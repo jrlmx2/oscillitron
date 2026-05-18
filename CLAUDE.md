@@ -114,6 +114,8 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 
 - ~~**Language and stack.**~~ Go, LOCKED 2026-05-18. See Stack & tooling above.
 - ~~**Hermes integration.**~~ Wrap, not modify or fork. LOCKED 2026-05-18. See Architecture above.
+- ~~**GitHub owner.**~~ `jrlmx2`. Module path `github.com/jrlmx2/oscillitron` matches the live repo at https://github.com/jrlmx2/oscillitron (private). LOCKED 2026-05-18.
+- ~~**Subproject vs. sibling repo.**~~ Option B — single repo with code at `oscillitron/` subdir. LOCKED 2026-05-18. (Reverses library-plan §8's "open" status.)
 
 ### Still open
 
@@ -123,8 +125,7 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 - **Unit of persistence in the playbook store.** Exemplars (input → good-output pairs), playbooks (recipes), or both with exemplars feeding playbooks?
 - **AP/summary shape.** Skeleton ships with a structured envelope (`pkg/session.Envelope`) wrapping a freeform body (`Outcome.Verdict`) — the hybrid hypothesis from `scratch/design-notes.md`. Final shape stable once a real Hermes adapter exercises it.
 - **Inhibitor as node vs. edge property.** Open. Skeleton's v0 is a runner-called process (`pkg/inhibitor`), per `scratch/design-notes.md`.
-- **GitHub owner.** Module path is `github.com/jrlmx2/oscillitron` placeholder — change once a real org is chosen. Library-plan §7.1.
-- **License.** Apache 2.0 leading per framework-design.md §11.1; not yet added. Library-plan §7.2.
+- **License.** Apache 2.0 leading per framework-design.md §11.1; not yet added. Library-plan §7.2. (Repo is private for now, so no immediate blocker — but add before any external sharing.)
 - Solo project or collaborative?
 
 ## Notes for Claude

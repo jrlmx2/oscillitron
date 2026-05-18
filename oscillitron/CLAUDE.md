@@ -49,7 +49,7 @@ go test ./...
 go run ./cmd/oscillitron
 ```
 
-Requires Go 1.21+ (uses `log/slog`).
+Requires Go 1.26+ (current toolchain on dev machine; bumped from 1.21 on 2026-05-18).
 
 ## Conventions
 
@@ -59,11 +59,14 @@ Requires Go 1.21+ (uses `log/slog`).
 - **No `main` logic in `cmd/`.** `cmd/oscillitron/main.go` wires components together and runs them; all logic lives in `pkg/`.
 - **Provenance marker.** Every file Claude authors has `// CLAUDE GENERATED` at the top.
 
+## Repo facts (locked 2026-05-18)
+
+- **Module path:** `github.com/jrlmx2/oscillitron`. Matches the live private repo at https://github.com/jrlmx2/oscillitron.
+- **Layout:** Option B — Go module lives at `oscillitron/` inside the parent knowledge-work repo. Not a sibling repo. `../scratch/...` links from this file are stable.
+
 ## Open placeholders to resolve before publishing
 
-- **Module path.** Currently `github.com/jrlmx2/oscillitron` (derived from email prefix). Change to the real GitHub owner once chosen (per library-plan §7.1). `sed -i '' 's|github.com/jrlmx2/oscillitron|github.com/<owner>/oscillitron|g'` across the tree.
-- **License.** No LICENSE file yet. Apache 2.0 is the leading recommendation per the framework design doc §11.1; confirm and add.
-- **Subproject vs. sibling repo.** This is currently a subdirectory (library-plan §8 Option B). If you later split to Option A (sibling repo), the `../scratch/...` links above break — they'd become README references back to the parent knowledge-work project.
+- **License.** No LICENSE file yet. Apache 2.0 is the leading recommendation per the framework design doc §11.1; confirm and add before the repo goes public.
 
 ## When to ask vs. proceed
 

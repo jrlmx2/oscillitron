@@ -29,16 +29,22 @@ What's here:
   - `pkg/inhibitor/contradictions` — single-session spike or cumulative `Outcome.Contradictions` cap.
   - `pkg/inhibitor/composite` — combines members with Abort > Restart > Continue precedence; concatenates reasons.
 - Demo runner (`cmd/oscillitron`) that fires an AP through a 3-oscillator topology with a composite inhibitor and logs each hop.
+- Cost tracker (`pkg/cost`) — `Pricing` + `Tracker` with parallel actual + frontier-counterfactual ledgers. Goroutine-safe. Not yet wired into the runner; that lands with the real Hermes adapter.
+- Eval harness (`pkg/eval`) — `Grader` interface, substring-match stub grader, and a `Run` function that drives a workload through a caller-supplied `Runner` (so the three Phase 1 comparison arms in library-plan §9 step 11 are substitutable).
+- Decomposer (`pkg/decomposer`) — `Decomposer` interface + `Passthrough` no-op impl. Manual-workflow and LLM-driven impls deferred to subpackages.
+- Recomposer (`pkg/recomposer`) — `Recomposer` interface + `Concat` impl. Tree-merge impl deferred (library-plan Phase 5).
+- Trace (`pkg/trace`) — `Tracer` interface with an slog-backed default. Scaffold-only: existing slog callsites in oscillator/runner/cmd are not yet migrated. New code should reach for `trace.Tracer`.
 
 Runner currently downgrades inhibitor `Restart` to `Abort` (logged with an annotated reason) because checkpointing isn't built yet. Replace with a real restart path when checkpointing lands.
 
 What's deliberately NOT here yet:
 
 - Real Hermes adapter — see library-plan §9 step 4.
-- Cost tracker — Phase 1 deliverable (`pkg/cost`).
-- Eval harness — Phase 1 deliverable (`pkg/eval`).
-- Decomposer / Recomposer implementations — Phase 2 deliverables not yet on the skeleton.
-- Trace package — slog calls are inlined in `cmd/oscillitron` for now.
+- Cost tracker wired into the runner — package is ready (`pkg/cost`); wiring lands with the real adapter so token counts come from somewhere real.
+- Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.
+- Manual / LLM-driven decomposer impls — `Passthrough` is the only impl today.
+- Tree-merge recomposer — `Concat` is the only impl today.
+- Trace migration — `pkg/trace` exists but oscillator/runner/cmd still call slog directly.
 - Anything compliance-shaped (audit ledger, manifest, classification routing) — Phase 4.
 
 ## Build, run, test

@@ -1,0 +1,31 @@
+# CLAUDE GENERATED
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Test/coverage
+coverage.txt
+coverage.html
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local env / secrets
+.env
+.env.local
+*.local
+
+# Binaries built into root from cmd/
+/oscillitron

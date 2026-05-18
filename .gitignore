@@ -1,0 +1,25 @@
+# CLAUDE GENERATED
+# macOS
+.DS_Store
+
+# Editor / IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go build output
+oscillitron/*.test
+oscillitron/*.out
+oscillitron/coverage.txt
+oscillitron/dist/
+oscillitron/bin/
+
+# Local Claude settings (allow rules are user-specific)
+.claude/settings.local.json
+oscillitron/.claude/settings.local.json
+
+# Env files (none expected today; defensive)
+.env
+.env.*
+!.env.example

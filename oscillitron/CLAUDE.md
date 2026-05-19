@@ -37,6 +37,39 @@ What's here:
 
 Runner currently downgrades inhibitor `Restart` to `Abort` (logged with an annotated reason) because checkpointing isn't built yet. Replace with a real restart path when checkpointing lands.
 
+## Pending rework: call-tree model (LOCKED 2026-05-18 in parent CLAUDE.md)
+
+The skeleton above was built around a *routed peer graph* of oscillators handing off APs along static edges. The architecture has since shifted to a **call tree of AP invocations** (see parent CLAUDE.md "Architecture" — locked 2026-05-18). Several packages need restructuring before the Hermes adapter lands. Summary of what shifts:
+
+- **`pkg/topology` → node registry.** Today: weighted directed graph with edges between oscillators. Future: registry of which brain functions exist and which specialist instances are available for each. No edges, no static weights. The static `Edge.Weight` concept goes away entirely — routing-time weights are LLM-emitted per AP, and the runtime "graph" is the ephemeral call tree, not a config artifact.
+- **`pkg/router` → dispatcher.** Today: rule-based picker over weighted outgoing edges. Future: `BrainFunction → specialist instance` dispatch (essentially a hash-map lookup, likely folded into the runner). The existing `router.Decision.Destinations []Destination` slice carries forward as "sub-APs this invocation emits."
+- **`pkg/runner` → tree-walker.** Today: sequential single-chain hop loop. Future: takes a root AP, dispatches it, consumes the invocation's emitted sub-APs, recurses, manages per-subtree budget and depth caps, knows when the tree is settled, returns the recomposed root output. **v0 is synchronous, no sibling parallelism** — siblings dispatch in order. Hardware parallelism is deferred.
+- **`pkg/decomposer` and `pkg/recomposer` → critical path.** Today: `Passthrough` and `Concat` no-op stubs. Future: decomposition is what brain functions *do* when they emit sub-APs (likely folds into the brain-function's output shape); recomposition is how sub-AP results combine into the parent's output (load-bearing — every non-trivial problem touches it).
+- **`pkg/oscillator`** stays useful as the goroutine + session-lifecycle wrapper around a specialist instance. What changes is it's invoked by brain-function dispatch, not by topological handoff.
+- **`pkg/inhibitor`** components stay (hardcap, confidence, repetition, contradictions, composite). Scope changes: they operate per-subtree and aggregate across the whole tree, not along a linear chain. The "edge property" lock from the parent CLAUDE.md means they attach to the dispatch edge between parent invocation and each sub-AP.
+- **`pkg/session.Envelope` → invocation shape.** Restructured around invocation semantics. Sketch (final shape stable once the Hermes adapter exercises it):
+  - `SchemaVersion` — additive evolution
+  - `BrainFunction` — which function to invoke (one, siloed)
+  - `Input` — the thing to operate on
+  - `OutputSchema` — handoff contract, *also* the preloaded prompt requirement that forces the producing LLM to self-classify against it
+  - `ParentRef` — position in the call tree
+  - `Budget` — token/depth allotted to this subtree
+  - On completion (set by the invocation): `Output`, `Classification`, `Confidence`, `SubAPs []SubAPSeed`, `ExitReason`
+- **Trace stays separate.** `pkg/trace` carries everything for the learning loop (verifier feedback, retrieval shards consulted, full tree topology, calibration, cost ledger). The AP/trace package boundary enforces the lean-AP-vs-fat-trace split.
+- **Demo (`cmd/oscillitron`) gets rewritten.** Three sequential nodes doesn't exercise fan-out, sub-AP emission, or tree termination. New demo: a root AP that decomposes into sub-APs, sub-APs that recurse, recomposer stitching the result.
+
+**Sequencing of the rework** (separate session, not now):
+
+1. Settle `session.Envelope` invocation shape (the spec everything else codes against).
+2. Replace `topology` with `registry`.
+3. Collapse `router` into dispatch, folded into the runner.
+4. Rewrite `runner` as tree-walker (sync, no sibling parallelism in v0).
+5. Promote `decomposer`/`recomposer` from stubs to real implementations.
+6. Rewrite the demo to exercise the call tree.
+7. Adapter and inhibitor changes flow from the above.
+
+Until that rework lands, the current skeleton stays buildable — these docs don't break anything that runs. The skeleton's value drops to "proof the AP-passing primitives compile" rather than "first architectural sketch."
+
 What's deliberately NOT here yet:
 
 - Real Hermes adapter — see library-plan §9 step 4.

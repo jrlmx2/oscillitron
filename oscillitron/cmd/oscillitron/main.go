@@ -11,8 +11,17 @@
 //     Hermes gateway (typically http://127.0.0.1:8642 after running
 //     `hermes gateway start`). One Hermes instance serves every brain
 //     function via SingleEndpoint; cost is tracked and printed at the
-//     end. For the locked one-per-specialist shape, edit the endpoint
-//     map by hand.
+//     end.
+//
+// Configuration:
+//
+//   - CLI flags (--hermes, --hermes-model, --timeout) are the primary
+//     surface and always take precedence when set.
+//   - --config <path> loads a .properties file (or set OSCILLITRON_CONFIG
+//     in the env). Properties file fills in any flag the user did not set
+//     on the command line. See oscillitron.properties.example for the
+//     supported keys; multi-endpoint Hermes (one process per brain
+//     function) is configurable here via hermes.endpoints.<bf>.url.
 //
 // Tree exercised:
 //
@@ -35,11 +44,13 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
+	"github.com/jrlmx2/oscillitron/pkg/config"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor/composite"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor/confidence"
@@ -58,15 +69,27 @@ func main() {
 	hermesURL := flag.String("hermes", "", "Hermes gateway base URL (e.g. http://127.0.0.1:8642). If empty, runs with stub adapters.")
 	hermesModel := flag.String("hermes-model", "", "Model identifier sent in the Hermes /v1/runs request body; empty leaves it to the Hermes instance's own config.")
 	timeout := flag.Duration("timeout", 5*time.Minute, "Wall-clock ceiling on the whole tree walk.")
+	cfgPath := flag.String("config", "", "Path to a .properties config file. Fills in any flag not set on the command line. Also reads OSCILLITRON_CONFIG when this flag is empty.")
 	flag.Parse()
 
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	tracer := trace.Slog{Logger: logger}
 
-	var (
-		costTracker *cost.Tracker
-		usingHermes = *hermesURL != ""
-	)
+	props, err := loadConfig(*cfgPath)
+	if err != nil {
+		logger.Error("config load failed", "err", err)
+		os.Exit(1)
+	}
+	mergeConfig(props, hermesURL, hermesModel, timeout)
+
+	endpoints, err := resolveEndpoints(props, *hermesURL, *hermesModel)
+	if err != nil {
+		logger.Error("endpoint resolution failed", "err", err)
+		os.Exit(1)
+	}
+	usingHermes := len(endpoints) > 0
+
+	var costTracker *cost.Tracker
 	if usingHermes {
 		// Frontier baseline — placeholder; real numbers when an
 		// adapter actually charges for them. Keeping the ratio
@@ -79,7 +102,7 @@ func main() {
 		}
 	}
 
-	reg, err := buildRegistry(tracer, *hermesURL, *hermesModel, costTracker)
+	reg, err := buildRegistry(tracer, endpoints, costTracker)
 	if err != nil {
 		logger.Error("registry build failed", "err", err)
 		os.Exit(1)
@@ -133,29 +156,114 @@ func adapterMode(usingHermes bool) string {
 	return "stub"
 }
 
-// buildRegistry assembles the brain-function → oscillator table. In
-// Hermes mode every oscillator points at the same hermes.Adapter
-// (which itself looks up the endpoint by brain function). In stub
-// mode each oscillator gets a pre-canned stub. Keeping the two
-// branches in one builder makes it obvious that the registry shape
-// is identical; only the adapter underneath changes.
-func buildRegistry(tracer trace.Tracer, hermesURL, hermesModel string, costTracker *cost.Tracker) (*registry.Registry, error) {
-	reg := registry.New()
+// loadConfig reads the .properties file path resolved from flag,
+// env, or — when both are empty — returns an empty bag.
+func loadConfig(flagPath string) (config.Properties, error) {
+	path := flagPath
+	if path == "" {
+		path = os.Getenv("OSCILLITRON_CONFIG")
+	}
+	if path == "" {
+		return config.Properties{}, nil
+	}
+	return config.Load(path)
+}
 
-	if hermesURL != "" {
-		cfg := hermes.SingleEndpoint(hermesURL, hermesModel)
-		cfg.Tracer = tracer
-		cfg.Cost = costTracker
-		ad, err := hermes.New(cfg)
-		if err != nil {
-			return nil, fmt.Errorf("build hermes adapter: %w", err)
+// mergeConfig fills in flag values that the user did NOT set on the
+// command line from the properties bag. flag.Visit enumerates
+// explicitly-set flags so we know which to leave alone.
+func mergeConfig(props config.Properties, hermesURL, hermesModel *string, timeout *time.Duration) {
+	set := map[string]bool{}
+	flag.Visit(func(f *flag.Flag) { set[f.Name] = true })
+
+	if !set["hermes"] {
+		if v := props.String("hermes.url", ""); v != "" {
+			*hermesURL = v
 		}
+	}
+	if !set["hermes-model"] {
+		if v := props.String("hermes.model", ""); v != "" {
+			*hermesModel = v
+		}
+	}
+	if !set["timeout"] {
+		if v := props.Duration("timeout", 0); v > 0 {
+			*timeout = v
+		}
+	}
+}
+
+// resolveEndpoints builds the brain-function → endpoint map. Order
+// of precedence (highest wins):
+//
+//  1. hermes.endpoints.<bf>.url in the properties file — explicit
+//     per-brain-function endpoints (the locked one-per-specialist
+//     shape).
+//  2. hermes.url + hermes.model OR the --hermes / --hermes-model
+//     flags — single-endpoint fallback. Bound to every well-known
+//     brain function.
+//  3. None of the above → empty map → stub mode.
+func resolveEndpoints(props config.Properties, hermesURL, hermesModel string) (map[session.BrainFunction]hermes.Endpoint, error) {
+	endpoints := map[session.BrainFunction]hermes.Endpoint{}
+
+	// Multi-endpoint case. Keys look like "<bf>.url" and "<bf>.model".
+	sub := props.Subset("hermes.endpoints")
+	for k, v := range sub {
+		if !strings.HasSuffix(k, ".url") {
+			continue
+		}
+		bf := session.BrainFunction(strings.TrimSuffix(k, ".url"))
+		ep := endpoints[bf]
+		ep.BaseURL = v
+		if m := sub[string(bf)+".model"]; m != "" {
+			ep.Model = m
+		}
+		endpoints[bf] = ep
+	}
+
+	if len(endpoints) > 0 {
+		return endpoints, nil
+	}
+
+	// Single-endpoint fallback.
+	if hermesURL != "" {
 		for _, bf := range []session.BrainFunction{
 			session.BrainPlanning,
 			session.BrainReasoning,
 			session.BrainRetrieval,
 			session.BrainCritic,
+			session.BrainPerception,
+			session.BrainComposition,
 		} {
+			endpoints[bf] = hermes.Endpoint{BaseURL: hermesURL, Model: hermesModel}
+		}
+	}
+	return endpoints, nil
+}
+
+// buildRegistry assembles the brain-function → oscillator table. In
+// Hermes mode every oscillator wraps the same hermes.Adapter (which
+// itself looks up the endpoint by brain function). In stub mode each
+// oscillator gets a pre-canned stub. Keeping the two branches in one
+// builder makes it obvious that the registry shape is identical;
+// only the adapter underneath changes.
+func buildRegistry(tracer trace.Tracer, endpoints map[session.BrainFunction]hermes.Endpoint, costTracker *cost.Tracker) (*registry.Registry, error) {
+	reg := registry.New()
+
+	if len(endpoints) > 0 {
+		cfg := hermes.Config{
+			Endpoints: endpoints,
+			Tracer:    tracer,
+			Cost:      costTracker,
+		}
+		ad, err := hermes.New(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("build hermes adapter: %w", err)
+		}
+		// Only register oscillators for brain functions that have an
+		// endpoint. Brain functions absent from the config use the
+		// stub demo seeds (allows mix-and-match for local dev).
+		for bf := range endpoints {
 			reg.Register(bf, oscillator.New(oscillator.ID(string(bf)+"-hermes"), bf, ad, tracer))
 		}
 		return reg, nil

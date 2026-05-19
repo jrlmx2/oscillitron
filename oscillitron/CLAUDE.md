@@ -12,72 +12,43 @@ The parent project is the source of truth for **what** to build and **why**; thi
 
 ## Status
 
-Stage: **scaffolding — Phase 2 thin skeleton only** (per library-plan §3).
+Stage: **call-tree skeleton** — the call-tree model from parent CLAUDE.md ("Architecture", locked 2026-05-18) is implemented end-to-end against stub adapters. Build is green; demo runs and recomposes a 4-node tree.
 
 What's here:
 
-- Session envelope types (`pkg/session`) — the AP/handoff shape, per library-plan §5.1.
-- Classification levels (`pkg/classification`).
-- Adapter interface (`pkg/adapter`) with a stub implementation for tests and the demo.
-- Oscillator type (`pkg/oscillator`) — wraps an adapter behind a goroutine + input channel.
-- Topology (`pkg/topology`) — directed graph of oscillator edges with weights.
-- Router interface (`pkg/router`) with a rule-based v0 (`pkg/router/rule`).
-- Inhibitor interface (`pkg/inhibitor`) with implementations:
-  - `pkg/inhibitor/hardcap` — chain-length cap (belt-and-suspenders).
-  - `pkg/inhibitor/confidence` — low-floor abort + window-drop restart on `Outcome.Confidence`.
-  - `pkg/inhibitor/repetition` — exact-verdict cycling detector over a sliding window.
-  - `pkg/inhibitor/contradictions` — single-session spike or cumulative `Outcome.Contradictions` cap.
-  - `pkg/inhibitor/composite` — combines members with Abort > Restart > Continue precedence; concatenates reasons.
-- Demo runner (`cmd/oscillitron`) that fires an AP through a 3-oscillator topology with a composite inhibitor and logs each hop.
-- Cost tracker (`pkg/cost`) — `Pricing` + `Tracker` with parallel actual + frontier-counterfactual ledgers. Goroutine-safe. Not yet wired into the runner; that lands with the real Hermes adapter.
-- Eval harness (`pkg/eval`) — `Grader` interface, substring-match stub grader, and a `Run` function that drives a workload through a caller-supplied `Runner` (so the three Phase 1 comparison arms in library-plan §9 step 11 are substitutable).
-- Decomposer (`pkg/decomposer`) — `Decomposer` interface + `Passthrough` no-op impl. Manual-workflow and LLM-driven impls deferred to subpackages.
-- Recomposer (`pkg/recomposer`) — `Recomposer` interface + `Concat` impl. Tree-merge impl deferred (library-plan Phase 5).
-- Trace (`pkg/trace`) — `Tracer` interface with an slog-backed default. Scaffold-only: existing slog callsites in oscillator/runner/cmd are not yet migrated. New code should reach for `trace.Tracer`.
+- **Session envelope** (`pkg/session`) — AP-as-invocation shape: `SchemaVersion`, `BrainFunction`, `Input`, `OutputSchema`, `ParentRef`, `Budget`, and on completion `Output{Content, Classification, Confidence, Signals, Contradictions, OpenQuestions, SubAPs, ExitReason}`. `NewRoot()` helper builds an entry-point envelope.
+- **Classification levels** (`pkg/classification`).
+- **Adapter** (`pkg/adapter`) — interface returns `(session.Output, error)`. Per-invocation session lifecycle is the adapter's responsibility.
+- **Stub adapter** (`pkg/adapter/stub`) — configurable mode/confidence/classification/signals/SubAPs. Used by tests and demo.
+- **Oscillator** (`pkg/oscillator`) — thin brain-function-typed wrapper around an adapter. Synchronous `Invoke(ctx, env) Envelope`. No goroutine, no channels.
+- **Registry** (`pkg/registry`) — `BrainFunction → *Oscillator` dispatch table. Replaces the deleted `pkg/topology`. No edges, no weights.
+- **Runner** (`pkg/runner`) — synchronous recursive **tree-walker**. Dispatches via registry, checks inhibitor on the root→current path, descends into `Output.SubAPs`, recomposes children, propagates inhibited children up. Sync; no sibling parallelism. Belt-and-suspenders `MaxDepth` cap independent of per-AP `Budget.DepthRemaining`. Restart→Abort downgrade still in effect (no checkpointing yet).
+- **Inhibitor** (`pkg/inhibitor`) interface with implementations:
+  - `pkg/inhibitor/hardcap` — path-depth cap.
+  - `pkg/inhibitor/confidence` — floor abort + window-drop restart on `Output.Confidence`.
+  - `pkg/inhibitor/repetition` — exact-content cycling detector over a sliding window.
+  - `pkg/inhibitor/contradictions` — single-invocation spike or cumulative `Output.Contradictions` cap.
+  - `pkg/inhibitor/composite` — combines members; Abort > Restart > Continue precedence.
+  - Argument is the root→current path through the call tree (slice shape unchanged; semantic interpretation differs).
+- **Recomposer** (`pkg/recomposer`) — load-bearing now. `Recompose(ctx, parentOutput, children []Envelope) (Output, error)`. `Concat` impl ships: joins content, takes weakest-link confidence min, deduplicates signals / contradictions / open questions.
+- **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up.
+- **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.
+- **Eval harness** (`pkg/eval`) — decoupled from the orchestrator (Runner is `func(ctx, Task) (string, error)`); no changes needed for the call-tree refactor.
+- **Trace** (`pkg/trace`) — slog-backed `Tracer` with `Info` / `Error` sugar helpers and a `Discard` no-op. Oscillator, runner, and the demo now emit through `trace.Tracer` rather than `*slog.Logger` directly. The fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
 
-Runner currently downgrades inhibitor `Restart` to `Abort` (logged with an annotated reason) because checkpointing isn't built yet. Replace with a real restart path when checkpointing lands.
-
-## Pending rework: call-tree model (LOCKED 2026-05-18 in parent CLAUDE.md)
-
-The skeleton above was built around a *routed peer graph* of oscillators handing off APs along static edges. The architecture has since shifted to a **call tree of AP invocations** (see parent CLAUDE.md "Architecture" — locked 2026-05-18). Several packages need restructuring before the Hermes adapter lands. Summary of what shifts:
-
-- **`pkg/topology` → node registry.** Today: weighted directed graph with edges between oscillators. Future: registry of which brain functions exist and which specialist instances are available for each. No edges, no static weights. The static `Edge.Weight` concept goes away entirely — routing-time weights are LLM-emitted per AP, and the runtime "graph" is the ephemeral call tree, not a config artifact.
-- **`pkg/router` → dispatcher.** Today: rule-based picker over weighted outgoing edges. Future: `BrainFunction → specialist instance` dispatch (essentially a hash-map lookup, likely folded into the runner). The existing `router.Decision.Destinations []Destination` slice carries forward as "sub-APs this invocation emits."
-- **`pkg/runner` → tree-walker.** Today: sequential single-chain hop loop. Future: takes a root AP, dispatches it, consumes the invocation's emitted sub-APs, recurses, manages per-subtree budget and depth caps, knows when the tree is settled, returns the recomposed root output. **v0 is synchronous, no sibling parallelism** — siblings dispatch in order. Hardware parallelism is deferred.
-- **`pkg/decomposer` and `pkg/recomposer` → critical path.** Today: `Passthrough` and `Concat` no-op stubs. Future: decomposition is what brain functions *do* when they emit sub-APs (likely folds into the brain-function's output shape); recomposition is how sub-AP results combine into the parent's output (load-bearing — every non-trivial problem touches it).
-- **`pkg/oscillator`** stays useful as the goroutine + session-lifecycle wrapper around a specialist instance. What changes is it's invoked by brain-function dispatch, not by topological handoff.
-- **`pkg/inhibitor`** components stay (hardcap, confidence, repetition, contradictions, composite). Scope changes: they operate per-subtree and aggregate across the whole tree, not along a linear chain. The "edge property" lock from the parent CLAUDE.md means they attach to the dispatch edge between parent invocation and each sub-AP.
-- **`pkg/session.Envelope` → invocation shape.** Restructured around invocation semantics. Sketch (final shape stable once the Hermes adapter exercises it):
-  - `SchemaVersion` — additive evolution
-  - `BrainFunction` — which function to invoke (one, siloed)
-  - `Input` — the thing to operate on
-  - `OutputSchema` — handoff contract, *also* the preloaded prompt requirement that forces the producing LLM to self-classify against it
-  - `ParentRef` — position in the call tree
-  - `Budget` — token/depth allotted to this subtree
-  - On completion (set by the invocation): `Output`, `Classification`, `Confidence`, `SubAPs []SubAPSeed`, `ExitReason`
-- **Trace stays separate.** `pkg/trace` carries everything for the learning loop (verifier feedback, retrieval shards consulted, full tree topology, calibration, cost ledger). The AP/trace package boundary enforces the lean-AP-vs-fat-trace split.
-- **Demo (`cmd/oscillitron`) gets rewritten.** Three sequential nodes doesn't exercise fan-out, sub-AP emission, or tree termination. New demo: a root AP that decomposes into sub-APs, sub-APs that recurse, recomposer stitching the result.
-
-**Sequencing of the rework** (separate session, not now):
-
-1. Settle `session.Envelope` invocation shape (the spec everything else codes against).
-2. Replace `topology` with `registry`.
-3. Collapse `router` into dispatch, folded into the runner.
-4. Rewrite `runner` as tree-walker (sync, no sibling parallelism in v0).
-5. Promote `decomposer`/`recomposer` from stubs to real implementations.
-6. Rewrite the demo to exercise the call tree.
-7. Adapter and inhibitor changes flow from the above.
-
-Until that rework lands, the current skeleton stays buildable — these docs don't break anything that runs. The skeleton's value drops to "proof the AP-passing primitives compile" rather than "first architectural sketch."
+**Deleted (no longer relevant under the call-tree model):**
+- `pkg/topology` — replaced by `pkg/registry`. No edges, no weights.
+- `pkg/router` and `pkg/router/rule` — collapsed into runner dispatch via the registry.
+- `pkg/decomposer` — decomposition is what a brain function *does* when it emits SubAPs; the standalone interface no longer earns its keep. Root-envelope construction is now `session.NewRoot()`.
 
 What's deliberately NOT here yet:
 
-- Real Hermes adapter — see library-plan §9 step 4.
-- Cost tracker wired into the runner — package is ready (`pkg/cost`); wiring lands with the real adapter so token counts come from somewhere real.
+- Real Hermes adapter — see library-plan §9 step 4. The call-tree skeleton is the spec it will code against.
+- Cost tracker wired into the runner — wiring lands with the real adapter so token counts come from somewhere real.
 - Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.
-- Manual / LLM-driven decomposer impls — `Passthrough` is the only impl today.
-- Tree-merge recomposer — `Concat` is the only impl today.
-- Trace migration — `pkg/trace` exists but oscillator/runner/cmd still call slog directly.
+- Real recomposer variants beyond Concat — LLM-driven recompose (re-invoke parent brain function with children outputs), tree-merge with conflict resolution. Plug in via the `Recomposer` interface.
+- Sibling parallelism, async sub-AP emission, hardware parallelism — deferred (see parent CLAUDE.md).
+- Checkpointing for inhibitor Restart — runner still downgrades Restart to Abort with annotated reason.
 - Anything compliance-shaped (audit ledger, manifest, classification routing) — Phase 4.
 
 ## Build, run, test

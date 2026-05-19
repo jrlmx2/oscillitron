@@ -30,7 +30,7 @@ func New(members ...inhibitor.Inhibitor) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
+func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
 	var (
 		aborts        []string
 		restarts      []string
@@ -39,7 +39,7 @@ func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
 	)
 
 	for _, m := range c.members {
-		v := m.Check(chain)
+		v := m.Check(path)
 		switch v.Decision {
 		case inhibitor.Abort:
 			aborts = append(aborts, v.Reason)

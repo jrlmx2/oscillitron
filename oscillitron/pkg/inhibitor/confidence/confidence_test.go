@@ -9,7 +9,7 @@ import (
 )
 
 func env(c float64) session.Envelope {
-	return session.Envelope{Outcome: &session.Outcome{Confidence: c}}
+	return session.Envelope{Output: &session.Output{Confidence: c}}
 }
 
 func TestFloorAborts(t *testing.T) {

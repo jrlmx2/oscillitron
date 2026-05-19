@@ -1,132 +1,185 @@
 // CLAUDE GENERATED
-// Package session defines the canonical session envelope — the
-// AP/handoff shape between oscillators.
+// Package session defines the AP envelope under the call-tree model.
 //
-// Per library-plan §5.1 and design-notes.md "Action potentials are
-// summaries": the Outcome field IS the AP body. A specialist exits a
-// session by producing an Outcome; that Outcome propagates to the
-// next specialist as its Input.
+// An AP is an *invocation* of one brain function on one input
+// (siloed). A complex problem is solved by an invocation emitting
+// sub-APs (further invocations), recursively, until leaves return
+// concrete results that recompose back up the tree.
 //
-// Schema-stability commitment (library-plan §2.4): Phase 2+ may ADD
-// fields, but must not rename or restructure existing ones. Phase 1
-// envelopes must remain replayable.
+// The envelope carries both the invocation in (BrainFunction, Input,
+// OutputSchema, Budget) and the result out (Output, populated by the
+// specialist on exit). Lean by design — token cost compounds over
+// every hop. Fat learning-loop records live in pkg/trace, not here.
+//
+// See parent CLAUDE.md "Architecture" (locked 2026-05-18) and
+// oscillitron/CLAUDE.md "Pending rework: call-tree model".
 package session
 
 import (
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 )
 
-// ID uniquely identifies a session.
+// SchemaVersion lets the envelope evolve additively. Bumped only on
+// breaking shape changes; readers can downgrade gracefully.
+const SchemaVersion = "v1"
+
+// ID uniquely identifies an envelope (an invocation in the call tree).
 type ID string
 
-// Type categorizes the session's role in a reasoning chain.
-type Type string
+// BrainFunction is the cognitive role an invocation invokes. Each AP
+// invokes exactly one (siloed). The registry binds these names to
+// specialist instances at runtime; names here are conventional.
+type BrainFunction string
 
 const (
-	TypeDecompose  Type = "decompose"
-	TypeAnalyze    Type = "analyze"
-	TypeMerge      Type = "merge"
-	TypeSynthesize Type = "synthesize"
+	BrainPerception  BrainFunction = "perception"  // parse / classify input
+	BrainRetrieval   BrainFunction = "retrieval"   // pull relevant context
+	BrainPlanning    BrainFunction = "planning"    // decompose into steps
+	BrainReasoning   BrainFunction = "reasoning"   // apply transformation, derive
+	BrainCritic      BrainFunction = "critic"      // verify / check
+	BrainComposition BrainFunction = "composition" // produce output artifact
 )
 
-// ExitReason records why a session exited. Per design-notes.md
-// "Specialist lifecycle: session-bounded with token-budget threshold":
-// downstream specialists need to know which kind of summary they're
-// receiving — they trigger different next moves.
+// ExitReason records why an invocation exited.
 type ExitReason string
 
 const (
-	// ExitDone — the specialist finished the task within its budget.
-	// The Outcome IS the answer.
+	// ExitDone — invocation finished within its budget. Output is final
+	// for this AP (modulo sub-AP resolution and recomposition).
 	ExitDone ExitReason = "done"
-	// ExitBudgetExhausted — the specialist hit the token-budget
-	// threshold (~70% of context window) before finishing. The Outcome
-	// is "where I got, what I tried, what remains."
+	// ExitBudgetExhausted — invocation hit its token/depth budget.
+	// Output captures progress + remaining work.
 	ExitBudgetExhausted ExitReason = "budget_exhausted"
-	// ExitInhibited — the inhibitor aborted the session before the
-	// specialist exited naturally. The Outcome captures what was tried
-	// and the inhibition signal.
+	// ExitInhibited — inhibitor aborted this invocation or subtree.
 	ExitInhibited ExitReason = "inhibited"
 )
 
-// Envelope is the canonical session envelope. Carries everything a
-// downstream specialist (or the orchestrator) needs to reason about
-// the session and what produced it.
+// Budget governs a subtree's resource ceiling. Per-AP allotment.
+// DepthRemaining is decremented as sub-APs descend; TokensRemaining is
+// charged by the adapter as it runs.
+type Budget struct {
+	TokensRemaining int `json:"tokens_remaining"`
+	DepthRemaining  int `json:"depth_remaining"`
+}
+
+// Envelope is one AP — a call to one brain function on one input, plus
+// (after the invocation runs) the result it produced.
 type Envelope struct {
-	ID             ID                   `json:"session_id"`
-	Type           Type                 `json:"session_type"`
-	Objective      string               `json:"objective"`
+	SchemaVersion  string               `json:"schema_version"`
+	ID             ID                   `json:"id"`
+	BrainFunction  BrainFunction        `json:"brain_function"`
 	Classification classification.Level `json:"classification"`
-	Notes          Notes                `json:"notes"`
 	Input          Input                `json:"input"`
-	Outcome        *Outcome             `json:"outcome,omitempty"`
-	Routing        Routing              `json:"routing"`
-	Trace          Trace                `json:"trace"`
-	Audit          *Audit               `json:"audit,omitempty"` // nil through Phase 3; populated Phase 4
+	// OutputSchema is the contract describing what a successful Output
+	// must contain. The producing brain function's prompt prepends this
+	// as the preloaded self-classification requirement: every LLM
+	// invocation is required to classify its output against this schema.
+	OutputSchema string `json:"output_schema"`
+	// ParentRef is the parent invocation's ID (nil for the root).
+	ParentRef *ID    `json:"parent_ref,omitempty"`
+	Budget    Budget `json:"budget"`
+	// Output is nil until the invocation runs and the adapter
+	// populates it. After sub-AP resolution + recomposition, Output may
+	// be replaced with the composed result.
+	Output *Output `json:"output,omitempty"`
+	// Trace is lean per-AP metrics. The fat learning-loop record lives
+	// in pkg/trace, off the inference path.
+	Trace Trace `json:"trace"`
+	// Audit is populated by the audit ledger from Phase 4 onward. Nil
+	// through Phase 3.
+	Audit *Audit `json:"audit,omitempty"`
 }
 
-// Notes carries context that doesn't fit cleanly in Input.
-type Notes struct {
-	Constraints  []string `json:"constraints"`
-	PriorSignals []string `json:"prior_signals"`
-	ContextTags  []string `json:"context_tags"`
-}
-
-// Input is what the specialist is asked to work on.
+// Input is what the invocation operates on.
 type Input struct {
-	Type        string `json:"type"`         // "prompt", "outcome_handoff", etc.
+	Type        string `json:"type"`         // "prompt", "subap_result", etc.
 	Content     string `json:"content"`
-	ContentHash string `json:"content_hash"` // sha256:hex; populated by the orchestrator
+	ContentHash string `json:"content_hash"` // sha256:hex; orchestrator populates
 }
 
-// Outcome is the specialist's exit summary — the AP body.
-type Outcome struct {
-	ExitReason     ExitReason `json:"exit_reason"`
-	Verdict        string     `json:"verdict"`
-	Signals        []string   `json:"signals"`
-	Confidence     float64    `json:"confidence"`
-	OpenQuestions  []string   `json:"open_questions"`
-	Contradictions []string   `json:"contradictions"`
-	FeedsInto      []ID       `json:"feeds_into"`
+// SubAPSeed is what an invocation emits to spawn a child AP. Enough
+// information to construct the child envelope at dispatch time.
+type SubAPSeed struct {
+	BrainFunction BrainFunction `json:"brain_function"`
+	Input         Input         `json:"input"`
+	OutputSchema  string        `json:"output_schema"`
 }
 
-// Routing records what backend handled the session and why.
-type Routing struct {
-	Model                    string `json:"model"`
-	ModelHash                string `json:"model_hash"`
-	Reason                   string `json:"reason"`
-	ClassificationConstraint string `json:"classification_constraint"`
+// Output is the invocation's product. Populated by the specialist's
+// adapter when the invocation exits.
+type Output struct {
+	// Content is the actual produced result.
+	Content string `json:"content"`
+	// Classification is the LLM-emitted self-classification against
+	// OutputSchema. Preloaded prompt requirement forces this.
+	Classification string `json:"classification"`
+	// Confidence is the LLM-emitted confidence in this output. Drives
+	// inhibitor checks and (eventually) recomposer weighting.
+	Confidence float64 `json:"confidence"`
+	// Signals are amorphous LLM-emitted grounding notes. Same channel
+	// the inhibitor reads for drift detection.
+	Signals []string `json:"signals,omitempty"`
+	// Contradictions are self-reported contradictions with prior
+	// context. Separate from Signals because the inhibitor weights
+	// them more heavily.
+	Contradictions []string `json:"contradictions,omitempty"`
+	// OpenQuestions are unresolved threads the invocation noticed but
+	// did not pursue. May seed future SubAPs.
+	OpenQuestions []string `json:"open_questions,omitempty"`
+	// SubAPs are the child invocations this one wants spawned before
+	// it is complete. Empty means this is a leaf (no further descent).
+	SubAPs []SubAPSeed `json:"sub_aps,omitempty"`
+	// ExitReason records why the invocation exited.
+	ExitReason ExitReason `json:"exit_reason"`
 }
 
-// Trace records per-session operational metrics.
+// Trace records lean per-AP operational metrics. The fat learning-loop
+// trace (verifier feedback, retrieval refs, full tree topology, etc.)
+// lives in pkg/trace.
 type Trace struct {
 	TokensInput               int     `json:"tokens_input"`
 	TokensOutput              int     `json:"tokens_output"`
 	DurationMs                int64   `json:"duration_ms"`
-	ParentSession             *ID     `json:"parent_session,omitempty"`
 	CostUSD                   float64 `json:"cost_usd"`
 	CostVsFrontierBaselineUSD float64 `json:"cost_vs_frontier_baseline_usd"`
 }
 
-// Audit is populated by the audit ledger from Phase 4 onward. Nil
-// through Phase 3.
+// Audit is populated by the audit ledger from Phase 4 onward.
 type Audit struct {
 	LedgerID  string `json:"ledger_id"`
-	SignedAt  string `json:"signed_at"`  // RFC3339
+	SignedAt  string `json:"signed_at"` // RFC3339
 	Signature string `json:"signature"`
 }
 
-// IsTerminal reports whether the envelope's outcome represents a
-// stopping point — either a finished answer or an inhibitor abort.
-// Budget-exhausted outcomes are NOT terminal: they're meant to be
-// handed to another specialist.
-func (e *Envelope) IsTerminal() bool {
-	if e.Outcome == nil {
-		return false
+// NewRoot constructs a root envelope (no parent) — the entry point a
+// caller fires at the tree-walker. Generated ID is the caller's
+// responsibility; budget governs the whole subtree.
+func NewRoot(id ID, bf BrainFunction, prompt, outputSchema string, budget Budget) Envelope {
+	return Envelope{
+		SchemaVersion: SchemaVersion,
+		ID:            id,
+		BrainFunction: bf,
+		Input:         Input{Type: "prompt", Content: prompt},
+		OutputSchema:  outputSchema,
+		Budget:        budget,
 	}
-	switch e.Outcome.ExitReason {
-	case ExitDone, ExitInhibited:
-		return true
-	}
-	return false
+}
+
+// IsLeaf reports whether this invocation requested no further sub-APs.
+// A leaf invocation's Output is the final result for this branch (no
+// recomposition needed below).
+func (e *Envelope) IsLeaf() bool {
+	return e.Output != nil && len(e.Output.SubAPs) == 0
+}
+
+// IsInhibited reports whether the invocation (or its subtree) was
+// aborted by the inhibitor.
+func (e *Envelope) IsInhibited() bool {
+	return e.Output != nil && e.Output.ExitReason == ExitInhibited
+}
+
+// IsComplete reports whether the invocation has run (Output is set).
+// Does not imply the subtree below it has resolved.
+func (e *Envelope) IsComplete() bool {
+	return e.Output != nil
 }

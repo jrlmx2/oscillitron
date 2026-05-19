@@ -20,7 +20,7 @@ What's here:
 - **Classification levels** (`pkg/classification`).
 - **Adapter** (`pkg/adapter`) — interface returns `(session.Output, error)`. Per-invocation session lifecycle is the adapter's responsibility.
 - **Stub adapter** (`pkg/adapter/stub`) — configurable mode/confidence/classification/signals/SubAPs. Used by tests and demo.
-- **Hermes adapter** (`pkg/adapter/hermes`) — speaks the OpenAI-compatible HTTP gateway from `github.com/NousResearch/hermes-agent` (`gateway/platforms/api_server.py`). One long-lived Hermes per brain function = the specialist's persistent store; each AP invocation is a session within that specialist (`session_id = envelope.ID`). Uses `POST /v1/runs` + `GET /v1/runs/{id}/events` (SSE) so Hermes' own self-improvement loop stays in play. Tested against an `httptest`-served fake; the demo is not yet wired through Hermes (intentionally — needs a real local instance and model API key to smoke-test).
+- **Hermes adapter** (`pkg/adapter/hermes`) — speaks the OpenAI-compatible HTTP gateway from `github.com/NousResearch/hermes-agent` (`gateway/platforms/api_server.py`). One long-lived Hermes per brain function = the specialist's persistent store; each AP invocation is a session within that specialist (`session_id = envelope.ID`). Uses `POST /v1/runs` + `GET /v1/runs/{id}/events` (SSE) so Hermes' own self-improvement loop stays in play. Structured-output contract: the adapter teaches Hermes (via `instructions`) to wrap its reply in a documented JSON envelope (`content`, `classification`, `confidence`, `signals`, `contradictions`, `open_questions`, `sub_aps`), then parses the run's final output back into `session.Output`. Accepts both whole-output JSON and fenced ```json blocks; falls back to raw text in `Output.Content` with zero-value structured fields when the model ignores the contract (configurable via `Config.RequireStructured`). Demo wires through via `--hermes <baseURL>`.
 - **Oscillator** (`pkg/oscillator`) — thin brain-function-typed wrapper around an adapter. Synchronous `Invoke(ctx, env) Envelope`. No goroutine, no channels.
 - **Registry** (`pkg/registry`) — `BrainFunction → *Oscillator` dispatch table. Replaces the deleted `pkg/topology`. No edges, no weights.
 - **Runner** (`pkg/runner`) — synchronous recursive **tree-walker**. Dispatches via registry, invokes the inhibitor on each parent→child edge after the child resolves (root has no incoming edge and is never checked), descends into `Output.SubAPs`, recomposes children, propagates inhibited children up. Sync; no sibling parallelism. Belt-and-suspenders `MaxDepth` cap independent of per-AP `Budget.DepthRemaining`. Restart→Abort downgrade still in effect (no checkpointing yet).
@@ -31,7 +31,7 @@ What's here:
   - `pkg/inhibitor/contradictions` — single-invocation spike or cumulative `Output.Contradictions` cap.
   - `pkg/inhibitor/composite` — combines members; Abort > Restart > Continue precedence.
 - **Recomposer** (`pkg/recomposer`) — load-bearing now. `Recompose(ctx, parentOutput, children []Envelope) (Output, error)`. `Concat` impl ships: joins content, takes weakest-link confidence min, deduplicates signals / contradictions / open questions.
-- **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up.
+- **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up. Default mode uses stubs. With `--hermes <baseURL>` (e.g. `--hermes http://127.0.0.1:8642`) the demo wires the same registry through the real Hermes adapter; cost is tracked via `pkg/cost` and printed at the end. Hermes mode honours the call-tree shape only insofar as Hermes returns `sub_aps` in its structured envelope — weak models often emit only the prose answer.
 - **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.
 - **Eval harness** (`pkg/eval`) — decoupled from the orchestrator (Runner is `func(ctx, Task) (string, error)`); no changes needed for the call-tree refactor.
 - **Trace** (`pkg/trace`) — slog-backed `Tracer` with `Info` / `Error` sugar helpers and a `Discard` no-op. Oscillator, runner, and the demo now emit through `trace.Tracer` rather than `*slog.Logger` directly. The fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
@@ -43,8 +43,7 @@ What's here:
 
 What's deliberately NOT here yet:
 
-- Demo wired through the Hermes adapter — `cmd/oscillitron` still uses the stub. Wiring it through Hermes needs a real local instance and a model API key, which is a setup task the user runs, not something the test suite can land cold.
-- Multi-instance Hermes — the adapter config takes a `BrainFunction → Endpoint` map, so multi-instance is the supported shape, but the locked "one per specialist" design hasn't been exercised end-to-end (would mean spawning N `hermes gateway` processes on different ports).
+- Multi-instance Hermes exercised end-to-end — the adapter config takes a `BrainFunction → Endpoint` map and the demo uses `SingleEndpoint` for v0 dev. Spawning N `hermes gateway` processes on different ports and pointing each brain function at its own endpoint is the locked design but isn't covered by the demo yet.
 - Approval handling — `/v1/runs/{id}/approval`. The v0 adapter rejects approval-required runs as inhibited; the orchestrator owns gating.
 - Cost tracker wired into the runner — the adapter records token usage into the cost tracker when one is provided, but the runner does not yet wire one up by default.
 - Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.
@@ -65,7 +64,7 @@ Requires Go 1.26+ (current toolchain on dev machine; bumped from 1.21 on 2026-05
 
 ### Smoke-testing the Hermes adapter against a real local Hermes
 
-The adapter ships with table-tested behavior against an `httptest`-served fake, but the only way to verify it against a real Hermes is to run one locally:
+The adapter ships with table-tested behavior against an `httptest`-served fake. To verify it against a real Hermes:
 
 ```
 # In a separate shell, with hermes-agent installed and configured
@@ -73,16 +72,16 @@ The adapter ships with table-tested behavior against an `httptest`-served fake, 
 hermes gateway start
 # By default api_server listens on 127.0.0.1:8642. Confirm with:
 curl -s http://127.0.0.1:8642/v1/models
+
+# Then run the demo through Hermes:
+go run ./cmd/oscillitron --hermes http://127.0.0.1:8642
+# Or pick the model explicitly:
+go run ./cmd/oscillitron --hermes http://127.0.0.1:8642 --hermes-model openrouter:openai/gpt-4o-mini
 ```
 
-Then in Go, point the adapter at it:
+`--hermes` uses `hermes.SingleEndpoint` — one Hermes serves every brain function. The locked design is one Hermes *per* brain function; for that, edit `buildRegistry` in `cmd/oscillitron/main.go` to construct a `BrainFunction → Endpoint` map by hand and stand up N Hermes processes on different ports.
 
-```go
-a, err := hermes.New(hermes.SingleEndpoint("http://127.0.0.1:8642", ""))
-// ...wire `a` into an oscillator via pkg/oscillator.New.
-```
-
-`SingleEndpoint` binds every brain function to the same Hermes for a fast smoke test. The locked design is one Hermes *per* brain function — for that, build a `BrainFunction → Endpoint` map by hand and stand up N Hermes processes on different ports.
+Expect leaf-only behavior on weak local models: the structured-envelope contract asks Hermes to emit `sub_aps` for decomposition, but many local models ignore it and return prose. The adapter falls back to raw text in `Output.Content` (set `Config.RequireStructured=true` if you want a parse failure to inhibit instead).
 
 ## Conventions
 

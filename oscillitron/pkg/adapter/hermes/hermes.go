@@ -95,6 +95,22 @@ type Config struct {
 	// Cost is the optional cost tracker. When set, run.completed token
 	// usage records into the actual + frontier-counterfactual ledgers.
 	Cost *cost.Tracker
+
+	// RequireStructured controls how strictly the adapter enforces the
+	// structured-output envelope. When true, any run.completed output
+	// that cannot be parsed as the documented JSON shape is surfaced
+	// as an error (caller wraps it in ExitInhibited). When false (the
+	// default), parse failure falls back to placing the raw text in
+	// Output.Content with zero-valued structured fields — useful for
+	// dev against weak models or quick smoke tests.
+	RequireStructured bool
+
+	// RawInstructions overrides the adapter's default instructions
+	// preamble. Most callers should leave this empty — the default
+	// preamble teaches Hermes to emit the structured envelope the
+	// adapter parses. Set this only when running against a
+	// pre-configured Hermes that already knows the output contract.
+	RawInstructions string
 }
 
 // Adapter is an adapter.Adapter targeting one Hermes instance per
@@ -203,8 +219,14 @@ func (a *Adapter) startRun(ctx context.Context, ep Endpoint, env session.Envelop
 		// trace later.
 		"session_id": string(env.ID),
 	}
-	if env.OutputSchema != "" {
-		body["instructions"] = env.OutputSchema
+	// Instructions tell Hermes how to format its reply so the adapter
+	// can re-derive structured Output fields. Callers can override by
+	// setting Config.RawInstructions when the substrate is already
+	// configured for a different output contract.
+	if a.cfg.RawInstructions != "" {
+		body["instructions"] = a.cfg.RawInstructions
+	} else {
+		body["instructions"] = renderInstructions(env.OutputSchema)
 	}
 	if ep.Model != "" {
 		body["model"] = ep.Model
@@ -329,24 +351,27 @@ func (a *Adapter) streamEvents(ctx context.Context, ep Endpoint, runID string, e
 			gotFinal = true
 			finalText = evt.text
 			usage = evt.usage
-			// Don't break here — the server sends the sentinel close
-			// immediately after; let the loop terminate naturally on
-			// next iteration when the decoder returns ok=false.
+			// Break immediately. The server normally closes the stream
+			// right after run.completed, but draining further keeps
+			// the HTTP connection open for no benefit and would
+			// process any (unexpected) late events.
+			goto done
 		case "run.failed":
 			return session.Output{}, fmt.Errorf("hermes: run failed: %s", evt.text)
 		case "run.cancelled":
 			return session.Output{}, errors.New("hermes: run cancelled")
 		}
 	}
+done:
 
 	// Prefer the run.completed "output" field over the streamed
 	// message.delta accumulation — message.delta carries provider
 	// tokens which can include tool-call artifacts; run.completed
 	// carries the final assistant response Hermes itself decided was
 	// the answer.
-	content := finalText
-	if content == "" {
-		content = deltaBuf.String()
+	raw := finalText
+	if raw == "" {
+		raw = deltaBuf.String()
 	}
 
 	if a.cfg.Cost != nil && (usage.input > 0 || usage.output > 0) {
@@ -357,10 +382,24 @@ func (a *Adapter) streamEvents(ctx context.Context, ep Endpoint, runID string, e
 		a.cfg.Cost.Record(model, usage.input, usage.output)
 	}
 
-	return session.Output{
-		Content:    content,
-		ExitReason: session.ExitDone,
-	}, nil
+	payload, structured, err := extractStructured(raw)
+	if err != nil {
+		// JSON-looking but unparseable — protocol violation.
+		return session.Output{}, err
+	}
+	if !structured && a.cfg.RequireStructured {
+		return session.Output{}, fmt.Errorf("hermes: run produced no structured envelope (raw length %d)", len(raw))
+	}
+	out := payload.toOutput()
+	out.ExitReason = session.ExitDone
+	if !structured {
+		trace.Info(a.cfg.Tracer, ctx, "hermes_unstructured_fallback",
+			slog.String("session", string(env.ID)),
+			slog.String("run_id", runID),
+			slog.Int("raw_length", len(raw)),
+		)
+	}
+	return out, nil
 }
 
 // tokenUsage carries the run.completed usage payload.

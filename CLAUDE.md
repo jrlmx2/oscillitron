@@ -61,9 +61,36 @@ What lives in Oscillitron (the wrapper) vs. Hermes (the substrate):
 
 Specialization seeds are **predetermined** (the scaffolding) and **grow organically within their niche** (the plasticity). Brain analogy: anatomical priors plus cortical plasticity, not pure emergence.
 
-**Specialists are nodes; processing flow is graph topology.** The system has fewer node types than first sketched. Content specialists (code, math, writing, retrieval, etc.) are real nodes because they carry distinct competence. The router, and optionally a cheap intent classifier upstream of it, are also nodes. Everything else — input → reasoning → output sequencing, fast vs. slow paths, inhibition — is a property of the graph (edges, weights, thresholds, path length, playbook richness), not separate node types. **The graph is the main learnable substrate.** Content specialists grow within their niches via Hermes' skill creation; the bulk of self-improvement happens at the topology layer — strengthening edges, shifting thresholds, adding or pruning routes. Brain analog: cortical microcircuits are nearly identical across regions; specialization comes from what feeds in, not from a different circuit.
+**Specialists are nodes; processing flow is graph topology.** The router, and optionally a cheap intent classifier upstream of it, are also nodes. Everything else — input → reasoning → output sequencing, fast vs. slow paths — is a property of the graph (edges, weights, thresholds, path length, playbook richness), not separate node types. **The graph is the main learnable substrate.** Specialists grow within their niches via Hermes' skill creation; the bulk of self-improvement happens at the topology layer — strengthening edges, shifting thresholds, adding or pruning routes. Brain analog: cortical microcircuits are nearly identical across regions; specialization comes from what feeds in, not from a different circuit.
+
+**Specialists are brain-function roles, NOT subject domains (LOCKED 2026-05-18).** Seed nodes are typed by cognitive function — perception/parsing, retrieval, planning/decomposition, reasoning/transformation, critic/verification, composition/output — analogous to functional cortical roles (sensory cortex, hippocampus, PFC, ACC, Broca). They are NOT typed by subject ("code specialist", "math specialist", "legal specialist"). Subject competence is an *emergent* property of which playbooks, exemplars, and retrieval shards a brain-function node accumulates over time, plus the topology that routes subject-shaped inputs toward it. Rationale: cortical microcircuits are uniform; specialization comes from afferents and learned weights, not from a different circuit per topic. Subject-based seeding pre-commits the system to a taxonomy we don't yet trust and duplicates effort across topics that share cognitive structure. **Enforcement:** if a draft, demo, doc, or chat suggestion reintroduces subject-based seed names (code/math/legal/writer/fact-check/etc.), rename to the brain-function role it actually plays. The demo in `oscillitron/cmd/oscillitron` uses `reasoner → critic → composer` as canonical placeholders.
+
+**Inhibitor is an edge property, not a node (LOCKED 2026-05-18).** Drift detection and circuit-breaking attach to graph edges (and to chains via aggregate edge state), not to a dedicated inhibitor specialist. Rationale: inhibition is a *modulation* of signal flow between regions, not a separate cortical region; node-shaped inhibition would have to re-receive and re-judge everything the edge already carries. The composite inhibitor in `pkg/inhibitor` stays as the implementation surface — what changes is how it's wired: invoked along edges during AP transit rather than as a graph node. Restart-depth and hard-cap semantics are unchanged. The current runner-level invocation is a v0 expedient; migrating it onto edges is on the to-do list.
+
+**Per-instance vs. shared resources follow the brain (LOCKED 2026-05-18).**
+
+- **Base model weights — shared (like cortical microcircuitry).** All Hermes instances point at the same underlying weak/cheap base model(s). Cortical microcircuits are nearly identical across regions; specialization isn't in the substrate.
+- **Playbooks and prompt templates — per-instance (like region-specific learned skills).** Each brain-function node accumulates its own. This is where specialization actually lives.
+- **Retrieval — per-instance episodic, shared semantic (like hippocampal vs. semantic memory).** Each node owns its episodic store (its own past sessions, its own exemplars). A small shared semantic pool — stable general knowledge, cross-node facts, agreed terminology — is readable by all. Writes to the shared pool are gated by the curation layer; nodes don't pollute the commons unilaterally.
+- **Working/session memory — per-instance, ephemeral (like local working memory in PFC).** Lives only for the session's lifetime; the AP summary is what survives the handoff.
+- **Verifier signal and topology state — shared (like global neuromodulation).** Feedback that shapes edge weights, firing thresholds, and curation decisions is system-wide so the graph can learn coherently.
 
 **Action potentials carry summaries.** The handoff payload between specialists is the compressed summary the upstream session produced on exit. The "spike" is just a concrete summary handoff sized to be cheap for the downstream specialist to ingest. See `scratch/design-notes.md` for the working session-lifecycle, summary, and inhibition design.
+
+**Runtime structure is a call tree of AP invocations, not a routed peer graph (LOCKED 2026-05-18).** A complex problem is solved by recursively invoking brain functions. The "graph" we care about is the call tree that emerges for *this specific problem* and dissolves when it returns. It is not a fixed routed network with persistent edges. Brain analog: writing an essay isn't one cortical region routing to another along fixed wires — it's a recursive cascade (retrieve → plan → generate → critique → revise), each step itself a smaller cascade. The structure exists for the duration of the thought.
+
+**APs are invocations, siloed to one brain function each (LOCKED 2026-05-18).** An AP is not a handoff payload between peers — it is a *call* to a specific brain function on a specific input. Each AP invokes exactly one brain function. Complex work happens by the invoked function emitting sub-APs (further invocations of other brain functions on sub-problems), recursively, until leaves return concrete results that recompose back up the tree. The siloed-to-one-function rule keeps each invocation single-purpose and the call tree readable.
+
+**Specialist vs. invocation (LOCKED 2026-05-18).** Two distinct things, easy to conflate:
+
+- **Specialist** = the brain-function type. One per type. Owns the *persistent* memory substrate for that function — exemplars, recipes, retrieval shards, accumulated playbooks. This is the per-instance side of the brain-mirrored resource-sharing model above. Long-lived; accumulates good knowledge over time via the curation layer.
+- **Invocation** = one AP being processed. Gets a fresh ephemeral Hermes process seeded from the specialist's persistent store at start, contributes back through curation on exit. Session-bounded, clean isolation, no cross-invocation contamination at the working-memory level.
+
+Brain analog: working memory is per-task and dissolves; long-term memory in the cortical region accumulates across tasks via consolidation. Same pattern, same separation.
+
+**Sub-AP emission is synchronous in v0 (LOCKED 2026-05-18; configurable later).** When an invocation emits sub-APs, the parent blocks on the whole subtree before recomposing and returning. Recursive function-call semantics. Async sub-AP emission (parent returns; sub-APs continue independently) is a real axis but stays deferred — it requires inhibition that can reason across in-flight asynchronous subtrees, which is its own design problem. v0 is fully synchronous, single-threaded sibling dispatch.
+
+**Hardware-level parallelism (multi-GPU, inference-server sharing, sibling-concurrent dispatch) is deferred past v0.** Not designed around. The dispatcher interface should still return a future-shaped result rather than a direct value — cheap insurance so this can be reintroduced without an interface break — but no concurrency, queueing, or backpressure logic ships in v0.
 
 ## Self-improvement loop
 
@@ -116,17 +143,23 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 - ~~**Hermes integration.**~~ Wrap, not modify or fork. LOCKED 2026-05-18. See Architecture above.
 - ~~**GitHub owner.**~~ `jrlmx2`. Module path `github.com/jrlmx2/oscillitron` matches the live repo at https://github.com/jrlmx2/oscillitron (private). LOCKED 2026-05-18.
 - ~~**Subproject vs. sibling repo.**~~ Option B — single repo with code at `oscillitron/` subdir. LOCKED 2026-05-18. (Reverses library-plan §8's "open" status.)
+- ~~**Specialist seed list — subject-based or function-based?**~~ Brain-function roles, NOT subject domains. LOCKED 2026-05-18. See Architecture above. Working seed set: perception/parsing, retrieval, planning/decomposition, reasoning/transformation, critic/verification, composition/output.
+- ~~**Inhibitor as node vs. edge property.**~~ Edge property. LOCKED 2026-05-18. See Architecture above.
+- ~~**Per-instance vs. shared resources.**~~ Brain-mirrored: shared base weights, per-instance playbooks, per-instance episodic + shared semantic retrieval, per-instance session memory, shared verifier/topology signal. LOCKED 2026-05-18. See Architecture above.
+- ~~**Solo or collaborative?**~~ Solo for now. LOCKED 2026-05-18.
+- ~~**Router design.**~~ Under the call-tree model, "router" collapses to a brain-function *dispatcher* — map `BrainFunction → specialist instance`. LOCKED 2026-05-18. The interesting decisions move to decomposition (owned by each brain function), termination (owned by the runner walking the tree), and recomposition (owned by `pkg/recomposer` and the parent invocation). The static-edge-weight question is moot: there are no static routing weights. The existing `router.Decision.Destinations []Destination` slice becomes "sub-APs this invocation emits" and carries forward as the dispatch shape.
+- ~~**Playbook persistence unit.**~~ Both — exemplars feeding recipes, with consolidation as a background "sleep" job. LOCKED 2026-05-18 (principle); schemas to be designed when implementation lands. Exemplars are ground truth, per-specialist; recipes are consolidated distillations; vetted cross-specialist recipes can promote to the shared semantic pool (gated by curation).
+- ~~**AP shape — AP vs. trace split.**~~ Separate, lean AP vs. fat trace. LOCKED 2026-05-18. AP (envelope) is what the next invocation ingests — must stay lean (token cost compounds over every hop). Trace is what the learning loop reads — verifier feedback, retrieval refs, full tree topology, cost ledger, calibration metadata — kept off the inference path, can be as fat as needed. Brain analog: axonal action potential vs. hippocampal episodic index that feeds cortical consolidation; different timescales, different consumers. Final field-level schema stable once a real Hermes adapter exercises it; sketch in `scratch/design-notes.md`.
 
 ### Still open
 
-- **Content-specialist seed list.** Now narrower than first hypothesized because processing-role specialists collapsed into graph topology. Need ~3–6 content nodes to start: candidates are code, math/structured reasoning, retrieval/research, writing. Domain layers (legal, medical, finance) ride on top later. The skeleton's demo uses `code-analyst`, `fact-check`, `writer` as placeholders.
-- **Router design.** v0 is rule-based (`oscillitron/pkg/router/rule`); picks the highest-weight outgoing edge. Open: when does content-aware routing land, and whether an upstream cheap intent classifier is a separate node or folded into the router.
-- **Per-instance vs. shared resources.** Working hypothesis: base models shared (cost), playbook stores isolated, retrieval mostly isolated with a small shared general-knowledge pool, session memory per-instance.
-- **Unit of persistence in the playbook store.** Exemplars (input → good-output pairs), playbooks (recipes), or both with exemplars feeding playbooks?
-- **AP/summary shape.** Skeleton ships with a structured envelope (`pkg/session.Envelope`) wrapping a freeform body (`Outcome.Verdict`) — the hybrid hypothesis from `scratch/design-notes.md`. Final shape stable once a real Hermes adapter exercises it.
-- **Inhibitor as node vs. edge property.** Open. Skeleton's v0 is a runner-called process (`pkg/inhibitor`), per `scratch/design-notes.md`.
-- **License.** Apache 2.0 leading per framework-design.md §11.1; not yet added. Library-plan §7.2. (Repo is private for now, so no immediate blocker — but add before any external sharing.)
-- Solo project or collaborative?
+(none currently blocking v0)
+
+### Deferred (not blocking v0)
+
+- **License.** Apache 2.0 leading per framework-design.md §11.1; not yet added. Repo is private, no urgency. Decide before going public.
+- **Hardware parallelism.** Multi-GPU, inference-server sharing, sibling-concurrent dispatch, backpressure/queueing. Out of scope for v0. Dispatcher interface should still be future-shaped (cheap insurance against an interface break later) but no concurrency logic ships.
+- **Async sub-AP emission.** v0 is synchronous; configurable async is a real axis but requires inhibition that reasons across in-flight asynchronous subtrees. Revisit when async workloads motivate it.
 
 ## Notes for Claude
 

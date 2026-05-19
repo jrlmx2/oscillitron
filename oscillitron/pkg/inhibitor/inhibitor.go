@@ -1,29 +1,38 @@
 // CLAUDE GENERATED
 // Package inhibitor defines the contract for the circuit-breaker that
 // watches a reasoning path and decides whether to continue, restart,
-// or abort. Brain analog: anterior cingulate modulates signal flow
-// between regions (locked as an edge property, 2026-05-18 — see
-// parent CLAUDE.md).
+// or abort.
 //
-// Under the call-tree model the runner invokes Check at the dispatch
-// edge between a parent invocation and each child sub-AP. The slice
-// passed to Check is the root→current path so far, not a linear chain;
-// the signature is unchanged because the data shape is the same.
+// Inhibition is an EDGE PROPERTY, not a node (LOCKED 2026-05-18 — see
+// parent CLAUDE.md). Brain analog: anterior cingulate modulates signal
+// flow between regions rather than acting as a separate cortical
+// region. Concretely, an Inhibitor sits on the parent→child edge in
+// the call tree: it fires after a child invocation resolves and
+// before that resolution flows further (into the child's own sub-AP
+// dispatch, or back up into the parent's recomposition). The root has
+// no incoming edge, so it is never checked.
+//
+// Path-stateful detectors (confidence drop windows, cumulative
+// contradictions, repetition cycling) still see the full root→child
+// path on the Edge; the slice shape is unchanged, what changes is
+// the framing — we are judging the traversal that produced the
+// current child, not the child as a standalone node.
 package inhibitor
 
 import "github.com/jrlmx2/oscillitron/pkg/session"
 
-// Decision is the inhibitor's verdict on a chain.
+// Decision is the inhibitor's verdict on an edge traversal.
 type Decision int
 
 const (
-	// Continue — chain is healthy, keep going.
+	// Continue — the edge is healthy, allow the child's output to
+	// flow further.
 	Continue Decision = iota
-	// Restart — chain showed drift; restart from the last good
+	// Restart — the edge showed drift; restart from the last good
 	// checkpoint with a reformulated input. v0 callers may treat this
 	// as Abort if no checkpointing is implemented yet.
 	Restart
-	// Abort — chain is unsalvageable, stop.
+	// Abort — the edge is unsalvageable, stop.
 	Abort
 )
 
@@ -31,17 +40,30 @@ const (
 type Verdict struct {
 	Decision   Decision
 	Reason     string
-	Checkpoint int // for Restart: index in the chain to restart from. 0 means start of chain.
+	Checkpoint int // for Restart: index in the path to restart from. 0 means start of path.
 }
 
-// Inhibitor watches a path through the call tree and decides whether
-// to continue. The slice is the ordered root→current sequence of
-// envelopes, most recent last.
+// Edge is a parent→child traversal in the call tree, presented to the
+// inhibitor after the child has resolved. Parent is the immediate
+// caller; Child is the just-resolved invocation; Path is the full
+// root→child sequence (inclusive of Child at the tail) for stateful
+// detectors that look back along the branch.
+//
+// The root has no incoming edge and is never checked, so Parent is
+// always non-nil when an Inhibitor is invoked.
+type Edge struct {
+	Parent *session.Envelope
+	Child  session.Envelope
+	Path   []session.Envelope
+}
+
+// Inhibitor watches an edge traversal and decides whether the
+// child's output should flow further.
 //
 // Phase 2 implementations only enforce the most basic signals (hard
 // depth cap, confidence threshold). Learned drift detection —
 // contradiction with earlier summaries, repetition cycling,
 // parallel-specialist disagreement — grows over time.
 type Inhibitor interface {
-	Check(path []session.Envelope) Verdict
+	Check(edge Edge) Verdict
 }

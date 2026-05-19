@@ -14,7 +14,7 @@ func env(c float64) session.Envelope {
 
 func TestFloorAborts(t *testing.T) {
 	c := New(0.4, 0, 0)
-	got := c.Check([]session.Envelope{env(0.8), env(0.6), env(0.3)})
+	got := c.Check(inhibitor.Edge{Path: []session.Envelope{env(0.8), env(0.6), env(0.3)}})
 	if got.Decision != inhibitor.Abort {
 		t.Fatalf("Decision = %v, want Abort", got.Decision)
 	}
@@ -22,7 +22,7 @@ func TestFloorAborts(t *testing.T) {
 
 func TestFloorTolerates(t *testing.T) {
 	c := New(0.4, 0, 0)
-	got := c.Check([]session.Envelope{env(0.8), env(0.6), env(0.5)})
+	got := c.Check(inhibitor.Edge{Path: []session.Envelope{env(0.8), env(0.6), env(0.5)}})
 	if got.Decision != inhibitor.Continue {
 		t.Fatalf("Decision = %v, want Continue", got.Decision)
 	}
@@ -30,7 +30,7 @@ func TestFloorTolerates(t *testing.T) {
 
 func TestDropTriggersRestart(t *testing.T) {
 	c := New(0, 0.3, 3)
-	got := c.Check([]session.Envelope{env(0.9), env(0.8), env(0.5)})
+	got := c.Check(inhibitor.Edge{Path: []session.Envelope{env(0.9), env(0.8), env(0.5)}})
 	if got.Decision != inhibitor.Restart {
 		t.Fatalf("Decision = %v, want Restart", got.Decision)
 	}
@@ -42,7 +42,7 @@ func TestDropTriggersRestart(t *testing.T) {
 func TestDropOnlyCountsPeakThenValley(t *testing.T) {
 	c := New(0, 0.3, 3)
 	// Rising trend — must not trigger.
-	got := c.Check([]session.Envelope{env(0.4), env(0.6), env(0.9)})
+	got := c.Check(inhibitor.Edge{Path: []session.Envelope{env(0.4), env(0.6), env(0.9)}})
 	if got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue for rising trend", got.Decision)
 	}
@@ -51,7 +51,7 @@ func TestDropOnlyCountsPeakThenValley(t *testing.T) {
 func TestDropWindowLimitsHistory(t *testing.T) {
 	c := New(0, 0.3, 2)
 	// 0.9 → 0.4 outside window; 0.7 → 0.6 inside window (drop=0.1).
-	got := c.Check([]session.Envelope{env(0.9), env(0.4), env(0.7), env(0.6)})
+	got := c.Check(inhibitor.Edge{Path: []session.Envelope{env(0.9), env(0.4), env(0.7), env(0.6)}})
 	if got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue (drop outside window)", got.Decision)
 	}
@@ -60,14 +60,14 @@ func TestDropWindowLimitsHistory(t *testing.T) {
 func TestSkipsEnvelopesWithoutOutcome(t *testing.T) {
 	c := New(0.4, 0, 0)
 	chain := []session.Envelope{{}, {}, env(0.5)}
-	if got := c.Check(chain); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{Path: chain}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue", got.Decision)
 	}
 }
 
 func TestEmptyChainContinues(t *testing.T) {
 	c := New(0.4, 0.3, 3)
-	if got := c.Check(nil); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue", got.Decision)
 	}
 }

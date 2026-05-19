@@ -15,7 +15,7 @@ func env(contras ...string) session.Envelope {
 func TestSpikeAborts(t *testing.T) {
 	c := New(3, 0)
 	chain := []session.Envelope{env("a"), env("b", "c", "d")}
-	if got := c.Check(chain); got.Decision != inhibitor.Abort {
+	if got := c.Check(inhibitor.Edge{Path: chain}); got.Decision != inhibitor.Abort {
 		t.Errorf("Decision = %v, want Abort on spike", got.Decision)
 	}
 }
@@ -23,7 +23,7 @@ func TestSpikeAborts(t *testing.T) {
 func TestMaxTotalAborts(t *testing.T) {
 	c := New(0, 5)
 	chain := []session.Envelope{env("a", "b"), env("c"), env("d", "e")}
-	if got := c.Check(chain); got.Decision != inhibitor.Abort {
+	if got := c.Check(inhibitor.Edge{Path: chain}); got.Decision != inhibitor.Abort {
 		t.Errorf("Decision = %v, want Abort on cumulative", got.Decision)
 	}
 }
@@ -31,7 +31,7 @@ func TestMaxTotalAborts(t *testing.T) {
 func TestBelowThresholdsContinues(t *testing.T) {
 	c := New(3, 5)
 	chain := []session.Envelope{env("a"), env("b"), env("c")}
-	if got := c.Check(chain); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{Path: chain}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue", got.Decision)
 	}
 }
@@ -39,7 +39,7 @@ func TestBelowThresholdsContinues(t *testing.T) {
 func TestZeroThresholdsDisable(t *testing.T) {
 	c := New(0, 0)
 	chain := []session.Envelope{env("a", "b", "c", "d", "e", "f", "g")}
-	if got := c.Check(chain); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{Path: chain}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue with both thresholds disabled", got.Decision)
 	}
 }
@@ -47,7 +47,7 @@ func TestZeroThresholdsDisable(t *testing.T) {
 func TestSkipsNilOutcome(t *testing.T) {
 	c := New(2, 3)
 	chain := []session.Envelope{{}, {}, env("only")}
-	if got := c.Check(chain); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{Path: chain}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue", got.Decision)
 	}
 }

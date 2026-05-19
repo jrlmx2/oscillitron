@@ -19,7 +19,6 @@ import (
 	"fmt"
 
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
-	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
 // Inhibitor configures the repetition detector.
@@ -38,7 +37,8 @@ func New(window, minRepeats int) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (r *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
+func (r *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
+	path := edge.Path
 	window := r.Window
 	if window <= 0 {
 		window = 5

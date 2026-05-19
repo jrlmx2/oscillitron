@@ -6,7 +6,10 @@
 //
 //  1. Dispatches it to the specialist registered for its BrainFunction
 //     (via pkg/registry).
-//  2. Checks the inhibitor against the root→current path after dispatch.
+//  2. For non-root nodes, invokes the inhibitor on the parent→current
+//     edge after dispatch (inhibition is an edge property — see
+//     pkg/inhibitor and parent CLAUDE.md). The root has no incoming
+//     edge and is never checked.
 //  3. If the invocation emitted SubAPs, builds child envelopes from the
 //     seeds, walks each subtree synchronously in order (v0 has no
 //     sibling parallelism), and recomposes children outputs into the
@@ -134,25 +137,34 @@ func walk(ctx context.Context, cfg Config, path []session.Envelope, current sess
 	}
 	current = osc.Invoke(ctx, current)
 
-	// Inhibitor check on the path including this newly-resolved node.
+	// Edge-based inhibitor check on the parent→current traversal.
+	// Root has no incoming edge, so skip when path is empty.
 	pathWithCurrent := append(append([]session.Envelope(nil), path...), current)
-	v := cfg.Inhibitor.Check(pathWithCurrent)
-	if v.Decision != inhibitor.Continue {
-		detail := v.Reason
-		if v.Decision == inhibitor.Restart {
-			// No checkpointing yet — downgrade to abort with annotated reason.
-			detail = "restart-as-abort (no checkpointing yet): " + v.Reason
+	if len(path) > 0 {
+		parent := path[len(path)-1]
+		edge := inhibitor.Edge{
+			Parent: &parent,
+			Child:  current,
+			Path:   pathWithCurrent,
 		}
-		if cfg.Tracer != nil {
-			trace.Info(cfg.Tracer, ctx, "inhibitor_abort",
-				slog.Int("decision", int(v.Decision)),
-				slog.String("reason", v.Reason),
-				slog.Int("path_depth", len(pathWithCurrent)),
-				slog.String("session", string(current.ID)),
-			)
+		v := cfg.Inhibitor.Check(edge)
+		if v.Decision != inhibitor.Continue {
+			detail := v.Reason
+			if v.Decision == inhibitor.Restart {
+				// No checkpointing yet — downgrade to abort with annotated reason.
+				detail = "restart-as-abort (no checkpointing yet): " + v.Reason
+			}
+			if cfg.Tracer != nil {
+				trace.Info(cfg.Tracer, ctx, "inhibitor_abort",
+					slog.Int("decision", int(v.Decision)),
+					slog.String("reason", v.Reason),
+					slog.Int("path_depth", len(pathWithCurrent)),
+					slog.String("session", string(current.ID)),
+				)
+			}
+			current.Output = inhibitedOutput(detail)
+			return current, nil
 		}
-		current.Output = inhibitedOutput(detail)
-		return current, nil
 	}
 
 	// Leaf — no SubAPs, no recomposition. Already inhibited (e.g. adapter

@@ -19,23 +19,33 @@ Last updated: 2026-05-18
 
 **Why this is good.** Bounds context degradation (long-context attention dilution is well-documented), makes specialist cost predictable, gives a clean handoff point. Brain analog: working memory has finite capacity and must offload before exhaustion.
 
-## Action potentials are summaries
+## Action potentials are invocations (was: summaries)
 
-**Idea.** The AP between sessions IS the compressed summary the upstream session produces on exit. The "spike" is just a compact handoff payload sized to be cheap for the downstream specialist to ingest.
+**Updated 2026-05-18.** Earlier framing called APs "summaries that hand off between peer specialists." That's been superseded by the call-tree lock in the parent CLAUDE.md: an AP is *an invocation of one brain function*, not a peer handoff. The "summary" framing still applies to what the invocation *produces* on exit (its output, classification, sub-AP seeds, exit reason), but the AP-as-it-enters-an-invocation is a call, not a handoff.
 
-**Why this is good.** Gives the AP a concrete data shape (until now hand-wavy). Unifies the spike concept with the practical handoff mechanic the system needs anyway.
+**Working envelope sketch** (stable enough to code against; final shape settles when the Hermes adapter exercises it):
 
-**Open.** Structured (JSON-like fields: state, attempts, remaining, confidence) or freeform prose? Structured is cheaper to parse and route on; freeform retains nuance. Probably a hybrid — small structured envelope wrapping a freeform body.
+- `SchemaVersion` — additive evolution.
+- `BrainFunction` — which function to invoke. Exactly one (siloed).
+- `Input` — the thing to operate on.
+- `OutputSchema` — handoff contract for the output. *Also* serves as the preloaded prompt requirement that forces the producing LLM to self-classify against it.
+- `ParentRef` — position in the call tree (root = nil).
+- `Budget` — token/depth allotted to this subtree.
+- On completion, the invocation populates: `Output`, `Classification` (against schema), `Confidence`, `SubAPs []SubAPSeed`, `ExitReason`.
+
+**AP vs. trace.** The AP stays lean — it's read by the next invocation, so token cost compounds over every hop. The fat learning-loop record (verifier feedback, retrieval shards consulted, full tree topology, cost ledger entries, calibration metadata) lives in `pkg/trace`, off the inference path. Package boundary enforces the separation.
+
+**Sub-AP seeds.** What the producing brain function emits to spawn further invocations. Likely a small struct: `{BrainFunction, Input, OutputSchema}` — enough to construct the child AP. Exact field set settles with the adapter.
 
 ## Multistep reasoning across sessions
 
-**Idea.** Hard problems chain multiple sessions, each focused on its slice, handing summaries forward. This is tree-of-thoughts / chain-of-thought spread across explicit session boundaries with summaries as the bridges.
+**Idea.** Hard problems form a *call tree* of invocations (LOCKED 2026-05-18 — see parent CLAUDE.md), each focused on its slice, recomposing results back up. Tree-of-thoughts spread across explicit session boundaries with sub-AP emission as the descent mechanism and the recomposer as the ascent mechanism. Earlier framing called this a "chain" — superseded; chains are just the degenerate case of a tree with one child per node.
 
-**Tradeoff.** Buys context-window cost amortization at the price of summary-loss risk in long chains. Mitigated by inhibition (below) and chain-depth caps.
+**Tradeoff.** Buys context-window cost amortization at the price of summary-loss risk in deep subtrees. Mitigated by per-subtree inhibition (below) and depth/budget caps per subtree plus a global cap on the whole tree.
 
 ## Inhibition as circuit-breaker
 
-**Idea.** An inhibitor (specialist or edge property — undecided) watches a chain for drift signals and aborts/restarts when triggered. Brain analog: anterior cingulate detects conflict and signals override to prefrontal cortex.
+**Idea.** An inhibitor (edge property — LOCKED 2026-05-18, see root CLAUDE.md) watches a chain for drift signals and aborts/restarts when triggered. Brain analog: anterior cingulate modulates signal flow between regions rather than acting as a separate stage.
 
 **Drift signals to watch.**
 
@@ -67,6 +77,5 @@ Last updated: 2026-05-18
 
 - Token-budget threshold — fixed at 70%, or tuned per specialist / per model?
 - Summary format — structured, freeform, or hybrid envelope?
-- Inhibitor as a dedicated node vs. as a graph-edge property attached to every chain edge?
 - Checkpoint granularity — every session boundary, or finer (every N tokens within a session)?
 - How does the verifier signal reach the summarizer? A bad downstream outcome should retroactively reward/punish the upstream summary that fed it.

@@ -18,6 +18,7 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 // ID identifies a specialist instance. Distinct from BrainFunction
@@ -29,12 +30,12 @@ type Oscillator struct {
 	ID            ID
 	BrainFunction session.BrainFunction
 	Adapter       adapter.Adapter
-	Logger        *slog.Logger // optional; nil-safe
+	Tracer        trace.Tracer // optional; nil-safe
 }
 
-// New constructs an oscillator. Logger may be nil.
-func New(id ID, bf session.BrainFunction, a adapter.Adapter, logger *slog.Logger) *Oscillator {
-	return &Oscillator{ID: id, BrainFunction: bf, Adapter: a, Logger: logger}
+// New constructs an oscillator. Tracer may be nil.
+func New(id ID, bf session.BrainFunction, a adapter.Adapter, tr trace.Tracer) *Oscillator {
+	return &Oscillator{ID: id, BrainFunction: bf, Adapter: a, Tracer: tr}
 }
 
 // Invoke runs the AP synchronously and returns the envelope with
@@ -47,13 +48,12 @@ func (o *Oscillator) Invoke(ctx context.Context, env session.Envelope) session.E
 	env.Trace.DurationMs = time.Since(start).Milliseconds()
 
 	if err != nil {
-		if o.Logger != nil {
-			o.Logger.Error("oscillator adapter error",
-				"oscillator", o.ID,
-				"brain_function", o.BrainFunction,
-				"adapter", o.Adapter.Name(),
-				"err", err)
-		}
+		o.emitError(ctx, "oscillator_adapter_error",
+			slog.String("oscillator", string(o.ID)),
+			slog.String("brain_function", string(o.BrainFunction)),
+			slog.String("adapter", o.Adapter.Name()),
+			slog.String("err", err.Error()),
+		)
 		env.Output = &session.Output{
 			ExitReason:     session.ExitInhibited,
 			Content:        "adapter error: " + err.Error(),
@@ -63,15 +63,28 @@ func (o *Oscillator) Invoke(ctx context.Context, env session.Envelope) session.E
 		return env
 	}
 	env.Output = &output
-	if o.Logger != nil {
-		o.Logger.Info("oscillator invoked",
-			"oscillator", o.ID,
-			"brain_function", o.BrainFunction,
-			"session", env.ID,
-			"exit", output.ExitReason,
-			"confidence", output.Confidence,
-			"subaps", len(output.SubAPs),
-			"duration_ms", env.Trace.DurationMs)
-	}
+	o.emitInfo(ctx, "oscillator_invoked",
+		slog.String("oscillator", string(o.ID)),
+		slog.String("brain_function", string(o.BrainFunction)),
+		slog.String("session", string(env.ID)),
+		slog.String("exit", string(output.ExitReason)),
+		slog.Float64("confidence", output.Confidence),
+		slog.Int("subaps", len(output.SubAPs)),
+		slog.Int64("duration_ms", env.Trace.DurationMs),
+	)
 	return env
+}
+
+func (o *Oscillator) emitInfo(ctx context.Context, name string, attrs ...slog.Attr) {
+	if o.Tracer == nil {
+		return
+	}
+	trace.Info(o.Tracer, ctx, name, attrs...)
+}
+
+func (o *Oscillator) emitError(ctx context.Context, name string, attrs ...slog.Attr) {
+	if o.Tracer == nil {
+		return
+	}
+	trace.Error(o.Tracer, ctx, name, attrs...)
 }

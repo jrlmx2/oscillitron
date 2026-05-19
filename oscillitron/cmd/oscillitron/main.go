@@ -39,10 +39,12 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/registry"
 	"github.com/jrlmx2/oscillitron/pkg/runner"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	tracer := trace.Slog{Logger: logger}
 
 	// Planning specialist emits two SubAPs: one reasoning, one critic.
 	planningSeeds := []session.SubAPSeed{
@@ -74,7 +76,7 @@ func main() {
 			WithClassification("plan_emitted").
 			WithSignals("split into reason+critic").
 			WithSubAPs(planningSeeds...),
-		logger,
+		tracer,
 	))
 	reg.Register(session.BrainReasoning, oscillator.New(
 		"reasoner-1", session.BrainReasoning,
@@ -83,7 +85,7 @@ func main() {
 			WithClassification("invariant_proven").
 			WithSignals("induction on i").
 			WithSubAPs(reasoningSeeds...),
-		logger,
+		tracer,
 	))
 	reg.Register(session.BrainRetrieval, oscillator.New(
 		"retriever-1", session.BrainRetrieval,
@@ -91,7 +93,7 @@ func main() {
 			WithConfidence(0.9).
 			WithClassification("proofs_list").
 			WithSignals("3 prior proofs found"),
-		logger,
+		tracer,
 	))
 	reg.Register(session.BrainCritic, oscillator.New(
 		"critic-1", session.BrainCritic,
@@ -99,7 +101,7 @@ func main() {
 			WithConfidence(0.7).
 			WithClassification("none").
 			WithSignals("base case checks out"),
-		logger,
+		tracer,
 	))
 
 	root := session.NewRoot(
@@ -120,7 +122,7 @@ func main() {
 			contradictions.New(3, 8),
 		),
 		Root:     root,
-		Logger:   logger,
+		Tracer:   tracer,
 		MaxDepth: 8,
 	}
 

@@ -31,6 +31,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/registry"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 // Config bundles the tree-walker's dependencies.
@@ -39,7 +40,7 @@ type Config struct {
 	Recomposer recomposer.Recomposer
 	Inhibitor  inhibitor.Inhibitor
 	Root       session.Envelope
-	Logger     *slog.Logger // optional; nil-safe
+	Tracer     trace.Tracer // optional; nil-safe
 
 	// MaxDepth bounds the call tree's depth as a belt-and-suspenders.
 	// Distinct from Envelope.Budget.DepthRemaining (which is per-AP
@@ -142,11 +143,13 @@ func walk(ctx context.Context, cfg Config, path []session.Envelope, current sess
 			// No checkpointing yet — downgrade to abort with annotated reason.
 			detail = "restart-as-abort (no checkpointing yet): " + v.Reason
 		}
-		if cfg.Logger != nil {
-			cfg.Logger.Info("inhibitor abort",
-				"decision", v.Decision, "reason", v.Reason,
-				"path_depth", len(pathWithCurrent),
-				"session", current.ID)
+		if cfg.Tracer != nil {
+			trace.Info(cfg.Tracer, ctx, "inhibitor_abort",
+				slog.Int("decision", int(v.Decision)),
+				slog.String("reason", v.Reason),
+				slog.Int("path_depth", len(pathWithCurrent)),
+				slog.String("session", string(current.ID)),
+			)
 		}
 		current.Output = inhibitedOutput(detail)
 		return current, nil
@@ -184,9 +187,11 @@ func walk(ctx context.Context, cfg Config, path []session.Envelope, current sess
 	// Recompose.
 	composed, err := cfg.Recomposer.Recompose(ctx, *current.Output, children)
 	if err != nil {
-		if cfg.Logger != nil {
-			cfg.Logger.Error("recompose error",
-				"session", current.ID, "err", err)
+		if cfg.Tracer != nil {
+			trace.Error(cfg.Tracer, ctx, "recompose_error",
+				slog.String("session", string(current.ID)),
+				slog.String("err", err.Error()),
+			)
 		}
 		current.Output = inhibitedOutput("recompose error: " + err.Error())
 		return current, nil

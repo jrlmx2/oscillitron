@@ -31,7 +31,8 @@ What's here:
   - `pkg/inhibitor/contradictions` — single-invocation spike or cumulative `Output.Contradictions` cap.
   - `pkg/inhibitor/composite` — combines members; Abort > Restart > Continue precedence.
 - **Recomposer** (`pkg/recomposer`) — load-bearing now. `Recompose(ctx, parentOutput, children []Envelope) (Output, error)`. `Concat` impl ships: joins content, takes weakest-link confidence min, deduplicates signals / contradictions / open questions.
-- **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up. Default mode uses stubs. With `--hermes <baseURL>` (e.g. `--hermes http://127.0.0.1:8642`) the demo wires the same registry through the real Hermes adapter; cost is tracked via `pkg/cost` and printed at the end. Hermes mode honours the call-tree shape only insofar as Hermes returns `sub_aps` in its structured envelope — weak models often emit only the prose answer.
+- **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up. Default mode uses stubs. With `--hermes <baseURL>` (e.g. `--hermes http://127.0.0.1:8642`) the demo wires the same registry through the real Hermes adapter; cost is tracked via `pkg/cost` and printed at the end. Hermes mode honours the call-tree shape only insofar as Hermes returns `sub_aps` in its structured envelope — weak models often emit only the prose answer. Configuration also accepts a `.properties` file via `--config <path>` or `OSCILLITRON_CONFIG` env (see `cmd/oscillitron/oscillitron.properties.example`); CLI flags always win over file values.
+- **Properties config** (`pkg/config`) — tiny stdlib-only `.properties` loader (Java-style `key=value`, `#` / `!` comments, dotted keys for hierarchy, typed accessors). Used by the demo for both single-endpoint (`hermes.url`) and multi-endpoint (`hermes.endpoints.<bf>.url`) Hermes setups. Deliberately a fraction of Spring Boot's surface — no profiles, no relaxed binding, no SpEL.
 - **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.
 - **Eval harness** (`pkg/eval`) — decoupled from the orchestrator (Runner is `func(ctx, Task) (string, error)`); no changes needed for the call-tree refactor.
 - **Trace** (`pkg/trace`) — slog-backed `Tracer` with `Info` / `Error` sugar helpers and a `Discard` no-op. Oscillator, runner, and the demo now emit through `trace.Tracer` rather than `*slog.Logger` directly. The fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
@@ -77,6 +78,12 @@ curl -s http://127.0.0.1:8642/v1/models
 go run ./cmd/oscillitron --hermes http://127.0.0.1:8642
 # Or pick the model explicitly:
 go run ./cmd/oscillitron --hermes http://127.0.0.1:8642 --hermes-model openrouter:openai/gpt-4o-mini
+
+# Or commit settings to a file and reuse:
+cp cmd/oscillitron/oscillitron.properties.example oscillitron.properties
+# (uncomment and edit the hermes.url / hermes.model lines, then:)
+go run ./cmd/oscillitron --config oscillitron.properties
+# CLI flags still win; --hermes "" forces back to stub mode.
 ```
 
 `--hermes` uses `hermes.SingleEndpoint` — one Hermes serves every brain function. The locked design is one Hermes *per* brain function; for that, edit `buildRegistry` in `cmd/oscillitron/main.go` to construct a `BrainFunction → Endpoint` map by hand and stand up N Hermes processes on different ports.

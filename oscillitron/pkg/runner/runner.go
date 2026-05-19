@@ -20,11 +20,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/jrlmx2/oscillitron/pkg/adapter"
+	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
 	"github.com/jrlmx2/oscillitron/pkg/oscillator"
 	"github.com/jrlmx2/oscillitron/pkg/router"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/topology"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 // Config bundles the runner's dependencies.
@@ -34,25 +37,42 @@ type Config struct {
 	Router      router.Router
 	Inhibitor   inhibitor.Inhibitor
 	Initial     session.Envelope
-	Logger      *slog.Logger // optional; nil-safe
-	BufferSize  int          // channel buffer; defaults to 8
+	// Logger is a convenience: if non-nil it's wrapped in trace.Slog
+	// and used as the runner's Tracer. Tracer takes precedence if both
+	// are set.
+	Logger *slog.Logger
+	Tracer trace.Tracer
+	// Tracker, if non-nil, records every emission's token usage and
+	// stamps Trace.CostUSD / Trace.CostVsFrontierBaselineUSD on the
+	// envelope before it's appended to the chain. Models without
+	// registered pricing record at ActualUSD=0 (still computes the
+	// frontier counterfactual).
+	Tracker *cost.Tracker
+	// BufferSize is the channel buffer per oscillator. Defaults to 8.
+	// Externalized via OSCILLITRON_RUNNER_BUFFER_SIZE / --runner-buffer-size.
+	BufferSize int
+	// ChainTimeout, if non-zero, wraps the caller's ctx with a deadline.
+	// Externalized via OSCILLITRON_RUNNER_CHAIN_TIMEOUT (a Go duration
+	// string like "30s", "5m") / --runner-chain-timeout. Zero leaves
+	// the caller's ctx unwrapped.
+	ChainTimeout time.Duration
 }
 
 // Reason describes why the runner stopped.
 type Reason string
 
 const (
-	ReasonTerminalOutcome Reason = "terminal_outcome"     // envelope.IsTerminal()
-	ReasonRouterTerminal  Reason = "router_terminal"      // router returned Terminal=true
-	ReasonInhibitorAbort  Reason = "inhibitor_abort"      // inhibitor said Abort
-	ReasonContextDone     Reason = "context_done"         // ctx.Done() fired
+	ReasonTerminalOutcome Reason = "terminal_outcome" // envelope.IsTerminal()
+	ReasonRouterTerminal  Reason = "router_terminal"  // router returned Terminal=true
+	ReasonInhibitorAbort  Reason = "inhibitor_abort"  // inhibitor said Abort
+	ReasonContextDone     Reason = "context_done"     // ctx.Done() fired
 )
 
 // Result is what the runner returns after the chain settles.
 type Result struct {
-	Chain   []session.Envelope
-	Reason  Reason
-	Detail  string
+	Chain  []session.Envelope
+	Reason Reason
+	Detail string
 }
 
 // Run executes the chain. It returns when the chain reaches a
@@ -72,8 +92,45 @@ func Run(ctx context.Context, cfg Config) (Result, error) {
 		bufSize = 8
 	}
 
+	tracer := cfg.Tracer
+	if tracer == nil {
+		if cfg.Logger != nil {
+			tracer = trace.Slog{Logger: cfg.Logger}
+		} else {
+			tracer = trace.Discard{}
+		}
+	}
+
+	// Advisory: warn when ChainTimeout is shorter than any adapter's
+	// declared MinCallTimeout. The per-adapter floor is still the hard
+	// guard at Call entry; this is just so the user knows their chain
+	// timeout setting will trigger inhibition on every call against
+	// this backend.
+	if cfg.ChainTimeout > 0 {
+		for id, osc := range cfg.Oscillators {
+			adv, ok := osc.Adapter.(adapter.MinTimeoutAdvisory)
+			if !ok {
+				continue
+			}
+			min := adv.MinCallTimeout()
+			if min > 0 && cfg.ChainTimeout < min {
+				tracer.Event(ctx, "runner.chain_timeout_below_adapter_floor",
+					slog.String("oscillator", string(id)),
+					slog.String("adapter", osc.Adapter.Name()),
+					slog.Duration("chain_timeout", cfg.ChainTimeout),
+					slog.Duration("adapter_min_call_timeout", min),
+				)
+			}
+		}
+	}
+
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	if cfg.ChainTimeout > 0 {
+		var timeoutCancel context.CancelFunc
+		runCtx, timeoutCancel = context.WithTimeout(runCtx, cfg.ChainTimeout)
+		defer timeoutCancel()
+	}
 
 	// Wire up: one input channel per oscillator, one shared output channel.
 	inputs := make(map[oscillator.ID]chan session.Envelope, len(cfg.Oscillators))
@@ -112,7 +169,20 @@ drainLoop:
 			result = Result{Chain: chain, Reason: ReasonContextDone, Detail: runCtx.Err().Error()}
 			break drainLoop
 		case em := <-shared:
-			chain = append(chain, em.Envelope)
+			env := em.Envelope
+			if cfg.Tracker != nil && env.Outcome != nil {
+				entry := cfg.Tracker.Record(
+					env.Routing.Model,
+					env.Outcome.TokensInput,
+					env.Outcome.TokensOutput,
+				)
+				env.Trace.CostUSD = entry.ActualUSD
+				env.Trace.CostVsFrontierBaselineUSD = entry.FrontierUSD
+			}
+			chain = append(chain, env)
+			// From here on the loop reads em.Envelope for routing/inhibition;
+			// keep that view in sync with the cost-stamped env.
+			em.Envelope = env
 
 			if v := cfg.Inhibitor.Check(chain); v.Decision != inhibitor.Continue {
 				// Restart isn't wired yet (no checkpointing); per
@@ -124,9 +194,11 @@ drainLoop:
 					detail = "restart-as-abort (no checkpointing yet): " + v.Reason
 				}
 				result = Result{Chain: chain, Reason: ReasonInhibitorAbort, Detail: detail}
-				if cfg.Logger != nil {
-					cfg.Logger.Info("inhibitor abort", "decision", v.Decision, "reason", v.Reason, "chain_len", len(chain))
-				}
+				tracer.Event(runCtx, "runner.inhibitor_abort",
+					slog.Int("decision", int(v.Decision)),
+					slog.String("reason", v.Reason),
+					slog.Int("chain_len", len(chain)),
+				)
 				break drainLoop
 			}
 
@@ -144,9 +216,10 @@ drainLoop:
 			}
 			if dec.Terminal {
 				result = Result{Chain: chain, Reason: ReasonRouterTerminal, Detail: dec.Reason}
-				if cfg.Logger != nil {
-					cfg.Logger.Info("router terminal", "reason", dec.Reason, "chain_len", len(chain))
-				}
+				tracer.Event(runCtx, "runner.router_terminal",
+					slog.String("reason", dec.Reason),
+					slog.Int("chain_len", len(chain)),
+				)
 				break drainLoop
 			}
 			// Defensive: a router that returns Terminal=false with no
@@ -164,20 +237,19 @@ drainLoop:
 					// silently dropping the AP.
 					result = Result{Chain: chain, Reason: ReasonRouterTerminal,
 						Detail: fmt.Sprintf("destination %q not in oscillator map", dest.To)}
-					if cfg.Logger != nil {
-						cfg.Logger.Warn("router pointed at unwired destination",
-							"dest", dest.To)
-					}
+					tracer.Event(runCtx, "runner.unwired_destination",
+						slog.String("dest", string(dest.To)),
+					)
 					break drainLoop
 				}
 				next := nextEnvelope(em.Envelope)
-				if cfg.Logger != nil {
-					cfg.Logger.Info("routing AP",
-						"from", em.From, "to", dest.To,
-						"parent_session", em.Envelope.ID,
-						"next_session", next.ID,
-						"router_reason", dec.Reason)
-				}
+				tracer.Event(runCtx, "runner.routing",
+					slog.String("from", string(em.From)),
+					slog.String("to", string(dest.To)),
+					slog.String("parent_session", string(em.Envelope.ID)),
+					slog.String("next_session", string(next.ID)),
+					slog.String("router_reason", dec.Reason),
+				)
 				if err := send(runCtx, ch, next); err != nil {
 					result = Result{Chain: chain, Reason: ReasonContextDone, Detail: err.Error()}
 					break drainLoop

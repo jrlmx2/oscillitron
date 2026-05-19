@@ -74,12 +74,18 @@ type Notes struct {
 
 // Input is what the specialist is asked to work on.
 type Input struct {
-	Type        string `json:"type"`         // "prompt", "outcome_handoff", etc.
+	Type        string `json:"type"` // "prompt", "outcome_handoff", etc.
 	Content     string `json:"content"`
 	ContentHash string `json:"content_hash"` // sha256:hex; populated by the orchestrator
 }
 
 // Outcome is the specialist's exit summary — the AP body.
+//
+// TokensInput/TokensOutput are populated by adapters that report
+// usage (the Hermes adapter parses ACP usage_update notifications).
+// The oscillator copies them into Envelope.Trace before emitting so
+// the cost layer sees them without inspecting Outcome. Zero values
+// are fine for adapters that don't report usage (e.g. stub).
 type Outcome struct {
 	ExitReason     ExitReason `json:"exit_reason"`
 	Verdict        string     `json:"verdict"`
@@ -88,6 +94,8 @@ type Outcome struct {
 	OpenQuestions  []string   `json:"open_questions"`
 	Contradictions []string   `json:"contradictions"`
 	FeedsInto      []ID       `json:"feeds_into"`
+	TokensInput    int        `json:"tokens_input,omitempty"`
+	TokensOutput   int        `json:"tokens_output,omitempty"`
 }
 
 // Routing records what backend handled the session and why.
@@ -112,7 +120,7 @@ type Trace struct {
 // through Phase 3.
 type Audit struct {
 	LedgerID  string `json:"ledger_id"`
-	SignedAt  string `json:"signed_at"`  // RFC3339
+	SignedAt  string `json:"signed_at"` // RFC3339
 	Signature string `json:"signature"`
 }
 

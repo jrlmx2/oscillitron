@@ -31,12 +31,14 @@ const (
 
 // Adapter is a deterministic, configurable stub.
 type Adapter struct {
-	name       string
-	mode       Mode
-	confidence float64
-	signals    []string
-	feedsInto  []session.ID
-	calls      atomic.Int64
+	name         string
+	mode         Mode
+	confidence   float64
+	signals      []string
+	feedsInto    []session.ID
+	tokensInput  int
+	tokensOutput int
+	calls        atomic.Int64
 }
 
 // New constructs a stub adapter.
@@ -66,6 +68,13 @@ func (a *Adapter) WithFeedsInto(ids ...session.ID) *Adapter {
 	return a
 }
 
+// WithTokens sets the TokensInput / TokensOutput counts the stub
+// reports on each Call. Lets the cost tracker exercise.
+func (a *Adapter) WithTokens(in, out int) *Adapter {
+	a.tokensInput, a.tokensOutput = in, out
+	return a
+}
+
 // Name implements adapter.Adapter.
 func (a *Adapter) Name() string { return a.name }
 
@@ -92,16 +101,20 @@ func (a *Adapter) Call(ctx context.Context, env session.Envelope) (session.Outco
 			Confidence:    a.confidence,
 			OpenQuestions: []string{"what remains: continue from here"},
 			FeedsInto:     a.feedsInto,
+			TokensInput:   a.tokensInput,
+			TokensOutput:  a.tokensOutput,
 		}, nil
 	case ModeDone:
 		fallthrough
 	default:
 		return session.Outcome{
-			ExitReason: session.ExitDone,
-			Verdict:    fmt.Sprintf("[%s] handled: %s", a.name, env.Objective),
-			Signals:    a.signals,
-			Confidence: a.confidence,
-			FeedsInto:  a.feedsInto,
+			ExitReason:   session.ExitDone,
+			Verdict:      fmt.Sprintf("[%s] handled: %s", a.name, env.Objective),
+			Signals:      a.signals,
+			Confidence:   a.confidence,
+			FeedsInto:    a.feedsInto,
+			TokensInput:  a.tokensInput,
+			TokensOutput: a.tokensOutput,
 		}, nil
 	}
 }

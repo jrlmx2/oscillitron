@@ -16,6 +16,7 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 // ID identifies an oscillator within a topology.
@@ -34,12 +35,28 @@ type Emission struct {
 type Oscillator struct {
 	ID      ID
 	Adapter adapter.Adapter
-	Logger  *slog.Logger // optional; nil-safe
+	Tracer  trace.Tracer
 }
 
-// New constructs an oscillator. Logger may be nil.
+// New constructs an oscillator. Accepts either a *slog.Logger (wrapped
+// in trace.Slog) or any trace.Tracer; a nil tracer is replaced with
+// trace.Discard so the dispatch loop never has to nil-check.
 func New(id ID, a adapter.Adapter, logger *slog.Logger) *Oscillator {
-	return &Oscillator{ID: id, Adapter: a, Logger: logger}
+	var t trace.Tracer = trace.Discard{}
+	if logger != nil {
+		t = trace.Slog{Logger: logger}
+	}
+	return &Oscillator{ID: id, Adapter: a, Tracer: t}
+}
+
+// NewWithTracer constructs an oscillator with an arbitrary Tracer.
+// Prefer this over New for non-slog backends (Langfuse, OTel) once
+// they land. nil tracer is replaced with trace.Discard.
+func NewWithTracer(id ID, a adapter.Adapter, t trace.Tracer) *Oscillator {
+	if t == nil {
+		t = trace.Discard{}
+	}
+	return &Oscillator{ID: id, Adapter: a, Tracer: t}
 }
 
 // Run is the oscillator's main loop. It blocks until in is closed or
@@ -80,13 +97,11 @@ func (o *Oscillator) dispatch(ctx context.Context, env session.Envelope) session
 	env.Trace.DurationMs = dur.Milliseconds()
 
 	if err != nil {
-		if o.Logger != nil {
-			o.Logger.Error("oscillator adapter error",
-				"oscillator", o.ID,
-				"adapter", o.Adapter.Name(),
-				"err", err,
-			)
-		}
+		o.Tracer.Event(ctx, "oscillator.adapter_error",
+			slog.String("oscillator", string(o.ID)),
+			slog.String("adapter", o.Adapter.Name()),
+			slog.String("err", err.Error()),
+		)
 		// Surface the error as an inhibited Outcome so the chain
 		// terminates cleanly rather than disappearing.
 		env.Outcome = &session.Outcome{
@@ -99,16 +114,19 @@ func (o *Oscillator) dispatch(ctx context.Context, env session.Envelope) session
 	}
 
 	env.Outcome = &outcome
+	// Copy usage into Trace so downstream layers (cost tracker, eval
+	// harness) don't have to peek at Outcome. Adapters that don't report
+	// usage leave these at zero.
+	env.Trace.TokensInput = outcome.TokensInput
+	env.Trace.TokensOutput = outcome.TokensOutput
 
-	if o.Logger != nil {
-		o.Logger.Info("oscillator emitted",
-			"oscillator", o.ID,
-			"session", env.ID,
-			"exit", outcome.ExitReason,
-			"confidence", outcome.Confidence,
-			"duration_ms", env.Trace.DurationMs,
-		)
-	}
+	o.Tracer.Event(ctx, "oscillator.emitted",
+		slog.String("oscillator", string(o.ID)),
+		slog.String("session", string(env.ID)),
+		slog.String("exit", string(outcome.ExitReason)),
+		slog.Float64("confidence", outcome.Confidence),
+		slog.Int64("duration_ms", env.Trace.DurationMs),
+	)
 
 	return env
 }

@@ -14,6 +14,7 @@ package adapter
 
 import (
 	"context"
+	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
@@ -28,4 +29,19 @@ type Adapter interface {
 	// substrate's Outcome. The caller stitches the Outcome back into
 	// the envelope and decides what to do next based on its ExitReason.
 	Call(ctx context.Context, env session.Envelope) (session.Outcome, error)
+}
+
+// MinTimeoutAdvisory is an OPTIONAL interface adapters may implement
+// to declare a minimum per-Call ctx deadline they need to operate.
+// The runner type-asserts at startup; if a chain-level timeout is set
+// shorter than what any adapter advertises, the runner emits a tracer
+// warning so the user knows their chain timeout is too aggressive
+// for the configured backend. This is advisory only — adapters that
+// care enforce hard refusal at Call entry independently (see
+// hermes.Adapter.MinCallTimeout / prompt_timeout_too_short signal).
+//
+// Adapters that don't care don't implement this; the runner skips
+// the check by type assertion.
+type MinTimeoutAdvisory interface {
+	MinCallTimeout() time.Duration
 }

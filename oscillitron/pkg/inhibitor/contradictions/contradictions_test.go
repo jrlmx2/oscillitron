@@ -9,7 +9,7 @@ import (
 )
 
 func env(contras ...string) session.Envelope {
-	return session.Envelope{Outcome: &session.Outcome{Contradictions: contras}}
+	return session.Envelope{Output: &session.Output{Contradictions: contras}}
 }
 
 func TestSpikeAborts(t *testing.T) {

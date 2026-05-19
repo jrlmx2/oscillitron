@@ -4,12 +4,14 @@
 // instance (production), a stub (tests/demo), or the frontier baseline
 // (comparison harness only).
 //
-// Per library-plan §5.3, with the wrap-Hermes lock applied (§3.2):
-// the production-facing Adapter takes an envelope IN and returns an
-// Outcome OUT, because the AP IS a summary handoff. The §5.3 v0.1
-// draft used a lower-level Request{Prompt}/Response{Text} shape; that
-// belongs to a future RawAdapter for direct model calls below the
-// Hermes layer, not to the orchestration boundary.
+// Under the call-tree model: the adapter takes an envelope IN (the
+// invocation) and returns an Output OUT. The oscillator stitches the
+// Output back into the envelope and returns it to the tree-walker,
+// which decides whether to descend into Output.SubAPs.
+//
+// Per-invocation session lifecycle is the adapter's responsibility.
+// A Hermes adapter, for example, may spin up a fresh Hermes process
+// per Call, seeded from the brain function's persistent memory store.
 package adapter
 
 import (
@@ -22,10 +24,9 @@ import (
 // package's stub subpackage), hermes (TBD — library-plan §9 step 4),
 // claude (frontier baseline, comparison harness only).
 type Adapter interface {
-	// Name identifies the adapter in logs and routing decisions.
+	// Name identifies the adapter in logs.
 	Name() string
-	// Call dispatches the envelope to the substrate and returns the
-	// substrate's Outcome. The caller stitches the Outcome back into
-	// the envelope and decides what to do next based on its ExitReason.
-	Call(ctx context.Context, env session.Envelope) (session.Outcome, error)
+	// Call runs the invocation and returns its Output. On non-nil
+	// error, the caller wraps the failure in an ExitInhibited Output.
+	Call(ctx context.Context, env session.Envelope) (session.Output, error)
 }

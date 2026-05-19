@@ -1,6 +1,6 @@
 // CLAUDE GENERATED
-// Package confidence is an Inhibitor that watches per-session
-// confidence scores reported by adapters via Outcome.Confidence. Two
+// Package confidence is an Inhibitor that watches per-invocation
+// confidence scores reported by adapters via Output.Confidence. Two
 // drift signals per design-notes.md "Inhibition as circuit-breaker":
 //
 //   - Floor: if the most recent envelope's confidence falls below
@@ -10,7 +10,7 @@
 //     A decaying confidence trend across sessions is the canonical
 //     drift signature.
 //
-// Envelopes without an Outcome (or with Confidence==0, the zero
+// Envelopes without an Output (or with Confidence==0, the zero
 // value) are skipped — a missing signal is not a negative signal.
 package confidence
 
@@ -41,8 +41,8 @@ func New(minFloor, maxDrop float64, window int) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
-	scores := collectScores(chain)
+func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
+	scores := collectScores(path)
 	if len(scores) == 0 {
 		return inhibitor.Verdict{Decision: inhibitor.Continue}
 	}
@@ -71,8 +71,6 @@ func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
 				start = 0
 			}
 			recent := scores[start:]
-			// Find peak before the min that follows it — a drop only
-			// counts if confidence went high then low, not low then high.
 			peak := recent[0]
 			worstDrop := 0.0
 			for _, s := range recent[1:] {
@@ -87,9 +85,9 @@ func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
 			if worstDrop >= c.MaxDrop {
 				return inhibitor.Verdict{
 					Decision: inhibitor.Restart,
-					Reason: fmt.Sprintf("confidence: dropped %.2f within last %d sessions (threshold %.2f)",
+					Reason: fmt.Sprintf("confidence: dropped %.2f within last %d invocations (threshold %.2f)",
 						worstDrop, len(recent), c.MaxDrop),
-					Checkpoint: len(chain) - len(recent),
+					Checkpoint: len(path) - len(recent),
 				}
 			}
 		}
@@ -98,18 +96,16 @@ func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
 	return inhibitor.Verdict{Decision: inhibitor.Continue}
 }
 
-func collectScores(chain []session.Envelope) []float64 {
-	out := make([]float64, 0, len(chain))
-	for _, e := range chain {
-		if e.Outcome == nil {
+func collectScores(path []session.Envelope) []float64 {
+	out := make([]float64, 0, len(path))
+	for _, e := range path {
+		if e.Output == nil {
 			continue
 		}
-		if e.Outcome.Confidence == 0 {
-			// Treat zero as "not reported." Avoids a stub or unset
-			// adapter looking like total uncertainty.
+		if e.Output.Confidence == 0 {
 			continue
 		}
-		out = append(out, e.Outcome.Confidence)
+		out = append(out, e.Output.Confidence)
 	}
 	return out
 }

@@ -1,13 +1,13 @@
 // CLAUDE GENERATED
-// Package repetition is an Inhibitor that detects a specialist
-// cycling — re-emitting the same verdict across recent sessions. Per
-// design-notes.md "Drift signals to watch": repetition / cycling is
-// the specialist re-trying the same approach.
+// Package repetition is an Inhibitor that detects an invocation
+// cycling — re-emitting the same content across recent invocations.
+// Per design-notes.md "Drift signals to watch": repetition / cycling
+// is the specialist re-trying the same approach.
 //
-// v0 detection is intentionally simple: count exact verdict
-// duplicates inside a trailing Window. If any verdict appears
-// MinRepeats or more times, abort. Empty verdicts (e.g. no Outcome
-// yet) are skipped — a missing payload isn't a repetition.
+// v0 detection is intentionally simple: count exact content
+// duplicates inside a trailing Window. If any value appears
+// MinRepeats or more times, abort. Empty values (e.g. no Output yet)
+// are skipped — a missing payload isn't a repetition.
 //
 // Future work: near-duplicate detection (cosine on small embeddings,
 // token-set Jaccard) once the project takes on a dependency that
@@ -38,7 +38,7 @@ func New(window, minRepeats int) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (r *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
+func (r *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
 	window := r.Window
 	if window <= 0 {
 		window = 5
@@ -47,27 +47,27 @@ func (r *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
 	if minRepeats < 2 {
 		minRepeats = 3
 	}
-	if len(chain) < minRepeats {
+	if len(path) < minRepeats {
 		return inhibitor.Verdict{Decision: inhibitor.Continue}
 	}
 
-	start := len(chain) - window
+	start := len(path) - window
 	if start < 0 {
 		start = 0
 	}
 	counts := make(map[string]int, window)
-	for _, e := range chain[start:] {
-		if e.Outcome == nil || e.Outcome.Verdict == "" {
+	for _, e := range path[start:] {
+		if e.Output == nil || e.Output.Content == "" {
 			continue
 		}
-		counts[e.Outcome.Verdict]++
+		counts[e.Output.Content]++
 	}
-	for verdict, n := range counts {
+	for content, n := range counts {
 		if n >= minRepeats {
 			return inhibitor.Verdict{
 				Decision: inhibitor.Abort,
-				Reason: fmt.Sprintf("repetition: verdict repeated %d times in last %d sessions (%q)",
-					n, len(chain[start:]), preview(verdict)),
+				Reason: fmt.Sprintf("repetition: content repeated %d times in last %d invocations (%q)",
+					n, len(path[start:]), preview(content)),
 			}
 		}
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func env(v string) session.Envelope {
-	return session.Envelope{Outcome: &session.Outcome{Verdict: v}}
+	return session.Envelope{Output: &session.Output{Content: v}}
 }
 
 func TestRepetitionAbortsOnDuplicateVerdicts(t *testing.T) {

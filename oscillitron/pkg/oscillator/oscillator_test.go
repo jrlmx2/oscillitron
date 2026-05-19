@@ -4,89 +4,56 @@ package oscillator
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
-func TestOscillatorEmitsWithSourceID(t *testing.T) {
-	a := stub.New("code", stub.ModeDone).WithConfidence(0.7)
-	o := New("code-osc", a, nil)
-
-	in := make(chan session.Envelope, 1)
-	out := make(chan Emission, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	go o.Run(ctx, in, out)
-
-	in <- session.Envelope{ID: "s1", Objective: "review"}
-	close(in)
-
-	select {
-	case em := <-out:
-		if em.From != "code-osc" {
-			t.Errorf("Emission.From = %q, want %q", em.From, "code-osc")
-		}
-		got := em.Envelope
-		if got.Outcome == nil {
-			t.Fatal("outcome not populated")
-		}
-		if got.Outcome.ExitReason != session.ExitDone {
-			t.Errorf("ExitReason = %q, want %q", got.Outcome.ExitReason, session.ExitDone)
-		}
-		if got.Routing.Model != "code" {
-			t.Errorf("Routing.Model = %q, want %q", got.Routing.Model, "code")
-		}
-	case <-ctx.Done():
-		t.Fatal("oscillator did not emit before timeout")
+func TestInvokePopulatesOutput(t *testing.T) {
+	a := stub.New("reasoner", stub.ModeDone).WithConfidence(0.7)
+	o := New("reasoner-1", session.BrainReasoning, a, nil)
+	env := session.Envelope{
+		ID:            "s1",
+		BrainFunction: session.BrainReasoning,
+		Input:         session.Input{Content: "review"},
+	}
+	got := o.Invoke(context.Background(), env)
+	if got.Output == nil {
+		t.Fatal("Invoke did not populate Output")
+	}
+	if got.Output.ExitReason != session.ExitDone {
+		t.Errorf("ExitReason = %q, want %q", got.Output.ExitReason, session.ExitDone)
+	}
+	if got.Output.Confidence != 0.7 {
+		t.Errorf("Confidence = %v, want 0.7", got.Output.Confidence)
 	}
 }
 
-func TestOscillatorSurfacesAdapterErrorAsInhibited(t *testing.T) {
-	a := stub.New("flaky", stub.ModeError)
-	o := New("flaky-osc", a, nil)
-
-	in := make(chan session.Envelope, 1)
-	out := make(chan Emission, 1)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	go o.Run(ctx, in, out)
-
-	in <- session.Envelope{ID: "s1"}
-	close(in)
-
-	em := <-out
-	if em.Envelope.Outcome == nil {
-		t.Fatal("outcome should be set even on error")
+func TestInvokeSurfacesAdapterErrorAsInhibited(t *testing.T) {
+	a := stub.New("broken", stub.ModeError)
+	o := New("broken-1", session.BrainReasoning, a, nil)
+	got := o.Invoke(context.Background(), session.Envelope{ID: "s2"})
+	if got.Output == nil {
+		t.Fatal("Invoke did not populate Output on adapter error")
 	}
-	if em.Envelope.Outcome.ExitReason != session.ExitInhibited {
-		t.Errorf("ExitReason = %q, want %q (errors surface as inhibited)",
-			em.Envelope.Outcome.ExitReason, session.ExitInhibited)
+	if got.Output.ExitReason != session.ExitInhibited {
+		t.Errorf("ExitReason = %q, want %q", got.Output.ExitReason, session.ExitInhibited)
+	}
+	if len(got.Output.Contradictions) == 0 {
+		t.Error("expected contradictions to flag adapter failure")
 	}
 }
 
-func TestOscillatorStopsOnContextCancel(t *testing.T) {
-	a := stub.New("x", stub.ModeDone)
-	o := New("x-osc", a, nil)
-
-	in := make(chan session.Envelope) // no buffer, no sender
-	out := make(chan Emission, 1)
+func TestInvokeRespectsContextCancellation(t *testing.T) {
+	a := stub.New("done", stub.ModeDone)
+	o := New("done-1", session.BrainReasoning, a, nil)
 	ctx, cancel := context.WithCancel(context.Background())
-
-	done := make(chan struct{})
-	go func() {
-		o.Run(ctx, in, out)
-		close(done)
-	}()
-
 	cancel()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("oscillator did not exit after context cancel")
+	got := o.Invoke(ctx, session.Envelope{})
+	if got.Output == nil {
+		t.Fatal("Invoke should populate Output even on ctx error")
+	}
+	if got.Output.ExitReason != session.ExitInhibited {
+		t.Errorf("cancelled ctx should surface as Inhibited; got %q", got.Output.ExitReason)
 	}
 }

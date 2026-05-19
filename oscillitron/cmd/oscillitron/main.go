@@ -34,36 +34,39 @@ import (
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
-	// Topology: code-analyst -> fact-check -> writer
+	// Topology: reasoner -> critic -> composer
 	//
-	//   * code-analyst (budget-exhausted): produces a partial result
-	//     and hands it forward.
-	//   * fact-check  (budget-exhausted): also hands forward — proves
-	//     the chain isn't single-hop.
-	//   * writer      (done): terminal node that produces the final
-	//     answer.
-	topo := topology.New("code-analyst")
-	must(topo.AddEdge("code-analyst", topology.Edge{To: "fact-check", Weight: 1.0}))
-	must(topo.AddEdge("fact-check", topology.Edge{To: "writer", Weight: 1.0}))
-	topo.AddNode("writer") // explicit sink
+	// Nodes are typed by brain function, never by subject domain
+	// (see ../../../CLAUDE.md "Architecture" — LOCKED 2026-05-18).
+	//
+	//   * reasoner (budget-exhausted): applies transformation / derives
+	//     a partial result and hands it forward.
+	//   * critic   (budget-exhausted): verifies, flags issues, hands
+	//     forward — proves the chain isn't single-hop.
+	//   * composer (done): terminal node that produces the final
+	//     output artifact.
+	topo := topology.New("reasoner")
+	must(topo.AddEdge("reasoner", topology.Edge{To: "critic", Weight: 1.0}))
+	must(topo.AddEdge("critic", topology.Edge{To: "composer", Weight: 1.0}))
+	topo.AddNode("composer") // explicit sink
 
 	oscMap := map[oscillator.ID]*oscillator.Oscillator{
-		"code-analyst": oscillator.New(
-			"code-analyst",
+		"reasoner": oscillator.New(
+			"reasoner",
 			stub.New("qwen3-coder-30b", stub.ModeBudgetExhausted).
 				WithConfidence(0.6).
 				WithSignals("loop bound looks suspicious"),
 			logger,
 		),
-		"fact-check": oscillator.New(
-			"fact-check",
+		"critic": oscillator.New(
+			"critic",
 			stub.New("qwen3-7b", stub.ModeBudgetExhausted).
 				WithConfidence(0.7).
 				WithSignals("confirmed: off-by-one at line 12"),
 			logger,
 		),
-		"writer": oscillator.New(
-			"writer",
+		"composer": oscillator.New(
+			"composer",
 			stub.New("qwen3-4b", stub.ModeDone).
 				WithConfidence(0.85),
 			logger,

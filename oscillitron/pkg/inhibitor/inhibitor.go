@@ -1,13 +1,14 @@
 // CLAUDE GENERATED
 // Package inhibitor defines the contract for the circuit-breaker that
-// watches a reasoning chain and decides whether to continue, restart,
-// or abort. Per design-notes.md "Inhibition as circuit-breaker":
-// brain analog is anterior cingulate detecting conflict and signaling
-// override to prefrontal cortex.
+// watches a reasoning path and decides whether to continue, restart,
+// or abort. Brain analog: anterior cingulate modulates signal flow
+// between regions (locked as an edge property, 2026-05-18 — see
+// parent CLAUDE.md).
 //
-// Open in design-notes.md (and library-plan §7.11): inhibitor as a
-// dedicated node vs. as a property attached to every chain edge. v0
-// treats it as a process called by the runner after each hop.
+// Under the call-tree model the runner invokes Check at the dispatch
+// edge between a parent invocation and each child sub-AP. The slice
+// passed to Check is the root→current path so far, not a linear chain;
+// the signature is unchanged because the data shape is the same.
 package inhibitor
 
 import "github.com/jrlmx2/oscillitron/pkg/session"
@@ -33,15 +34,14 @@ type Verdict struct {
 	Checkpoint int // for Restart: index in the chain to restart from. 0 means start of chain.
 }
 
-// Inhibitor watches a chain and decides whether to continue. Chains
-// are passed as the full ordered slice of envelopes processed so far,
-// most recent last.
+// Inhibitor watches a path through the call tree and decides whether
+// to continue. The slice is the ordered root→current sequence of
+// envelopes, most recent last.
 //
 // Phase 2 implementations only enforce the most basic signals (hard
-// max-iteration cap, confidence threshold). Learned drift detection
-// — contradiction with earlier summaries, repetition cycling,
-// parallel-specialist disagreement — grows over time as the
-// inhibitor's playbook expands.
+// depth cap, confidence threshold). Learned drift detection —
+// contradiction with earlier summaries, repetition cycling,
+// parallel-specialist disagreement — grows over time.
 type Inhibitor interface {
-	Check(chain []session.Envelope) Verdict
+	Check(path []session.Envelope) Verdict
 }

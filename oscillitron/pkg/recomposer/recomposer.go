@@ -1,12 +1,14 @@
 // CLAUDE GENERATED
-// Package recomposer merges the outcomes of a decomposed oscillation
-// back into a single envelope. Per library-plan §5.5: the concat
-// implementation joins verdicts in order; a tree.Recomposer (Phase 5)
-// will pairwise-merge with conflict resolution.
+// Package recomposer combines a parent invocation's resolved children
+// into the parent's final Output. Under the call-tree model
+// recomposition is load-bearing: every non-leaf invocation in the
+// tree passes through a recomposer once its SubAPs have been
+// dispatched and returned.
 //
-// Ships the interface and a concat implementation in this file.
-// Future impls (tree merge, voting, weighted blend) live in
-// subpackages.
+// v0 ships a generic Concat recomposer (simple content join, signals
+// aggregated, confidence min). Per-brain-function recomposers (e.g. an
+// LLM-driven recompose step that re-invokes the parent brain function
+// with children's outputs as context) arrive later.
 package recomposer
 
 import (
@@ -17,83 +19,77 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
-// Recomposer collapses an ordered slice of outcome-bearing envelopes
-// into a single envelope.
+// Recomposer collapses a parent's initial Output plus its resolved
+// children into a single composed Output. The composed Output has no
+// SubAPs (the children have, by definition, resolved).
 type Recomposer interface {
-	Recompose(ctx context.Context, outcomes []session.Envelope) (session.Envelope, error)
+	Recompose(ctx context.Context, parent session.Output, children []session.Envelope) (session.Output, error)
 }
 
-// Concat joins outcome verdicts in input order with a separator. The
-// returned envelope's Outcome.Confidence is the minimum across
-// inputs (the weakest link sets the confidence floor). Signals,
-// open questions, and contradictions are concatenated and
-// deduplicated in input order.
+// Concat joins parent and children Content with a separator. Confidence
+// is the weakest-link min across parent + children. Signals,
+// contradictions, and open questions are deduplicated unions.
 type Concat struct {
-	// Separator placed between joined verdicts. Defaults to "\n\n---\n\n".
+	// Separator placed between parent content and each child content.
+	// Defaults to "\n\n---\n\n" when empty.
 	Separator string
 }
 
 // Recompose implements Recomposer.
-func (c Concat) Recompose(_ context.Context, outcomes []session.Envelope) (session.Envelope, error) {
-	if len(outcomes) == 0 {
-		return session.Envelope{}, errors.New("recomposer: no outcomes to recompose")
+func (c Concat) Recompose(_ context.Context, parent session.Output, children []session.Envelope) (session.Output, error) {
+	if len(children) == 0 {
+		return session.Output{}, errors.New("recomposer: no children to recompose")
 	}
 	sep := c.Separator
 	if sep == "" {
 		sep = "\n\n---\n\n"
 	}
 
-	verdicts := make([]string, 0, len(outcomes))
-	minConf := 1.0
-	confSet := false
-	var signals, questions, contradictions []string
-	var feedsInto []session.ID
-	for _, e := range outcomes {
-		if e.Outcome == nil {
+	parts := make([]string, 0, 1+len(children))
+	if parent.Content != "" {
+		parts = append(parts, parent.Content)
+	}
+
+	minConf := parent.Confidence
+	confSet := parent.Confidence > 0
+	signals := append([]string(nil), parent.Signals...)
+	contradictions := append([]string(nil), parent.Contradictions...)
+	questions := append([]string(nil), parent.OpenQuestions...)
+
+	for _, child := range children {
+		if child.Output == nil {
 			continue
 		}
-		verdicts = append(verdicts, e.Outcome.Verdict)
-		if e.Outcome.Confidence > 0 {
-			if !confSet || e.Outcome.Confidence < minConf {
-				minConf = e.Outcome.Confidence
+		if child.Output.Content != "" {
+			parts = append(parts, child.Output.Content)
+		}
+		if child.Output.Confidence > 0 {
+			if !confSet || child.Output.Confidence < minConf {
+				minConf = child.Output.Confidence
 				confSet = true
 			}
 		}
-		signals = appendUnique(signals, e.Outcome.Signals)
-		questions = appendUnique(questions, e.Outcome.OpenQuestions)
-		contradictions = appendUnique(contradictions, e.Outcome.Contradictions)
-		feedsInto = append(feedsInto, e.Outcome.FeedsInto...)
+		signals = appendUnique(signals, child.Output.Signals)
+		contradictions = appendUnique(contradictions, child.Output.Contradictions)
+		questions = appendUnique(questions, child.Output.OpenQuestions)
 	}
-	if len(verdicts) == 0 {
-		return session.Envelope{}, errors.New("recomposer: outcomes carry no verdicts")
+
+	if len(parts) == 0 {
+		return session.Output{}, errors.New("recomposer: nothing to recompose (no content anywhere)")
 	}
 	if !confSet {
 		minConf = 0
 	}
 
-	// Inherit non-payload fields from the first envelope as a sensible
-	// default — classification, type, objective. Caller can override.
-	base := outcomes[0]
-	merged := session.Envelope{
-		Type:           base.Type,
-		Objective:      base.Objective,
-		Classification: base.Classification,
-		Notes:          base.Notes,
-		Input: session.Input{
-			Type:    "recomposed",
-			Content: strings.Join(verdicts, sep),
-		},
-		Outcome: &session.Outcome{
-			ExitReason:     session.ExitDone,
-			Verdict:        strings.Join(verdicts, sep),
-			Signals:        signals,
-			Confidence:     minConf,
-			OpenQuestions:  questions,
-			Contradictions: contradictions,
-			FeedsInto:      feedsInto,
-		},
-	}
-	return merged, nil
+	return session.Output{
+		Content:        strings.Join(parts, sep),
+		Classification: parent.Classification,
+		Confidence:     minConf,
+		Signals:        signals,
+		Contradictions: contradictions,
+		OpenQuestions:  questions,
+		ExitReason:     session.ExitDone,
+	}, nil
 }
 
 func appendUnique(dst, src []string) []string {

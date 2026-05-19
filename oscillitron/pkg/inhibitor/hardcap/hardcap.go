@@ -26,11 +26,11 @@ type Inhibitor struct {
 func New(maxSteps int) *Inhibitor { return &Inhibitor{MaxSteps: maxSteps} }
 
 // Check implements inhibitor.Inhibitor.
-func (h *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
-	if len(chain) > h.MaxSteps {
+func (h *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
+	if len(path) > h.MaxSteps {
 		return inhibitor.Verdict{
 			Decision: inhibitor.Abort,
-			Reason:   fmt.Sprintf("hardcap: chain length %d exceeded max %d", len(chain), h.MaxSteps),
+			Reason:   fmt.Sprintf("hardcap: path depth %d exceeded max %d", len(path), h.MaxSteps),
 		}
 	}
 	return inhibitor.Verdict{Decision: inhibitor.Continue}

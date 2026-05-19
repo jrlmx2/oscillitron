@@ -1,12 +1,14 @@
 // CLAUDE GENERATED
-// Package oscillator wraps an adapter behind an ID and a goroutine
-// that reads envelopes off an input channel, dispatches them to the
-// adapter, and forwards the resulting envelope (with Outcome
-// populated) to a shared output channel as an Emission.
+// Package oscillator wraps an adapter as a brain-function-typed
+// specialist. Long-lived per brain function; the adapter owns
+// per-invocation session lifecycle internally (e.g., spinning up a
+// fresh Hermes process seeded from the brain function's persistent
+// memory store).
 //
-// The oscillator is deliberately dumb: it does not decide where to
-// route the result. That's the router's job, applied by the runner
-// after the oscillator emits.
+// Under the call-tree model the oscillator is invoked synchronously
+// by the runner — there is no Run loop, no goroutine, no input/output
+// channels. The runner walks the call tree by calling Invoke and
+// recursing on Output.SubAPs.
 package oscillator
 
 import (
@@ -18,97 +20,58 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
-// ID identifies an oscillator within a topology.
+// ID identifies a specialist instance. Distinct from BrainFunction
+// (multiple instances may bind the same brain function later).
 type ID string
 
-// Emission pairs an envelope with the oscillator that produced it.
-// The runner reads Emissions from a shared output channel; the From
-// field tells the router which graph node to look up outgoing edges
-// from.
-type Emission struct {
-	From     ID
-	Envelope session.Envelope
-}
-
-// Oscillator is a specialist node — adapter + identity + goroutine.
+// Oscillator is a brain-function-typed wrapper around an adapter.
 type Oscillator struct {
-	ID      ID
-	Adapter adapter.Adapter
-	Logger  *slog.Logger // optional; nil-safe
+	ID            ID
+	BrainFunction session.BrainFunction
+	Adapter       adapter.Adapter
+	Logger        *slog.Logger // optional; nil-safe
 }
 
 // New constructs an oscillator. Logger may be nil.
-func New(id ID, a adapter.Adapter, logger *slog.Logger) *Oscillator {
-	return &Oscillator{ID: id, Adapter: a, Logger: logger}
+func New(id ID, bf session.BrainFunction, a adapter.Adapter, logger *slog.Logger) *Oscillator {
+	return &Oscillator{ID: id, BrainFunction: bf, Adapter: a, Logger: logger}
 }
 
-// Run is the oscillator's main loop. It blocks until in is closed or
-// ctx is cancelled. Each inbound envelope is dispatched to the adapter
-// and the result (with Outcome and Routing populated) is sent to out
-// as an Emission.
-//
-// Run does not own in or out; the caller (the runner) creates and
-// closes them.
-func (o *Oscillator) Run(ctx context.Context, in <-chan session.Envelope, out chan<- Emission) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case env, ok := <-in:
-			if !ok {
-				return
-			}
-			result := o.dispatch(ctx, env)
-			select {
-			case <-ctx.Done():
-				return
-			case out <- Emission{From: o.ID, Envelope: result}:
-			}
-		}
-	}
-}
-
-func (o *Oscillator) dispatch(ctx context.Context, env session.Envelope) session.Envelope {
+// Invoke runs the AP synchronously and returns the envelope with
+// Output populated. On adapter error, populates an ExitInhibited
+// Output so the tree-walker surfaces the failure cleanly rather than
+// dropping the AP.
+func (o *Oscillator) Invoke(ctx context.Context, env session.Envelope) session.Envelope {
 	start := time.Now()
-	outcome, err := o.Adapter.Call(ctx, env)
-	dur := time.Since(start)
-
-	// Always stamp routing + duration so the chain can be inspected
-	// even when the adapter errored.
-	env.Routing.Model = o.Adapter.Name()
-	env.Routing.Reason = "handled by " + string(o.ID)
-	env.Trace.DurationMs = dur.Milliseconds()
+	output, err := o.Adapter.Call(ctx, env)
+	env.Trace.DurationMs = time.Since(start).Milliseconds()
 
 	if err != nil {
 		if o.Logger != nil {
 			o.Logger.Error("oscillator adapter error",
 				"oscillator", o.ID,
+				"brain_function", o.BrainFunction,
 				"adapter", o.Adapter.Name(),
-				"err", err,
-			)
+				"err", err)
 		}
-		// Surface the error as an inhibited Outcome so the chain
-		// terminates cleanly rather than disappearing.
-		env.Outcome = &session.Outcome{
+		env.Output = &session.Output{
 			ExitReason:     session.ExitInhibited,
-			Verdict:        "adapter error: " + err.Error(),
+			Content:        "adapter error: " + err.Error(),
 			Confidence:     0,
 			Contradictions: []string{"adapter call failed"},
 		}
 		return env
 	}
-
-	env.Outcome = &outcome
-
+	env.Output = &output
 	if o.Logger != nil {
-		o.Logger.Info("oscillator emitted",
+		o.Logger.Info("oscillator invoked",
 			"oscillator", o.ID,
+			"brain_function", o.BrainFunction,
 			"session", env.ID,
-			"exit", outcome.ExitReason,
-			"confidence", outcome.Confidence,
-			"duration_ms", env.Trace.DurationMs,
-		)
+			"exit", output.ExitReason,
+			"confidence", output.Confidence,
+			"subaps", len(output.SubAPs),
+			"duration_ms", env.Trace.DurationMs)
 	}
-
 	return env
 }

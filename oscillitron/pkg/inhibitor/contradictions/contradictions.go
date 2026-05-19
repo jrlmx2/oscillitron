@@ -1,8 +1,8 @@
 // CLAUDE GENERATED
 // Package contradictions is an Inhibitor that watches the
-// Outcome.Contradictions field accumulating across a chain. Per
-// design-notes.md "Drift signals to watch": contradiction with an
-// earlier summary is a primary drift indicator.
+// Output.Contradictions field accumulating along a path through the
+// call tree. Per design-notes.md "Drift signals to watch":
+// contradiction with an earlier summary is a primary drift indicator.
 //
 // Two thresholds:
 //
@@ -35,18 +35,18 @@ func New(spike, maxTotal int) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
+func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
 	total := 0
-	for i, e := range chain {
-		if e.Outcome == nil {
+	for i, e := range path {
+		if e.Output == nil {
 			continue
 		}
-		n := len(e.Outcome.Contradictions)
+		n := len(e.Output.Contradictions)
 		total += n
 		if c.Spike > 0 && n >= c.Spike {
 			return inhibitor.Verdict{
 				Decision: inhibitor.Abort,
-				Reason: fmt.Sprintf("contradictions: session %d reported %d (spike threshold %d)",
+				Reason: fmt.Sprintf("contradictions: invocation %d reported %d (spike threshold %d)",
 					i, n, c.Spike),
 			}
 		}
@@ -54,7 +54,7 @@ func (c *Inhibitor) Check(chain []session.Envelope) inhibitor.Verdict {
 	if c.MaxTotal > 0 && total >= c.MaxTotal {
 		return inhibitor.Verdict{
 			Decision: inhibitor.Abort,
-			Reason:   fmt.Sprintf("contradictions: %d total across chain (threshold %d)", total, c.MaxTotal),
+			Reason:   fmt.Sprintf("contradictions: %d total along path (threshold %d)", total, c.MaxTotal),
 		}
 	}
 	return inhibitor.Verdict{Decision: inhibitor.Continue}

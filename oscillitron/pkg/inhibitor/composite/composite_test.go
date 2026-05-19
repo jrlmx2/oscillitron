@@ -6,16 +6,15 @@ import (
 	"testing"
 
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
-	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
 type fake struct{ v inhibitor.Verdict }
 
-func (f fake) Check([]session.Envelope) inhibitor.Verdict { return f.v }
+func (f fake) Check(inhibitor.Edge) inhibitor.Verdict { return f.v }
 
 func TestCompositeContinuesWhenAllContinue(t *testing.T) {
 	c := New(fake{inhibitor.Verdict{Decision: inhibitor.Continue}}, fake{inhibitor.Verdict{Decision: inhibitor.Continue}})
-	if got := c.Check(nil); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue", got.Decision)
 	}
 }
@@ -26,7 +25,7 @@ func TestCompositeAbortBeatsRestart(t *testing.T) {
 		fake{inhibitor.Verdict{Decision: inhibitor.Abort, Reason: "cap"}},
 		fake{inhibitor.Verdict{Decision: inhibitor.Continue}},
 	)
-	got := c.Check(nil)
+	got := c.Check(inhibitor.Edge{})
 	if got.Decision != inhibitor.Abort {
 		t.Fatalf("Decision = %v, want Abort", got.Decision)
 	}
@@ -41,7 +40,7 @@ func TestCompositeRestartPicksEarliestCheckpoint(t *testing.T) {
 		fake{inhibitor.Verdict{Decision: inhibitor.Restart, Reason: "b", Checkpoint: 2}},
 		fake{inhibitor.Verdict{Decision: inhibitor.Restart, Reason: "c", Checkpoint: 7}},
 	)
-	got := c.Check(nil)
+	got := c.Check(inhibitor.Edge{})
 	if got.Decision != inhibitor.Restart {
 		t.Fatalf("Decision = %v, want Restart", got.Decision)
 	}
@@ -58,7 +57,7 @@ func TestCompositeAggregatesMultipleAbortReasons(t *testing.T) {
 		fake{inhibitor.Verdict{Decision: inhibitor.Abort, Reason: "floor"}},
 		fake{inhibitor.Verdict{Decision: inhibitor.Abort, Reason: "cap"}},
 	)
-	got := c.Check(nil)
+	got := c.Check(inhibitor.Edge{})
 	if got.Decision != inhibitor.Abort {
 		t.Fatalf("Decision = %v, want Abort", got.Decision)
 	}
@@ -69,7 +68,7 @@ func TestCompositeAggregatesMultipleAbortReasons(t *testing.T) {
 
 func TestCompositeEmptyMembersContinues(t *testing.T) {
 	c := New()
-	if got := c.Check(nil); got.Decision != inhibitor.Continue {
+	if got := c.Check(inhibitor.Edge{}); got.Decision != inhibitor.Continue {
 		t.Errorf("Decision = %v, want Continue", got.Decision)
 	}
 }

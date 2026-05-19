@@ -22,14 +22,13 @@ What's here:
 - **Stub adapter** (`pkg/adapter/stub`) — configurable mode/confidence/classification/signals/SubAPs. Used by tests and demo.
 - **Oscillator** (`pkg/oscillator`) — thin brain-function-typed wrapper around an adapter. Synchronous `Invoke(ctx, env) Envelope`. No goroutine, no channels.
 - **Registry** (`pkg/registry`) — `BrainFunction → *Oscillator` dispatch table. Replaces the deleted `pkg/topology`. No edges, no weights.
-- **Runner** (`pkg/runner`) — synchronous recursive **tree-walker**. Dispatches via registry, checks inhibitor on the root→current path, descends into `Output.SubAPs`, recomposes children, propagates inhibited children up. Sync; no sibling parallelism. Belt-and-suspenders `MaxDepth` cap independent of per-AP `Budget.DepthRemaining`. Restart→Abort downgrade still in effect (no checkpointing yet).
-- **Inhibitor** (`pkg/inhibitor`) interface with implementations:
+- **Runner** (`pkg/runner`) — synchronous recursive **tree-walker**. Dispatches via registry, invokes the inhibitor on each parent→child edge after the child resolves (root has no incoming edge and is never checked), descends into `Output.SubAPs`, recomposes children, propagates inhibited children up. Sync; no sibling parallelism. Belt-and-suspenders `MaxDepth` cap independent of per-AP `Budget.DepthRemaining`. Restart→Abort downgrade still in effect (no checkpointing yet).
+- **Inhibitor** (`pkg/inhibitor`) — edge-property interface; `Check(Edge)` returns a verdict for the parent→child traversal. `Edge` carries `Parent`, `Child`, and the full root→child `Path` for stateful detectors. Implementations:
   - `pkg/inhibitor/hardcap` — path-depth cap.
   - `pkg/inhibitor/confidence` — floor abort + window-drop restart on `Output.Confidence`.
   - `pkg/inhibitor/repetition` — exact-content cycling detector over a sliding window.
   - `pkg/inhibitor/contradictions` — single-invocation spike or cumulative `Output.Contradictions` cap.
   - `pkg/inhibitor/composite` — combines members; Abort > Restart > Continue precedence.
-  - Argument is the root→current path through the call tree (slice shape unchanged; semantic interpretation differs).
 - **Recomposer** (`pkg/recomposer`) — load-bearing now. `Recompose(ctx, parentOutput, children []Envelope) (Output, error)`. `Concat` impl ships: joins content, takes weakest-link confidence min, deduplicates signals / contradictions / open questions.
 - **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up.
 - **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.

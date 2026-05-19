@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
-	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
 // Inhibitor configures the contradiction detector.
@@ -35,9 +34,9 @@ func New(spike, maxTotal int) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
+func (c *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
 	total := 0
-	for i, e := range path {
+	for i, e := range edge.Path {
 		if e.Output == nil {
 			continue
 		}

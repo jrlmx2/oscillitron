@@ -14,7 +14,6 @@ import (
 	"fmt"
 
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
-	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
 // Inhibitor enforces a maximum chain length.
@@ -26,11 +25,11 @@ type Inhibitor struct {
 func New(maxSteps int) *Inhibitor { return &Inhibitor{MaxSteps: maxSteps} }
 
 // Check implements inhibitor.Inhibitor.
-func (h *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
-	if len(path) > h.MaxSteps {
+func (h *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
+	if len(edge.Path) > h.MaxSteps {
 		return inhibitor.Verdict{
 			Decision: inhibitor.Abort,
-			Reason:   fmt.Sprintf("hardcap: path depth %d exceeded max %d", len(path), h.MaxSteps),
+			Reason:   fmt.Sprintf("hardcap: path depth %d exceeded max %d", len(edge.Path), h.MaxSteps),
 		}
 	}
 	return inhibitor.Verdict{Decision: inhibitor.Continue}

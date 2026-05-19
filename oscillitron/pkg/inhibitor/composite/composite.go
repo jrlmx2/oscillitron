@@ -15,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
-	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
 // Inhibitor runs each member and aggregates verdicts.
@@ -30,7 +29,7 @@ func New(members ...inhibitor.Inhibitor) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
+func (c *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
 	var (
 		aborts        []string
 		restarts      []string
@@ -39,7 +38,7 @@ func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
 	)
 
 	for _, m := range c.members {
-		v := m.Check(path)
+		v := m.Check(edge)
 		switch v.Decision {
 		case inhibitor.Abort:
 			aborts = append(aborts, v.Reason)

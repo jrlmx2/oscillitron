@@ -41,7 +41,8 @@ func New(minFloor, maxDrop float64, window int) *Inhibitor {
 }
 
 // Check implements inhibitor.Inhibitor.
-func (c *Inhibitor) Check(path []session.Envelope) inhibitor.Verdict {
+func (c *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
+	path := edge.Path
 	scores := collectScores(path)
 	if len(scores) == 0 {
 		return inhibitor.Verdict{Decision: inhibitor.Continue}

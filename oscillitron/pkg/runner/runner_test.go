@@ -19,7 +19,7 @@ import (
 // want deterministic abort/continue without depending on signal shape.
 type staticInhibitor struct{ v inhibitor.Verdict }
 
-func (s staticInhibitor) Check([]session.Envelope) inhibitor.Verdict { return s.v }
+func (s staticInhibitor) Check(inhibitor.Edge) inhibitor.Verdict { return s.v }
 
 func newRegistry(bindings map[session.BrainFunction]*oscillator.Oscillator) *registry.Registry {
 	r := registry.New()
@@ -96,10 +96,21 @@ func TestParentWithSubAPsRecomposesChildren(t *testing.T) {
 }
 
 func TestInhibitorAbortPropagates(t *testing.T) {
-	osc := oscillator.New("r", session.BrainReasoning,
-		stub.New("reasoner", stub.ModeDone), nil)
+	// Inhibition is an edge property — root has no incoming edge, so
+	// for the inhibitor to fire at all the root must emit a SubAP. The
+	// edge-level abort on the child then propagates back to the root.
+	subSeeds := []session.SubAPSeed{
+		{BrainFunction: session.BrainCritic, Input: session.Input{Content: "check"}, OutputSchema: "ok"},
+	}
+	parent := oscillator.New("p", session.BrainReasoning,
+		stub.New("reasoner", stub.ModeDone).WithSubAPs(subSeeds...), nil)
+	critic := oscillator.New("c", session.BrainCritic,
+		stub.New("critic", stub.ModeDone), nil)
 	cfg := Config{
-		Registry:   newRegistry(map[session.BrainFunction]*oscillator.Oscillator{session.BrainReasoning: osc}),
+		Registry: newRegistry(map[session.BrainFunction]*oscillator.Oscillator{
+			session.BrainReasoning: parent,
+			session.BrainCritic:    critic,
+		}),
 		Recomposer: recomposer.Concat{},
 		Inhibitor:  staticInhibitor{v: inhibitor.Verdict{Decision: inhibitor.Abort, Reason: "test abort"}},
 		Root:       session.NewRoot("root", session.BrainReasoning, "x", "y", session.Budget{DepthRemaining: 5}),
@@ -110,6 +121,23 @@ func TestInhibitorAbortPropagates(t *testing.T) {
 	}
 	if !res.Root.IsInhibited() {
 		t.Error("root should be inhibited")
+	}
+}
+
+func TestInhibitorSkippedAtRoot(t *testing.T) {
+	// A leaf root must dispatch successfully even when the inhibitor
+	// would always abort — the root has no incoming edge to check.
+	osc := oscillator.New("r", session.BrainReasoning,
+		stub.New("reasoner", stub.ModeDone).WithConfidence(0.5), nil)
+	cfg := Config{
+		Registry:   newRegistry(map[session.BrainFunction]*oscillator.Oscillator{session.BrainReasoning: osc}),
+		Recomposer: recomposer.Concat{},
+		Inhibitor:  staticInhibitor{v: inhibitor.Verdict{Decision: inhibitor.Abort, Reason: "should not fire"}},
+		Root:       session.NewRoot("root", session.BrainReasoning, "x", "y", session.Budget{DepthRemaining: 5}),
+	}
+	res, _ := Run(context.Background(), cfg)
+	if res.Reason != ReasonSuccess {
+		t.Fatalf("Reason = %q, want success (inhibitor should not fire at root)", res.Reason)
 	}
 }
 

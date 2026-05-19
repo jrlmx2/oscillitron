@@ -20,6 +20,7 @@ What's here:
 - **Classification levels** (`pkg/classification`).
 - **Adapter** (`pkg/adapter`) — interface returns `(session.Output, error)`. Per-invocation session lifecycle is the adapter's responsibility.
 - **Stub adapter** (`pkg/adapter/stub`) — configurable mode/confidence/classification/signals/SubAPs. Used by tests and demo.
+- **Hermes adapter** (`pkg/adapter/hermes`) — speaks the OpenAI-compatible HTTP gateway from `github.com/NousResearch/hermes-agent` (`gateway/platforms/api_server.py`). One long-lived Hermes per brain function = the specialist's persistent store; each AP invocation is a session within that specialist (`session_id = envelope.ID`). Uses `POST /v1/runs` + `GET /v1/runs/{id}/events` (SSE) so Hermes' own self-improvement loop stays in play. Tested against an `httptest`-served fake; the demo is not yet wired through Hermes (intentionally — needs a real local instance and model API key to smoke-test).
 - **Oscillator** (`pkg/oscillator`) — thin brain-function-typed wrapper around an adapter. Synchronous `Invoke(ctx, env) Envelope`. No goroutine, no channels.
 - **Registry** (`pkg/registry`) — `BrainFunction → *Oscillator` dispatch table. Replaces the deleted `pkg/topology`. No edges, no weights.
 - **Runner** (`pkg/runner`) — synchronous recursive **tree-walker**. Dispatches via registry, invokes the inhibitor on each parent→child edge after the child resolves (root has no incoming edge and is never checked), descends into `Output.SubAPs`, recomposes children, propagates inhibited children up. Sync; no sibling parallelism. Belt-and-suspenders `MaxDepth` cap independent of per-AP `Budget.DepthRemaining`. Restart→Abort downgrade still in effect (no checkpointing yet).
@@ -42,8 +43,10 @@ What's here:
 
 What's deliberately NOT here yet:
 
-- Real Hermes adapter — see library-plan §9 step 4. The call-tree skeleton is the spec it will code against.
-- Cost tracker wired into the runner — wiring lands with the real adapter so token counts come from somewhere real.
+- Demo wired through the Hermes adapter — `cmd/oscillitron` still uses the stub. Wiring it through Hermes needs a real local instance and a model API key, which is a setup task the user runs, not something the test suite can land cold.
+- Multi-instance Hermes — the adapter config takes a `BrainFunction → Endpoint` map, so multi-instance is the supported shape, but the locked "one per specialist" design hasn't been exercised end-to-end (would mean spawning N `hermes gateway` processes on different ports).
+- Approval handling — `/v1/runs/{id}/approval`. The v0 adapter rejects approval-required runs as inhibited; the orchestrator owns gating.
+- Cost tracker wired into the runner — the adapter records token usage into the cost tracker when one is provided, but the runner does not yet wire one up by default.
 - Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.
 - Real recomposer variants beyond Concat — LLM-driven recompose (re-invoke parent brain function with children outputs), tree-merge with conflict resolution. Plug in via the `Recomposer` interface.
 - Sibling parallelism, async sub-AP emission, hardware parallelism — deferred (see parent CLAUDE.md).
@@ -59,6 +62,27 @@ go run ./cmd/oscillitron
 ```
 
 Requires Go 1.26+ (current toolchain on dev machine; bumped from 1.21 on 2026-05-18).
+
+### Smoke-testing the Hermes adapter against a real local Hermes
+
+The adapter ships with table-tested behavior against an `httptest`-served fake, but the only way to verify it against a real Hermes is to run one locally:
+
+```
+# In a separate shell, with hermes-agent installed and configured
+# (model provider keys in ~/.hermes/.env, etc.):
+hermes gateway start
+# By default api_server listens on 127.0.0.1:8642. Confirm with:
+curl -s http://127.0.0.1:8642/v1/models
+```
+
+Then in Go, point the adapter at it:
+
+```go
+a, err := hermes.New(hermes.SingleEndpoint("http://127.0.0.1:8642", ""))
+// ...wire `a` into an oscillator via pkg/oscillator.New.
+```
+
+`SingleEndpoint` binds every brain function to the same Hermes for a fast smoke test. The locked design is one Hermes *per* brain function — for that, build a `BrainFunction → Endpoint` map by hand and stand up N Hermes processes on different ports.
 
 ## Conventions
 

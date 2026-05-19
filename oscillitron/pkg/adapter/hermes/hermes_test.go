@@ -139,10 +139,14 @@ func TestNewRejectsBlankBaseURL(t *testing.T) {
 
 func TestCallHappyPath(t *testing.T) {
 	f := newFake(t)
+	// Structured envelope inside run.completed — the documented v0
+	// output contract. Adapter parses it into the rich Output fields.
+	structured := `{"content":"Hello world.","classification":"ok","confidence":0.9,"signals":["s1"],"contradictions":[],"open_questions":[],"sub_aps":[]}`
+	completed := fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{"input_tokens":12,"output_tokens":3,"total_tokens":15}}`, structured)
 	f.setEvents(
 		`{"event":"message.delta","run_id":"run_fake","delta":"Hello "}`,
 		`{"event":"message.delta","run_id":"run_fake","delta":"world."}`,
-		`{"event":"run.completed","run_id":"run_fake","output":"Hello world.","usage":{"input_tokens":12,"output_tokens":3,"total_tokens":15}}`,
+		completed,
 	)
 
 	tracker := cost.New(cost.Pricing{InputUSDPerMTok: 10, OutputUSDPerMTok: 30})
@@ -168,6 +172,15 @@ func TestCallHappyPath(t *testing.T) {
 	if out.ExitReason != session.ExitDone {
 		t.Errorf("ExitReason = %q, want done", out.ExitReason)
 	}
+	if out.Confidence != 0.9 {
+		t.Errorf("Confidence = %v, want 0.9", out.Confidence)
+	}
+	if out.Classification != "ok" {
+		t.Errorf("Classification = %q, want ok", out.Classification)
+	}
+	if len(out.Signals) != 1 || out.Signals[0] != "s1" {
+		t.Errorf("Signals = %v, want [s1]", out.Signals)
+	}
 	if got := f.postRuns.Load(); got != 1 {
 		t.Errorf("POST /v1/runs called %d times, want 1", got)
 	}
@@ -181,8 +194,11 @@ func TestCallHappyPath(t *testing.T) {
 	if body["session_id"] != "sess-1" {
 		t.Errorf("session_id = %v, want sess-1", body["session_id"])
 	}
-	if body["instructions"] != "free-text" {
-		t.Errorf("instructions = %v, want free-text", body["instructions"])
+	// Instructions get the structured preamble prepended; the
+	// envelope's OutputSchema is the trailing schema directive.
+	instr, _ := body["instructions"].(string)
+	if !strings.Contains(instr, "JSON object") || !strings.Contains(instr, "free-text") {
+		t.Errorf("instructions missing preamble or schema: %q", instr)
 	}
 	if body["model"] != "test-model" {
 		t.Errorf("model = %v, want test-model", body["model"])
@@ -296,6 +312,88 @@ func TestContextCancellationStopsRun(t *testing.T) {
 	_, err = a.Call(ctx, envFor(session.BrainReasoning, "sess-7", "x"))
 	if err == nil {
 		t.Fatal("expected error from cancelled context")
+	}
+}
+
+func TestStructuredFromFencedBlock(t *testing.T) {
+	f := newFake(t)
+	// Hermes returns prose + a fenced JSON block; adapter pulls the
+	// block out and falls the prose into Content (since the JSON's
+	// Content is empty).
+	raw := "Sure, here's the answer:\n\n```json\n{\"content\":\"\",\"confidence\":0.7,\"sub_aps\":[{\"brain_function\":\"critic\",\"input\":\"check it\",\"output_schema\":\"ok\"}]}\n```\n\nLet me know if you want more.\n"
+	completed := fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`, raw)
+	f.setEvents(completed)
+
+	a, err := New(SingleEndpoint(f.server.URL, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	out, err := a.Call(context.Background(), envFor(session.BrainReasoning, "sess-fenced", "x"))
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if out.Confidence != 0.7 {
+		t.Errorf("Confidence = %v, want 0.7", out.Confidence)
+	}
+	if len(out.SubAPs) != 1 || out.SubAPs[0].BrainFunction != session.BrainCritic {
+		t.Errorf("SubAPs = %+v, want one critic", out.SubAPs)
+	}
+	if !strings.Contains(out.Content, "Sure, here's the answer") {
+		t.Errorf("Content should fall back to surrounding prose: %q", out.Content)
+	}
+}
+
+func TestUnstructuredFallback(t *testing.T) {
+	f := newFake(t)
+	completed := `{"event":"run.completed","run_id":"run_fake","output":"just text","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}`
+	f.setEvents(completed)
+
+	a, err := New(SingleEndpoint(f.server.URL, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	out, err := a.Call(context.Background(), envFor(session.BrainReasoning, "sess-unstructured", "x"))
+	if err != nil {
+		t.Fatalf("Call: %v", err)
+	}
+	if out.Content != "just text" {
+		t.Errorf("Content = %q, want raw fallback", out.Content)
+	}
+	if out.Confidence != 0 {
+		t.Errorf("Confidence = %v, want zero for unstructured", out.Confidence)
+	}
+}
+
+func TestRequireStructuredErrorsOnFallback(t *testing.T) {
+	f := newFake(t)
+	completed := `{"event":"run.completed","run_id":"run_fake","output":"plain prose, no envelope","usage":{}}`
+	f.setEvents(completed)
+
+	cfg := SingleEndpoint(f.server.URL, "")
+	cfg.RequireStructured = true
+	a, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-strict", "x"))
+	if err == nil || !strings.Contains(err.Error(), "no structured envelope") {
+		t.Fatalf("expected structured-required error, got %v", err)
+	}
+}
+
+func TestMalformedJSONBlockSurfacesParseError(t *testing.T) {
+	f := newFake(t)
+	raw := "```json\n{not valid json}\n```"
+	completed := fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{}}`, raw)
+	f.setEvents(completed)
+
+	a, err := New(SingleEndpoint(f.server.URL, ""))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-bad-json", "x"))
+	if err == nil || !strings.Contains(err.Error(), "parse fenced JSON") {
+		t.Fatalf("expected parse error, got %v", err)
 	}
 }
 

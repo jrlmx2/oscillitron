@@ -34,7 +34,7 @@ What's here:
 - **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up.
 - **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.
 - **Eval harness** (`pkg/eval`) — decoupled from the orchestrator (Runner is `func(ctx, Task) (string, error)`); no changes needed for the call-tree refactor.
-- **Trace** (`pkg/trace`) — slog-backed `Tracer`. Existing slog callsites in oscillator/runner/cmd are not yet migrated; the fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
+- **Trace** (`pkg/trace`) — slog-backed `Tracer` with `Info` / `Error` sugar helpers and a `Discard` no-op. Oscillator, runner, and the demo now emit through `trace.Tracer` rather than `*slog.Logger` directly. The fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
 
 **Deleted (no longer relevant under the call-tree model):**
 - `pkg/topology` — replaced by `pkg/registry`. No edges, no weights.
@@ -47,7 +47,6 @@ What's deliberately NOT here yet:
 - Cost tracker wired into the runner — wiring lands with the real adapter so token counts come from somewhere real.
 - Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.
 - Real recomposer variants beyond Concat — LLM-driven recompose (re-invoke parent brain function with children outputs), tree-merge with conflict resolution. Plug in via the `Recomposer` interface.
-- Trace migration — oscillator/runner/cmd still call slog directly.
 - Sibling parallelism, async sub-AP emission, hardware parallelism — deferred (see parent CLAUDE.md).
 - Checkpointing for inhibitor Restart — runner still downgrades Restart to Abort with annotated reason.
 - Anything compliance-shaped (audit ledger, manifest, classification routing) — Phase 4.

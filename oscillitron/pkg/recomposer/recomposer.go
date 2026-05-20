@@ -1,110 +1,50 @@
 // CLAUDE GENERATED
-// Package recomposer combines a parent invocation's resolved children
-// into the parent's final Output. Under the call-tree model
-// recomposition is load-bearing: every non-leaf invocation in the
-// tree passes through a recomposer once its SubAPs have been
-// dispatched and returned.
+// Package recomposer combines a parent plan's resolved children into
+// a single composed payload under the uniform-node + evaluate/execute
+// model.
 //
-// v0 ships a generic Concat recomposer (simple content join, signals
-// aggregated, confidence min). Per-brain-function recomposers (e.g. an
-// LLM-driven recompose step that re-invokes the parent brain function
-// with children's outputs as context) arrive later.
+// This file is a placeholder. Stage 4 of the uniform-node refactor
+// rewrites the recomposer to read the RecomposeSpec carried on the
+// parent plan's emit_subtree payload and dispatch accordingly:
+//
+//   - RecomposeSequential — Concat-style sequential reduction.
+//   - RecomposePairwise   — driven by the compose playbook self-chaining
+//     off the parent's scope channel; the recomposer in this package
+//     supplies the binary reducer step.
+//   - RecomposeNone       — no recomposition; parent simply collects
+//     children without merging.
+//
+// Until Stage 4 lands, Concat is preserved in skeletal form but no
+// longer reads the old session.Output flat record (deleted).
 package recomposer
 
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
-// Recomposer collapses a parent's initial Output plus its resolved
-// children into a single composed Output. The composed Output has no
-// SubAPs (the children have, by definition, resolved).
+// Recomposer collapses N resolved children into a single composed
+// return_result payload. Inputs are the children's return_result
+// payloads only; emit_subtree and verifier_signal children are not
+// directly composable (the runner handles those separately).
 type Recomposer interface {
-	Recompose(ctx context.Context, parent session.Output, children []session.Envelope) (session.Output, error)
+	Recompose(ctx context.Context, spec session.RecomposeSpec, children []session.ReturnResultPayload) (session.ReturnResultPayload, error)
 }
 
-// Concat joins parent and children Content with a separator. Confidence
-// is the weakest-link min across parent + children. Signals,
-// contradictions, and open questions are deduplicated unions.
+// ErrStagePending is returned by all Recomposer implementations while
+// Stage 4 of the uniform-node refactor is in flight.
+var ErrStagePending = errors.New("recomposer: rewrite pending (Stage 4 of uniform-node refactor)")
+
+// Concat is the v0 sequential recomposer. Skeletal until Stage 4.
 type Concat struct {
-	// Separator placed between parent content and each child content.
-	// Defaults to "\n\n---\n\n" when empty.
 	Separator string
 }
 
 // Recompose implements Recomposer.
-func (c Concat) Recompose(_ context.Context, parent session.Output, children []session.Envelope) (session.Output, error) {
-	if len(children) == 0 {
-		return session.Output{}, errors.New("recomposer: no children to recompose")
-	}
-	sep := c.Separator
-	if sep == "" {
-		sep = "\n\n---\n\n"
-	}
-
-	parts := make([]string, 0, 1+len(children))
-	if parent.Content != "" {
-		parts = append(parts, parent.Content)
-	}
-
-	minConf := parent.Confidence
-	confSet := parent.Confidence > 0
-	signals := append([]string(nil), parent.Signals...)
-	contradictions := append([]string(nil), parent.Contradictions...)
-	questions := append([]string(nil), parent.OpenQuestions...)
-
-	for _, child := range children {
-		if child.Output == nil {
-			continue
-		}
-		if child.Output.Content != "" {
-			parts = append(parts, child.Output.Content)
-		}
-		if child.Output.Confidence > 0 {
-			if !confSet || child.Output.Confidence < minConf {
-				minConf = child.Output.Confidence
-				confSet = true
-			}
-		}
-		signals = appendUnique(signals, child.Output.Signals)
-		contradictions = appendUnique(contradictions, child.Output.Contradictions)
-		questions = appendUnique(questions, child.Output.OpenQuestions)
-	}
-
-	if len(parts) == 0 {
-		return session.Output{}, errors.New("recomposer: nothing to recompose (no content anywhere)")
-	}
-	if !confSet {
-		minConf = 0
-	}
-
-	return session.Output{
-		Content:        strings.Join(parts, sep),
-		Classification: parent.Classification,
-		Confidence:     minConf,
-		Signals:        signals,
-		Contradictions: contradictions,
-		OpenQuestions:  questions,
-		ExitReason:     session.ExitDone,
-	}, nil
-}
-
-func appendUnique(dst, src []string) []string {
-	seen := make(map[string]struct{}, len(dst))
-	for _, s := range dst {
-		seen[s] = struct{}{}
-	}
-	for _, s := range src {
-		if _, ok := seen[s]; ok {
-			continue
-		}
-		seen[s] = struct{}{}
-		dst = append(dst, s)
-	}
-	return dst
+func (c Concat) Recompose(_ context.Context, _ session.RecomposeSpec, _ []session.ReturnResultPayload) (session.ReturnResultPayload, error) {
+	return session.ReturnResultPayload{}, ErrStagePending
 }
 
 var _ Recomposer = Concat{}

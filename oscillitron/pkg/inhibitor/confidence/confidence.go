@@ -1,7 +1,8 @@
 // CLAUDE GENERATED
 // Package confidence is an Inhibitor that watches per-invocation
-// confidence scores reported by adapters via Output.Confidence. Two
-// drift signals per design-notes.md "Inhibition as circuit-breaker":
+// confidence scores reported by adapters on a return_result execute
+// payload. Two drift signals per design-notes.md "Inhibition as
+// circuit-breaker":
 //
 //   - Floor: if the most recent envelope's confidence falls below
 //     MinFloor, abort. A single very-unsure session is enough.
@@ -10,8 +11,10 @@
 //     A decaying confidence trend across sessions is the canonical
 //     drift signature.
 //
-// Envelopes without an Output (or with Confidence==0, the zero
-// value) are skipped — a missing signal is not a negative signal.
+// Envelopes without a return_result payload (i.e. plan emit_subtree
+// or verifier_signal exits) are skipped — they don't carry a
+// confidence score in the same place. Confidence==0 is also skipped:
+// a missing signal is not a negative signal.
 package confidence
 
 import (
@@ -100,13 +103,14 @@ func (c *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
 func collectScores(path []session.Envelope) []float64 {
 	out := make([]float64, 0, len(path))
 	for _, e := range path {
-		if e.Output == nil {
+		if e.Execute == nil || e.Execute.ReturnResult == nil {
 			continue
 		}
-		if e.Output.Confidence == 0 {
+		conf := e.Execute.ReturnResult.Confidence
+		if conf == 0 {
 			continue
 		}
-		out = append(out, e.Output.Confidence)
+		out = append(out, conf)
 	}
 	return out
 }

@@ -1,5 +1,3 @@
-//go:build hermes_stage5
-
 // CLAUDE GENERATED
 package hermes
 
@@ -20,21 +18,20 @@ import (
 
 // fakeHermes stands in for a Hermes /v1/runs surface. Each test
 // configures the SSE event sequence it wants emitted, plus optional
-// status overrides.
+// status overrides. The same instance serves both Evaluate and
+// Execute calls; tests reconfigure events between calls when needed.
 type fakeHermes struct {
 	t        *testing.T
 	server   *httptest.Server
 	postRuns atomic.Int32
 	getEvts  atomic.Int32
 
-	mu          sync.Mutex
-	runStatus   int // 0 → 202, otherwise the override
-	runRespBody string
-	eventsStatus int // 0 → 200
-	events      []string // raw SSE payload lines (each becomes "data: <line>\n\n")
-
-	// lastBody captures the most recent POST body for body-shape assertions.
-	lastBody map[string]any
+	mu           sync.Mutex
+	runStatus    int    // 0 → 202, otherwise the override
+	runRespBody  string
+	eventsStatus int      // 0 → 200
+	events       []string // raw SSE payload lines (each becomes "data: <line>\n\n")
+	lastBody     map[string]any
 }
 
 func newFake(t *testing.T) *fakeHermes {
@@ -101,316 +98,401 @@ func (f *fakeHermes) setEvents(events ...string) {
 	f.events = events
 }
 
-func envFor(bf session.BrainFunction, id session.ID, content string) session.Envelope {
+// completedEvent produces a run.completed SSE payload carrying the
+// supplied JSON-as-a-string output and a fixed token usage.
+func completedEvent(output string) string {
+	return fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{"input_tokens":12,"output_tokens":3,"total_tokens":15}}`, output)
+}
+
+func envFor(id session.ID, content, schema string) session.Envelope {
 	return session.Envelope{
 		SchemaVersion: session.SchemaVersion,
 		ID:            id,
-		BrainFunction: bf,
-		Input:         session.Input{Type: "prompt", Content: content},
-		OutputSchema:  "free-text",
-		Budget:        session.Budget{DepthRemaining: 1},
+		RootID:        id,
+		Path:          []session.ID{id},
+		Input:         session.Payload{Kind: "task", Content: content},
+		OutputSchema:  schema,
+		Budget:        session.Budget{DepthRemaining: 3},
 	}
 }
 
-func TestSingleEndpointBindsAllBrainFunctions(t *testing.T) {
+func envWithEvaluate(id session.ID, content string, pb session.Playbook) session.Envelope {
+	e := envFor(id, content, "free-text")
+	e.Evaluate = &session.Evaluate{Playbook: pb, Confidence: 0.9}
+	return e
+}
+
+func TestSingleEndpointBindsEvaluateAndAllPlaybooks(t *testing.T) {
 	cfg := SingleEndpoint("http://x", "test-model")
-	for _, bf := range []session.BrainFunction{
-		session.BrainPerception, session.BrainRetrieval, session.BrainPlanning,
-		session.BrainReasoning, session.BrainCritic, session.BrainComposition,
+	if cfg.EvaluateEndpoint.BaseURL != "http://x" {
+		t.Errorf("EvaluateEndpoint missing or wrong: %+v", cfg.EvaluateEndpoint)
+	}
+	for _, pb := range []session.Playbook{
+		session.PlaybookPlan, session.PlaybookProcess,
+		session.PlaybookCritique, session.PlaybookVerifyGrounded,
+		session.PlaybookCompose,
 	} {
-		if _, ok := cfg.Endpoints[bf]; !ok {
-			t.Errorf("SingleEndpoint missing brain function %q", bf)
+		if _, ok := cfg.ExecuteEndpoints[pb]; !ok {
+			t.Errorf("SingleEndpoint missing playbook %q", pb)
 		}
 	}
 }
 
-func TestNewRejectsEmptyEndpoints(t *testing.T) {
+func TestNewRejectsMissingEvaluateEndpoint(t *testing.T) {
 	if _, err := New(Config{}); err == nil {
-		t.Fatal("New with no endpoints should error")
+		t.Fatal("New with no EvaluateEndpoint should error")
+	}
+	if _, err := New(Config{
+		EvaluateEndpoint: Endpoint{BaseURL: "http://x"},
+	}); err == nil {
+		t.Fatal("New with no ExecuteEndpoints should error")
 	}
 }
 
 func TestNewRejectsBlankBaseURL(t *testing.T) {
-	cfg := Config{Endpoints: map[session.BrainFunction]Endpoint{
-		session.BrainReasoning: {BaseURL: "   "},
-	}}
+	cfg := Config{
+		EvaluateEndpoint: Endpoint{BaseURL: "http://x"},
+		ExecuteEndpoints: map[session.Playbook]Endpoint{
+			session.PlaybookProcess: {BaseURL: "   "},
+		},
+	}
 	if _, err := New(cfg); err == nil {
 		t.Fatal("blank BaseURL should error")
 	}
 }
 
-func TestCallHappyPath(t *testing.T) {
+func TestEvaluateHappyPath(t *testing.T) {
 	f := newFake(t)
-	// Structured envelope inside run.completed — the documented v0
-	// output contract. Adapter parses it into the rich Output fields.
-	structured := `{"content":"Hello world.","classification":"ok","confidence":0.9,"signals":["s1"],"contradictions":[],"open_questions":[],"sub_aps":[]}`
-	completed := fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{"input_tokens":12,"output_tokens":3,"total_tokens":15}}`, structured)
-	f.setEvents(
-		`{"event":"message.delta","run_id":"run_fake","delta":"Hello "}`,
-		`{"event":"message.delta","run_id":"run_fake","delta":"world."}`,
-		completed,
-	)
+	f.setEvents(completedEvent(`{"playbook":"process","rationale":"single task","confidence":0.85}`))
 
-	tracker := cost.New(cost.Pricing{InputUSDPerMTok: 10, OutputUSDPerMTok: 30})
-	tracker.Register("test-model", cost.Pricing{InputUSDPerMTok: 1, OutputUSDPerMTok: 3})
-
-	a, err := New(Config{
-		Endpoints: map[session.BrainFunction]Endpoint{
-			session.BrainReasoning: {BaseURL: f.server.URL, Model: "test-model"},
-		},
-		Cost: tracker,
-	})
+	a, err := New(SingleEndpoint(f.server.URL, "test-model"))
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-
-	out, err := a.Call(context.Background(), envFor(session.BrainReasoning, "sess-1", "say hi"))
+	env, err := a.Evaluate(context.Background(), envFor("ap-1", "say hi", "{answer}"))
 	if err != nil {
-		t.Fatalf("Call: %v", err)
+		t.Fatalf("Evaluate: %v", err)
 	}
-	if out.Content != "Hello world." {
-		t.Errorf("Content = %q, want %q", out.Content, "Hello world.")
+	if env.Evaluate == nil {
+		t.Fatal("Evaluate field not populated")
 	}
-	if out.ExitReason != session.ExitDone {
-		t.Errorf("ExitReason = %q, want done", out.ExitReason)
+	if env.Evaluate.Playbook != session.PlaybookProcess {
+		t.Errorf("Playbook = %q, want process", env.Evaluate.Playbook)
 	}
-	if out.Confidence != 0.9 {
-		t.Errorf("Confidence = %v, want 0.9", out.Confidence)
+	if env.Evaluate.Confidence != 0.85 {
+		t.Errorf("Confidence = %v, want 0.85", env.Evaluate.Confidence)
 	}
-	if out.Classification != "ok" {
-		t.Errorf("Classification = %q, want ok", out.Classification)
+	if env.Evaluate.Rationale != "single task" {
+		t.Errorf("Rationale = %q", env.Evaluate.Rationale)
 	}
-	if len(out.Signals) != 1 || out.Signals[0] != "s1" {
-		t.Errorf("Signals = %v, want [s1]", out.Signals)
-	}
-	if got := f.postRuns.Load(); got != 1 {
-		t.Errorf("POST /v1/runs called %d times, want 1", got)
-	}
-	if got := f.getEvts.Load(); got != 1 {
-		t.Errorf("GET events called %d times, want 1", got)
-	}
-	// Body shape: session_id == envelope ID, instructions == OutputSchema, model == ep.Model.
+	// Session ID should be "<envID>:evaluate".
 	f.mu.Lock()
 	body := f.lastBody
 	f.mu.Unlock()
-	if body["session_id"] != "sess-1" {
-		t.Errorf("session_id = %v, want sess-1", body["session_id"])
-	}
-	// Instructions get the structured preamble prepended; the
-	// envelope's OutputSchema is the trailing schema directive.
-	instr, _ := body["instructions"].(string)
-	if !strings.Contains(instr, "JSON object") || !strings.Contains(instr, "free-text") {
-		t.Errorf("instructions missing preamble or schema: %q", instr)
-	}
-	if body["model"] != "test-model" {
-		t.Errorf("model = %v, want test-model", body["model"])
-	}
-	if body["input"] != "say hi" {
-		t.Errorf("input = %v, want 'say hi'", body["input"])
-	}
-
-	// Cost ledger captured the usage under the endpoint's model.
-	summary := tracker.Summary()
-	if len(summary.Entries) != 1 {
-		t.Fatalf("expected 1 cost entry, got %d", len(summary.Entries))
-	}
-	if summary.Entries[0].TokensInput != 12 || summary.Entries[0].TokensOutput != 3 {
-		t.Errorf("cost entry tokens = (%d,%d), want (12,3)",
-			summary.Entries[0].TokensInput, summary.Entries[0].TokensOutput)
+	if body["session_id"] != "ap-1:evaluate" {
+		t.Errorf("session_id = %v, want ap-1:evaluate", body["session_id"])
 	}
 }
 
-func TestCallRunFailedSurfacesError(t *testing.T) {
+func TestEvaluateRejectsUnknownPlaybook(t *testing.T) {
 	f := newFake(t)
-	f.setEvents(
-		`{"event":"run.failed","run_id":"run_fake","error":"model 401"}`,
-	)
-	a, err := New(SingleEndpoint(f.server.URL, ""))
+	f.setEvents(completedEvent(`{"playbook":"foo","confidence":0.5}`))
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	if _, err := a.Evaluate(context.Background(), envFor("ap-x", "hello", "")); err == nil {
+		t.Fatal("expected error for unknown playbook")
+	}
+}
+
+func TestEvaluateUnstructuredFallback(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(completedEvent("this is not JSON at all"))
+
+	cfg := SingleEndpoint(f.server.URL, "")
+	a, _ := New(cfg)
+	env, err := a.Evaluate(context.Background(), envFor("ap-1", "hello", ""))
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("Evaluate: %v", err)
 	}
-	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-2", "fail"))
-	if err == nil || !strings.Contains(err.Error(), "model 401") {
-		t.Fatalf("expected run.failed error, got %v", err)
+	// Fallback: PlaybookProcess at very low confidence.
+	if env.Evaluate.Playbook != session.PlaybookProcess {
+		t.Errorf("fallback playbook = %q, want process", env.Evaluate.Playbook)
+	}
+	if env.Evaluate.Confidence != 0.1 {
+		t.Errorf("fallback confidence = %v, want 0.1", env.Evaluate.Confidence)
 	}
 }
 
-func TestCallApprovalRequestRejected(t *testing.T) {
+func TestEvaluateRequireStructuredRejectsUnstructured(t *testing.T) {
 	f := newFake(t)
-	f.setEvents(
-		`{"event":"approval.request","run_id":"run_fake","tool":"shell"}`,
-	)
-	a, err := New(SingleEndpoint(f.server.URL, ""))
+	f.setEvents(completedEvent("definitely not JSON"))
+	cfg := SingleEndpoint(f.server.URL, "")
+	cfg.RequireStructured = true
+	a, _ := New(cfg)
+	if _, err := a.Evaluate(context.Background(), envFor("ap-1", "hello", "")); err == nil {
+		t.Fatal("expected error with RequireStructured=true")
+	}
+}
+
+func TestExecutePlan(t *testing.T) {
+	f := newFake(t)
+	planJSON := `{"sub_aps":[{"input_kind":"task","input":"step 1","output_schema":"{r}","classification":"","needs_verification":false},{"input_kind":"task","input":"step 2","output_schema":"{r}","classification":"","needs_verification":true}],"recompose":"sequential"}`
+	f.setEvents(completedEvent(planJSON))
+
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	env, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "decompose", session.PlaybookPlan))
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("Execute: %v", err)
 	}
-	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-3", "rm -rf /"))
-	if err == nil || !strings.Contains(err.Error(), "approval") {
-		t.Fatalf("expected approval-required error, got %v", err)
+	if env.Execute == nil || env.Execute.Category != session.CategoryEmitSubtree {
+		t.Fatalf("Execute = %+v", env.Execute)
+	}
+	if env.Execute.EmitSubtree == nil || len(env.Execute.EmitSubtree.SubAPs) != 2 {
+		t.Fatalf("SubAPs not parsed: %+v", env.Execute.EmitSubtree)
+	}
+	if env.Execute.EmitSubtree.Recompose != session.RecomposeSequential {
+		t.Errorf("Recompose = %q, want sequential", env.Execute.EmitSubtree.Recompose)
+	}
+	if !env.Execute.EmitSubtree.SubAPs[1].NeedsVerification {
+		t.Errorf("NeedsVerification on second seed should be true")
+	}
+	if env.ExitReason != session.ExitDone {
+		t.Errorf("ExitReason = %q, want done", env.ExitReason)
 	}
 }
 
-func TestCallStreamEndsWithoutTerminalEvent(t *testing.T) {
+func TestExecutePlanRejectsUnknownRecompose(t *testing.T) {
 	f := newFake(t)
-	// Only deltas, no run.completed — server closes cleanly without a
-	// terminal. Adapter must treat this as failure rather than
-	// returning a confidently-empty Output.
-	f.setEvents(
-		`{"event":"message.delta","run_id":"run_fake","delta":"partial"}`,
-	)
-	a, err := New(SingleEndpoint(f.server.URL, ""))
+	f.setEvents(completedEvent(`{"sub_aps":[],"recompose":"bogus"}`))
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	if _, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookPlan)); err == nil {
+		t.Fatal("expected error for unknown recompose spec")
+	}
+}
+
+func TestExecuteProcess(t *testing.T) {
+	f := newFake(t)
+	groundedTrue := true
+	procJSON := `{"content":"42","confidence":0.92,"grounded_pass":true,"contradictions":[],"open_questions":["why 42?"]}`
+	f.setEvents(completedEvent(procJSON))
+
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	env, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "compute", session.PlaybookProcess))
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("Execute: %v", err)
 	}
-	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-4", "x"))
-	if err == nil || !strings.Contains(err.Error(), "terminal event") {
-		t.Fatalf("expected terminal-event error, got %v", err)
+	if env.Execute.Category != session.CategoryReturnResult {
+		t.Fatalf("Category = %q, want return_result", env.Execute.Category)
+	}
+	rr := env.Execute.ReturnResult
+	if rr.Result.Content != "42" {
+		t.Errorf("Content = %q", rr.Result.Content)
+	}
+	if rr.Confidence != 0.92 {
+		t.Errorf("Confidence = %v", rr.Confidence)
+	}
+	if rr.Signals.GroundedPass == nil || *rr.Signals.GroundedPass != groundedTrue {
+		t.Errorf("GroundedPass not parsed: %+v", rr.Signals.GroundedPass)
+	}
+	if len(rr.Signals.OpenQuestions) != 1 {
+		t.Errorf("OpenQuestions = %v", rr.Signals.OpenQuestions)
 	}
 }
 
-func TestCallUnknownBrainFunctionErrors(t *testing.T) {
+func TestExecuteCritique(t *testing.T) {
 	f := newFake(t)
-	a, err := New(Config{
-		Endpoints: map[session.BrainFunction]Endpoint{
-			session.BrainReasoning: {BaseURL: f.server.URL},
+	critJSON := `{"verdict":"issues","issues":[{"severity":"warning","where":"line 12","what":"loop bound suspicious"}]}`
+	f.setEvents(completedEvent(critJSON))
+
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	env, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "check", session.PlaybookCritique))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if env.Execute.Category != session.CategoryVerifierSignal {
+		t.Fatalf("Category = %q, want verifier_signal", env.Execute.Category)
+	}
+	vs := env.Execute.VerifierSignal
+	if vs.Verdict != session.VerdictIssues {
+		t.Errorf("Verdict = %q", vs.Verdict)
+	}
+	if len(vs.Issues) != 1 || vs.Issues[0].Severity != session.SeverityWarning {
+		t.Errorf("Issues not parsed: %+v", vs.Issues)
+	}
+}
+
+func TestExecuteVerifyGrounded(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(completedEvent(`{"verdict":"pass","issues":[]}`))
+
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	env := envWithEvaluate("ap-1", "ground check", session.PlaybookVerifyGrounded)
+	env.VerifySpec = &session.VerifySpec{Kind: "compile", Spec: "go build ./..."}
+	env, err := a.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if env.Execute.VerifierSignal.Verdict != session.VerdictPass {
+		t.Errorf("Verdict = %q, want pass", env.Execute.VerifierSignal.Verdict)
+	}
+}
+
+func TestExecuteCalledBeforeEvaluate(t *testing.T) {
+	f := newFake(t)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	if _, err := a.Execute(context.Background(), envFor("ap-1", "x", "")); err == nil {
+		t.Fatal("expected error when Execute called before Evaluate")
+	}
+}
+
+func TestExecuteUnknownPlaybookEndpoint(t *testing.T) {
+	f := newFake(t)
+	// Configure only PlaybookProcess; evaluate "plan" → should error.
+	cfg := Config{
+		EvaluateEndpoint: Endpoint{BaseURL: f.server.URL},
+		ExecuteEndpoints: map[session.Playbook]Endpoint{
+			session.PlaybookProcess: {BaseURL: f.server.URL},
 		},
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
 	}
-	_, err = a.Call(context.Background(), envFor(session.BrainCritic, "sess-5", "x"))
-	if err == nil || !strings.Contains(err.Error(), "no endpoint registered") {
-		t.Fatalf("expected unregistered-brain-function error, got %v", err)
+	a, _ := New(cfg)
+	if _, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookPlan)); err == nil {
+		t.Fatal("expected error: no endpoint for PlaybookPlan")
 	}
 }
 
-func TestCallPostRunsServerErrorPropagates(t *testing.T) {
+func TestExecuteUnstructuredFallbackByCategory(t *testing.T) {
+	cases := []struct {
+		name         string
+		pb           session.Playbook
+		wantCategory session.Category
+	}{
+		{"plan → empty emit_subtree", session.PlaybookPlan, session.CategoryEmitSubtree},
+		{"process → low-conf return_result", session.PlaybookProcess, session.CategoryReturnResult},
+		{"critique → 'issues' verifier_signal", session.PlaybookCritique, session.CategoryVerifierSignal},
+		{"verify_grounded → 'issues' verifier_signal", session.PlaybookVerifyGrounded, session.CategoryVerifierSignal},
+		{"compose → low-conf return_result", session.PlaybookCompose, session.CategoryReturnResult},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFake(t)
+			f.setEvents(completedEvent("not JSON at all, just words"))
+			a, _ := New(SingleEndpoint(f.server.URL, ""))
+			env, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", c.pb))
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if env.Execute.Category != c.wantCategory {
+				t.Errorf("Category = %q, want %q", env.Execute.Category, c.wantCategory)
+			}
+		})
+	}
+}
+
+func TestExecuteRequireStructuredRejectsUnstructured(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(completedEvent("not JSON"))
+	cfg := SingleEndpoint(f.server.URL, "")
+	cfg.RequireStructured = true
+	a, _ := New(cfg)
+	if _, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookProcess)); err == nil {
+		t.Fatal("expected error with RequireStructured=true")
+	}
+}
+
+func TestApprovalRejected(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(`{"event":"approval.request","run_id":"run_fake","tool":"shell"}`)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	_, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookProcess))
+	if err == nil || !strings.Contains(err.Error(), "approval") {
+		t.Errorf("expected approval error, got %v", err)
+	}
+}
+
+func TestRunFailed(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(`{"event":"run.failed","run_id":"run_fake","error":"model rate-limited"}`)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	_, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookProcess))
+	if err == nil || !strings.Contains(err.Error(), "rate-limited") {
+		t.Errorf("expected failure error, got %v", err)
+	}
+}
+
+func TestStreamEndedWithoutTerminal(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(`{"event":"message.delta","run_id":"run_fake","delta":"partial"}`)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	_, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookProcess))
+	if err == nil || !strings.Contains(err.Error(), "terminal") {
+		t.Errorf("expected terminal-event error, got %v", err)
+	}
+}
+
+func TestCostTrackingAcrossBothPhases(t *testing.T) {
+	f := newFake(t)
+	tracker := cost.New(cost.Pricing{InputUSDPerMTok: 10, OutputUSDPerMTok: 30})
+	tracker.Register("test-model", cost.Pricing{InputUSDPerMTok: 1, OutputUSDPerMTok: 3})
+
+	cfg := SingleEndpoint(f.server.URL, "test-model")
+	cfg.Cost = tracker
+	a, _ := New(cfg)
+
+	// Evaluate
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+	env, err := a.Evaluate(context.Background(), envFor("ap-1", "x", ""))
+	if err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	// Execute
+	f.setEvents(completedEvent(`{"content":"done","confidence":0.9}`))
+	env, err = a.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if env.Evaluate.TokensUsed != 15 || env.Execute.TokensUsed != 15 {
+		t.Errorf("token usage not stamped: eval=%d exec=%d", env.Evaluate.TokensUsed, env.Execute.TokensUsed)
+	}
+	// Cost ledger should have 2 entries total — one per phase.
+	sum := tracker.Summary()
+	if len(sum.Entries) != 2 {
+		t.Errorf("cost entries: got %d, want 2", len(sum.Entries))
+	}
+	for _, e := range sum.Entries {
+		if e.Model != "test-model" {
+			t.Errorf("cost entry model = %q, want test-model", e.Model)
+		}
+	}
+}
+
+func TestPostRunsServerError(t *testing.T) {
 	f := newFake(t)
 	f.mu.Lock()
 	f.runStatus = http.StatusInternalServerError
 	f.runRespBody = "boom"
 	f.mu.Unlock()
-	a, err := New(SingleEndpoint(f.server.URL, ""))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-6", "x"))
-	if err == nil || !strings.Contains(err.Error(), "500") {
-		t.Fatalf("expected 500 to surface, got %v", err)
+
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+	if _, err := a.Evaluate(context.Background(), envFor("ap-1", "x", "")); err == nil {
+		t.Fatal("expected POST /v1/runs error to surface")
 	}
 }
 
-func TestContextCancellationStopsRun(t *testing.T) {
+func TestRawInstructionsOverride(t *testing.T) {
 	f := newFake(t)
-	// No events queued — the SSE handler will write the sentinel close
-	// after no events, so the stream closes quickly. Cancel before
-	// dispatch to exercise the cancellation path.
-	a, err := New(SingleEndpoint(f.server.URL, ""))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	_, err = a.Call(ctx, envFor(session.BrainReasoning, "sess-7", "x"))
-	if err == nil {
-		t.Fatal("expected error from cancelled context")
-	}
-}
-
-func TestStructuredFromFencedBlock(t *testing.T) {
-	f := newFake(t)
-	// Hermes returns prose + a fenced JSON block; adapter pulls the
-	// block out and falls the prose into Content (since the JSON's
-	// Content is empty).
-	raw := "Sure, here's the answer:\n\n```json\n{\"content\":\"\",\"confidence\":0.7,\"sub_aps\":[{\"brain_function\":\"critic\",\"input\":\"check it\",\"output_schema\":\"ok\"}]}\n```\n\nLet me know if you want more.\n"
-	completed := fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`, raw)
-	f.setEvents(completed)
-
-	a, err := New(SingleEndpoint(f.server.URL, ""))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	out, err := a.Call(context.Background(), envFor(session.BrainReasoning, "sess-fenced", "x"))
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if out.Confidence != 0.7 {
-		t.Errorf("Confidence = %v, want 0.7", out.Confidence)
-	}
-	if len(out.SubAPs) != 1 || out.SubAPs[0].BrainFunction != session.BrainCritic {
-		t.Errorf("SubAPs = %+v, want one critic", out.SubAPs)
-	}
-	if !strings.Contains(out.Content, "Sure, here's the answer") {
-		t.Errorf("Content should fall back to surrounding prose: %q", out.Content)
-	}
-}
-
-func TestUnstructuredFallback(t *testing.T) {
-	f := newFake(t)
-	completed := `{"event":"run.completed","run_id":"run_fake","output":"just text","usage":{"input_tokens":0,"output_tokens":0,"total_tokens":0}}`
-	f.setEvents(completed)
-
-	a, err := New(SingleEndpoint(f.server.URL, ""))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	out, err := a.Call(context.Background(), envFor(session.BrainReasoning, "sess-unstructured", "x"))
-	if err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-	if out.Content != "just text" {
-		t.Errorf("Content = %q, want raw fallback", out.Content)
-	}
-	if out.Confidence != 0 {
-		t.Errorf("Confidence = %v, want zero for unstructured", out.Confidence)
-	}
-}
-
-func TestRequireStructuredErrorsOnFallback(t *testing.T) {
-	f := newFake(t)
-	completed := `{"event":"run.completed","run_id":"run_fake","output":"plain prose, no envelope","usage":{}}`
-	f.setEvents(completed)
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.5}`))
 
 	cfg := SingleEndpoint(f.server.URL, "")
-	cfg.RequireStructured = true
-	a, err := New(cfg)
+	cfg.RawEvaluateInstructions = "use my custom evaluate prompt"
+	a, _ := New(cfg)
+
+	_, err := a.Evaluate(context.Background(), envFor("ap-1", "x", ""))
 	if err != nil {
-		t.Fatalf("New: %v", err)
+		t.Fatalf("Evaluate: %v", err)
 	}
-	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-strict", "x"))
-	if err == nil || !strings.Contains(err.Error(), "no structured envelope") {
-		t.Fatalf("expected structured-required error, got %v", err)
+	f.mu.Lock()
+	got := f.lastBody["instructions"]
+	f.mu.Unlock()
+	if got != "use my custom evaluate prompt" {
+		t.Errorf("instructions = %q, want override", got)
 	}
 }
-
-func TestMalformedJSONBlockSurfacesParseError(t *testing.T) {
-	f := newFake(t)
-	raw := "```json\n{not valid json}\n```"
-	completed := fmt.Sprintf(`{"event":"run.completed","run_id":"run_fake","output":%q,"usage":{}}`, raw)
-	f.setEvents(completed)
-
-	a, err := New(SingleEndpoint(f.server.URL, ""))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	_, err = a.Call(context.Background(), envFor(session.BrainReasoning, "sess-bad-json", "x"))
-	if err == nil || !strings.Contains(err.Error(), "parse fenced JSON") {
-		t.Fatalf("expected parse error, got %v", err)
-	}
-}
-
-// Smoke check: cost tracker stays untouched when not configured.
-func TestCallNilCostTrackerNoOp(t *testing.T) {
-	f := newFake(t)
-	f.setEvents(
-		`{"event":"run.completed","run_id":"run_fake","output":"ok","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`,
-	)
-	a, err := New(SingleEndpoint(f.server.URL, ""))
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	if _, err := a.Call(context.Background(), envFor(session.BrainReasoning, "sess-8", "x")); err != nil {
-		t.Fatalf("Call: %v", err)
-	}
-}
-

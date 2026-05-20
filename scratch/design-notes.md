@@ -3,7 +3,7 @@
 
 Ideas in motion. Not locked. Promote to `CLAUDE.md` (or to a `references/` doc) once an idea settles enough to act on.
 
-Last updated: 2026-05-18
+Last updated: 2026-05-20
 
 ---
 
@@ -172,6 +172,171 @@ Notes:
 - **Cross-specialist audit format.** When a recipe is being considered for promotion, what does the strong-model audit actually see — the recipe alone, or recipe + a sample of its exemplars? Sample feels right but increases audit cost.
 - **Probationary exemplar handling.** Do `probationary` exemplars contribute to recipe consolidation at reduced weight, or not at all until promoted back to `kept`?
 - **Recipe interactions.** When two recipes match `when_to_apply` for the same invocation, what's the tiebreaker — win_rate, recency, specificity? Probably specificity-then-win-rate, but the precedence rule wants exercise.
+
+## Verifier policy (phase ramp, locked 2026-05-20)
+
+**Idea.** Critique-emission is not a binary "(a) parent emits / (b) process auto-emits" lock. It's a **policy** with a sampling rate that ramps with the substrate's maturity. Bootstrap signal density first; ramp cost down as the curation layer earns trust. Brain analog: dense verifier signal early (a child learning a skill double-checks every move), sparser sampling once the substrate is reliable (an expert spot-checks; ACC stays on as a tripwire).
+
+**Formula.**
+
+```
+if n_invocations <= bootstrap_threshold:
+    sample_rate = 1.0
+else:
+    sample_rate = max(floor, 1 - happiness_wilson_lower_bound)
+```
+
+- `happiness` = **judge-sampling agreement rate** for v0 (frontier judge concurs with local critique). The signal stays composable — design space leaves the door open for weighted combinations (critique pass rate + grounded-check pass + judge agreement) once telemetry shows which proxies actually move when something drifts.
+- `happiness_wilson_lower_bound` = Wilson lower bound (95% CI) over a sliding window. Reading the lower bound, not the point estimate, protects freshly-bootstrapped playbooks from premature throttling on a lucky early run.
+- `sliding window` = ~2k samples once past bootstrap. Sized to keep the Wilson CI usable while still catching recent drift; all-time would hide drift, smaller windows widen the CI past usefulness.
+
+**v0 defaults (starting points; revisit if telemetry shows wild swings or saturation).**
+
+| Knob | Value | Rationale |
+|---|---|---|
+| `bootstrap_threshold` | 10_000 | Enough to compute happiness with tight CI before letting it drive the rate. |
+| `floor` | 0.15 | Sampling rate never drops below 15% — the drift tripwire. Pins happiness ceiling at ~85% as the policy's effective target. |
+| `sliding_window` | 2_000 | Trade-off between CI width and drift recency. |
+| `confidence_level` | 0.95 | Wilson interval; standard. |
+
+**Happiness scope: configurable (try both).** `happiness_scope ∈ {global, per_action}`.
+
+- **`global`** — one happiness rate drives sampling everywhere. Cheap; hides per-playbook drift (a 95% `process` rate can mask a 65% `plan` rate).
+- **`per_action`** — happiness tracked per action tag (the playbook key). Each new playbook eats its own bootstrap. Expensive but principled; matches the per-instance playbook substrate lock.
+- v0 ships with **telemetry for both regardless of which drives the rate**. Cheap to track both, lets us A/B which one is the better policy without re-instrumenting later.
+
+**Parent override.** `needs_verification: true` on a child AP forces a critique pass regardless of the sampling roll. The sample rate sets the *baseline*; the parent can pin specific invocations on top.
+
+**Caveat.** All four numeric defaults (10k bootstrap, 15% floor, 2k window, 95% CI) are starting points. If telemetry shows wild rate swings, slow convergence, or saturation at the floor, revisit before tuning anything more sophisticated. Don't pre-optimize.
+
+## Pairwise compose: sequential self-chaining (locked 2026-05-20)
+
+**Decision.** Compose pulls pairs off the parent scope channel as siblings complete, reduces them sequentially, and re-enters its own result into the channel. One compose AP per scope, looping until `expected_count` reductions are done. *Not* pre-emission of N-1 compose APs.
+
+**Why this beats pre-emission.** The pre-emission argument was trace fidelity: every reduction step is its own AP, every step explicit. But sibling dispatch is already randomized (per the locked sibling-dispatch policy from the 2026-05-19 handoff). Reduction order is non-deterministic regardless of which mechanism we pick — pre-emission doesn't buy determinism, just more APs. Sequential self-chaining: fewer APs, simpler trace, no false promise of step-level determinism.
+
+**Trace coverage.** Every reduction is still logged in `pkg/trace` with its `(left, right) → combined` step recorded. The trace is faithful at the reduction level; what changes is whether each step is its own AP envelope or a step inside one compose AP's execution. Trace consumers don't lose anything.
+
+## JSON envelope sketch (evaluate/execute AP shape)
+
+**Where this fits.** The single source of truth for AP shape across evaluate/execute, the three output categories, scope handles for compose, verification metadata for `verify_grounded`, parent_override, and the recompose spec carried on plan output. Foundation the demo refactor hangs off. Stable enough to code against; final field set settles when a real Hermes adapter exercises it.
+
+**Lean envelope discipline.** This is the *AP envelope* (the lean record the next invocation reads), not the trace. Anything that's a learning-loop signal — verifier feedback, retrieval refs consulted, cost ledger entries, full subtree topology — goes in `pkg/trace`, not here. Per the locked AP-vs-trace split.
+
+### Envelope (the call)
+
+```json
+{
+  "schema_version": 1,
+  "id": "ap-…",
+  "parent_id": "ap-…",            // null at root
+  "root_id": "ap-…",
+  "path": ["ap-…", "ap-…"],       // root → this; for inhibitor stateful detectors
+  "scope_handle": "scope-…",      // parent's scope channel id; null at root
+
+  "input": { "kind": "task|result|...", "content": "..." },
+  "output_schema": { ... },        // handoff contract; also preloaded as prompt requirement so producing LLM self-classifies
+  "classification": "...",         // expected classification level (from envelope contract)
+
+  "needs_verification": false,     // parent_override: forces critique on top of sampling baseline
+  "verify_spec": null,             // populated only when this AP is a verify_grounded; carries the check (compile/exec/retrieval-match)
+
+  "budget": {
+    "tokens_remaining": 32000,
+    "depth_remaining": 6
+  },
+
+  "evaluate": null,                // populated after evaluate step (see below)
+  "execute":  null                 // populated after execute step (see below)
+}
+```
+
+Notes:
+
+- **`id`, `parent_id`, `root_id`, `path`** — call-tree position. `path` is the root→child chain the inhibitor reads for stateful detectors (confidence drop windows, cumulative contradictions, repetition).
+- **`scope_handle`** — the parent's scope channel. Sibling results land here; `compose` pulls from here. Null at root (no parent scope to publish into).
+- **`output_schema`** is doing double duty: handoff contract *and* the preloaded prompt requirement that forces the producing LLM to self-classify against it (already locked behavior, carried forward).
+- **`needs_verification`** is the parent's force-on-top override; the sampling baseline (verifier policy above) decides the rest. Suppression by parent is *not* allowed in v0 — parent can pin, not unpin.
+- **`verify_spec`** is null on every AP except those whose execute step will run `verify_grounded`. The check spec (e.g. "compile this code", "match retrieval against this query") rides the envelope so the adapter has everything it needs.
+
+### Evaluate step output
+
+Populates `envelope.evaluate` when the evaluate LLM call returns:
+
+```json
+{
+  "evaluate": {
+    "playbook": "plan|process|critique|verify_grounded|compose",
+    "rationale": "short string; trace-bound, not consumed downstream",
+    "confidence": 0.0,             // evaluate's confidence in the playbook pick
+    "tokens_used": 0
+  }
+}
+```
+
+Only the chosen `playbook` is structurally consumed downstream. `rationale` is for the trace and human inspection; nothing reads it programmatically. (Resist the temptation to make a *second* LLM read it — that's the kind of cost compounding the lean envelope discipline exists to prevent.)
+
+### Execute step output (three shapes by output category)
+
+Populates `envelope.execute` when the playbook finishes. **Shape depends on the playbook's locked output category.** The envelope must encode which it is so the runner knows what to do next.
+
+**`emit_subtree`** — only `plan` in the v0 set:
+
+```json
+{
+  "execute": {
+    "category": "emit_subtree",
+    "sub_aps": [
+      { "input": {...}, "output_schema": {...}, "classification": "...", "verify_spec": null, "needs_verification": false },
+      ...
+    ],
+    "recompose": "pairwise|sequential|none",   // carried per the "plan bundles recompose spec" lock
+    "tokens_used": 0
+  }
+}
+```
+
+The runner constructs child envelopes from each `sub_aps[i]`, assigns ids, inherits budget (depth_remaining - 1; token budget split per policy), publishes results into this AP's scope, and dispatches in randomized order. `recompose` tells the parent's recomposer what shape to expect.
+
+**`return_result`** — `process` and `compose`:
+
+```json
+{
+  "execute": {
+    "category": "return_result",
+    "result": { "kind": "...", "content": "..." },
+    "confidence": 0.0,
+    "signals": { "grounded_pass": null, "contradictions": [], "open_questions": [] },
+    "tokens_used": 0
+  }
+}
+```
+
+`result` flows up the tree. `signals` are the lean local-signal bundle the curation layer reads (the rest of the signal record lives in the trace).
+
+**`verifier_signal`** — `critique` and `verify_grounded`:
+
+```json
+{
+  "execute": {
+    "category": "verifier_signal",
+    "verdict": "pass|fail|issues",
+    "issues": [
+      { "severity": "info|warning|error", "where": "...", "what": "..." }
+    ],
+    "tokens_used": 0
+  }
+}
+```
+
+This **goes to the runtime, not the next AP** (per the locked output-categories rule). Runtime owns retry / proceed / escalate policy; the next sibling/parent AP doesn't see verifier signals on its own envelope. The verdict + issues land in the trace and feed the verifier-policy happiness signal (judge-sampling agreement is computed by comparing this verdict against frontier judge verdicts on the audited slice).
+
+### Open envelope subquestions
+
+- **`input` polymorphism.** `{kind, content}` is the bluntest version. Per-playbook input shapes (task vs. result vs. scope-pull) might want a stricter discriminated union. Probably fine to start loose and tighten when the adapter forces the issue.
+- **`signals` field set.** What goes in the lean envelope vs. the fat trace? Current bias: only what the *parent recomposer* needs (confidence, grounded_pass, contradictions, open_questions). Everything else (retrieval refs, cost ledger, judge agreement) goes to trace.
+- **Budget split policy.** When `plan` emits N sub-APs, how is the parent's `tokens_remaining` divided? Equal split? Reserve for recomposer? Defer to the runner with an injectable strategy; lock when telemetry has an opinion.
+- **Schema evolution.** `schema_version` is additive evolution only; never repurpose a field. Breaking changes get a new top-level version *and* an adapter shim that round-trips old envelopes.
 
 ## Risks to track
 

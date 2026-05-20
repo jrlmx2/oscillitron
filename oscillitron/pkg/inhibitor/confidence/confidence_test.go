@@ -9,7 +9,12 @@ import (
 )
 
 func env(c float64) session.Envelope {
-	return session.Envelope{Output: &session.Output{Confidence: c}}
+	return session.Envelope{
+		Execute: &session.Execute{
+			Category:     session.CategoryReturnResult,
+			ReturnResult: &session.ReturnResultPayload{Confidence: c},
+		},
+	}
 }
 
 func TestFloorAborts(t *testing.T) {

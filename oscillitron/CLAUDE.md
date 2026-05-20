@@ -12,41 +12,40 @@ The parent project is the source of truth for **what** to build and **why**; thi
 
 ## Status
 
-Stage: **call-tree skeleton** — the call-tree model from parent CLAUDE.md ("Architecture", locked 2026-05-18) is implemented end-to-end against stub adapters. Build is green; demo runs and recomposes a 4-node tree.
+Stage: **uniform-node refactor in flight — Stage 1+2 of 5 landed.** Envelope and adapter are rewritten onto the locked uniform-node + evaluate/execute shape (parent CLAUDE.md, scratch/design-notes.md "JSON envelope sketch"). Runner, recomposer, Hermes adapter, and demo are stubbed or build-tagged off and land in Stages 3–6. Build is green; full test suite passes on the rewritten packages.
 
 What's here:
 
-- **Session envelope** (`pkg/session`) — AP-as-invocation shape: `SchemaVersion`, `BrainFunction`, `Input`, `OutputSchema`, `ParentRef`, `Budget`, and on completion `Output{Content, Classification, Confidence, Signals, Contradictions, OpenQuestions, SubAPs, ExitReason}`. `NewRoot()` helper builds an entry-point envelope.
+- **Session envelope** (`pkg/session`) — uniform-node + evaluate/execute shape. Fields: `SchemaVersion`, `ID`, `ParentID`, `RootID`, `Path` (root→this), `ScopeHandle`, `Input` (`Payload{Kind, Content, ContentHash}`), `OutputSchema`, `Classification`, `NeedsVerification`, `VerifySpec`, `Budget`, `Evaluate{Playbook, Rationale, Confidence, TokensUsed}`, `Execute{Category, EmitSubtree|ReturnResult|VerifierSignal, TokensUsed}`, `ExitReason`, `Trace`, `Audit`. No `BrainFunction` field — playbook is *picked by evaluate*, not declared. `NewRoot()` and `NewChild()` helpers stamp the call-tree plumbing. Three execute categories: `emit_subtree` (plan), `return_result` (process, compose), `verifier_signal` (critique, verify_grounded). Predicates: `IsComplete`, `IsLeaf`, `IsInhibited`, `Depth`.
 - **Classification levels** (`pkg/classification`).
-- **Adapter** (`pkg/adapter`) — interface returns `(session.Output, error)`. Per-invocation session lifecycle is the adapter's responsibility.
-- **Stub adapter** (`pkg/adapter/stub`) — configurable mode/confidence/classification/signals/SubAPs. Used by tests and demo.
-- **Hermes adapter** (`pkg/adapter/hermes`) — speaks the OpenAI-compatible HTTP gateway from `github.com/NousResearch/hermes-agent` (`gateway/platforms/api_server.py`). One long-lived Hermes per brain function = the specialist's persistent store; each AP invocation is a session within that specialist (`session_id = envelope.ID`). Uses `POST /v1/runs` + `GET /v1/runs/{id}/events` (SSE) so Hermes' own self-improvement loop stays in play. Structured-output contract: the adapter teaches Hermes (via `instructions`) to wrap its reply in a documented JSON envelope (`content`, `classification`, `confidence`, `signals`, `contradictions`, `open_questions`, `sub_aps`), then parses the run's final output back into `session.Output`. Accepts both whole-output JSON and fenced ```json blocks; falls back to raw text in `Output.Content` with zero-value structured fields when the model ignores the contract (configurable via `Config.RequireStructured`). Demo wires through via `--hermes <baseURL>`.
-- **Oscillator** (`pkg/oscillator`) — thin brain-function-typed wrapper around an adapter. Synchronous `Invoke(ctx, env) Envelope`. No goroutine, no channels.
-- **Registry** (`pkg/registry`) — `BrainFunction → *Oscillator` dispatch table. Replaces the deleted `pkg/topology`. No edges, no weights.
-- **Runner** (`pkg/runner`) — synchronous recursive **tree-walker**. Dispatches via registry, invokes the inhibitor on each parent→child edge after the child resolves (root has no incoming edge and is never checked), descends into `Output.SubAPs`, recomposes children, propagates inhibited children up. Sync; no sibling parallelism. Belt-and-suspenders `MaxDepth` cap independent of per-AP `Budget.DepthRemaining`. Restart→Abort downgrade still in effect (no checkpointing yet).
-- **Inhibitor** (`pkg/inhibitor`) — edge-property interface; `Check(Edge)` returns a verdict for the parent→child traversal. `Edge` carries `Parent`, `Child`, and the full root→child `Path` for stateful detectors. Implementations:
-  - `pkg/inhibitor/hardcap` — path-depth cap.
-  - `pkg/inhibitor/confidence` — floor abort + window-drop restart on `Output.Confidence`.
-  - `pkg/inhibitor/repetition` — exact-content cycling detector over a sliding window.
-  - `pkg/inhibitor/contradictions` — single-invocation spike or cumulative `Output.Contradictions` cap.
-  - `pkg/inhibitor/composite` — combines members; Abort > Restart > Continue precedence.
-- **Recomposer** (`pkg/recomposer`) — load-bearing now. `Recompose(ctx, parentOutput, children []Envelope) (Output, error)`. `Concat` impl ships: joins content, takes weakest-link confidence min, deduplicates signals / contradictions / open questions.
-- **Demo** (`cmd/oscillitron`) — fires a `planning` root that emits `reasoning` + `critic` SubAPs; `reasoning` further emits a `retrieval` SubAP; tree resolves and recomposes back up. Default mode uses stubs. With `--hermes <baseURL>` (e.g. `--hermes http://127.0.0.1:8642`) the demo wires the same registry through the real Hermes adapter; cost is tracked via `pkg/cost` and printed at the end. Hermes mode honours the call-tree shape only insofar as Hermes returns `sub_aps` in its structured envelope — weak models often emit only the prose answer. Configuration also accepts a `.properties` file via `--config <path>` or `OSCILLITRON_CONFIG` env (see `cmd/oscillitron/oscillitron.properties.example`); CLI flags always win over file values.
+- **Adapter** (`pkg/adapter`) — interface has two methods: `Evaluate(ctx, env) (env, err)` (picks the playbook) and `Execute(ctx, env) (env, err)` (runs the chosen playbook). Per-invocation session lifecycle is the adapter's responsibility.
+- **Stub adapter** (`pkg/adapter/stub`) — configurable per-playbook. `WithDefaultPlaybook` / `WithEvaluator` shape Evaluate; `WithEmitSubtree` / `WithReturnResult` / `WithVerifierSignal` shape Execute by playbook. Counters: `Calls`, `EvalCalls`, `ExecuteCalls`, `CallsForPlaybook`. Used by tests.
+- **Hermes adapter** (`pkg/adapter/hermes`) — **build-tagged off** (`//go:build hermes_stage5`). Old `(session.Envelope) -> session.Output` shape doesn't compose with the new evaluate/execute split; Stage 5 rewrites the structured-output contract to the new envelope and lifts the tag.
+- **Inhibitor** (`pkg/inhibitor`) — edge-property interface unchanged. Implementations updated to read the new envelope:
+  - `pkg/inhibitor/hardcap` — path-depth cap (unchanged; reads `Edge.Path` length).
+  - `pkg/inhibitor/confidence` — reads `Execute.ReturnResult.Confidence`. APs that didn't emit a return_result are skipped (missing signal, not a negative signal).
+  - `pkg/inhibitor/repetition` — reads `Execute.ReturnResult.Result.Content`.
+  - `pkg/inhibitor/contradictions` — reads `Execute.ReturnResult.Signals.Contradictions`.
+  - `pkg/inhibitor/composite` — combines members; Abort > Restart > Continue precedence (unchanged).
+- **Runner** (`pkg/runner`) — **placeholder.** `Run` returns `ErrStagePending`. Stage 3 implements the three-category branching, scope channels, and randomized sibling dispatch.
+- **Recomposer** (`pkg/recomposer`) — **placeholder.** Interface is reshaped to `Recompose(ctx, RecomposeSpec, []ReturnResultPayload) (ReturnResultPayload, error)`. Concat returns `ErrStagePending` until Stage 4.
+- **Demo** (`cmd/oscillitron`) — **placeholder** that prints a stage-pending status line. Stage 6 rewrites onto the new shape (plan → process sub-APs → compose pulled from scope channel; critique fired per verifier policy).
 - **Properties config** (`pkg/config`) — tiny stdlib-only `.properties` loader (Java-style `key=value`, `#` / `!` comments, dotted keys for hierarchy, typed accessors). Used by the demo for both single-endpoint (`hermes.url`) and multi-endpoint (`hermes.endpoints.<bf>.url`) Hermes setups. Deliberately a fraction of Spring Boot's surface — no profiles, no relaxed binding, no SpEL.
 - **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.
 - **Eval harness** (`pkg/eval`) — decoupled from the orchestrator (Runner is `func(ctx, Task) (string, error)`); no changes needed for the call-tree refactor.
 - **Trace** (`pkg/trace`) — slog-backed `Tracer` with `Info` / `Error` sugar helpers and a `Discard` no-op. Oscillator, runner, and the demo now emit through `trace.Tracer` rather than `*slog.Logger` directly. The fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
 
-**Deleted (no longer relevant under the call-tree model):**
-- `pkg/topology` — replaced by `pkg/registry`. No edges, no weights.
-- `pkg/router` and `pkg/router/rule` — collapsed into runner dispatch via the registry.
-- `pkg/decomposer` — decomposition is what a brain function *does* when it emits SubAPs; the standalone interface no longer earns its keep. Root-envelope construction is now `session.NewRoot()`.
+**Deleted (no longer relevant under the uniform-node model):**
+- `pkg/oscillator` — uniform-node lock kills the brain-function-typed wrapper. One adapter handles every AP; the playbook is *picked* by evaluate, not declared.
+- `pkg/registry` — no `BrainFunction → instance` mapping; one adapter does it all.
+- `pkg/topology`, `pkg/router`, `pkg/router/rule`, `pkg/decomposer` — already gone under the earlier call-tree refactor.
 
 What's deliberately NOT here yet:
 
-- Multi-instance Hermes exercised end-to-end — the adapter config takes a `BrainFunction → Endpoint` map and the demo uses `SingleEndpoint` for v0 dev. Spawning N `hermes gateway` processes on different ports and pointing each brain function at its own endpoint is the locked design but isn't covered by the demo yet.
-- Approval handling — `/v1/runs/{id}/approval`. The v0 adapter rejects approval-required runs as inhibited; the orchestrator owns gating.
-- Cost tracker wired into the runner — the adapter records token usage into the cost tracker when one is provided, but the runner does not yet wire one up by default.
+- Runner, recomposer, Hermes adapter, demo — Stages 3–6 of the uniform-node refactor.
+- Multi-instance Hermes exercised end-to-end — locked design, not in v0 dev path. Stage 5 reinstates the Hermes adapter on the new envelope; multi-instance wiring comes after.
+- Approval handling — `/v1/runs/{id}/approval`. Returns to the adapter in Stage 5.
+- Cost tracker wired into the runner.
 - Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.
 - Real recomposer variants beyond Concat — LLM-driven recompose (re-invoke parent brain function with children outputs), tree-merge with conflict resolution. Plug in via the `Recomposer` interface.
 - Sibling parallelism, async sub-AP emission, hardware parallelism — deferred (see parent CLAUDE.md).
@@ -65,7 +64,7 @@ Requires Go 1.26+ (current toolchain on dev machine; bumped from 1.21 on 2026-05
 
 ### Smoke-testing the Hermes adapter against a real local Hermes
 
-The adapter ships with table-tested behavior against an `httptest`-served fake. To verify it against a real Hermes:
+**Build-tagged off during Stage 1–4 of the uniform-node refactor.** To compile and exercise the existing Hermes code, pass `-tags hermes_stage5`. Stage 5 rewrites the structured-output contract onto the new envelope and lifts the tag. The block below is preserved for reference and will return to relevance in Stage 5.
 
 ```
 # In a separate shell, with hermes-agent installed and configured
@@ -86,9 +85,7 @@ go run ./cmd/oscillitron --config oscillitron.properties
 # CLI flags still win; --hermes "" forces back to stub mode.
 ```
 
-`--hermes` uses `hermes.SingleEndpoint` — one Hermes serves every brain function. The locked design is one Hermes *per* brain function; for that, edit `buildRegistry` in `cmd/oscillitron/main.go` to construct a `BrainFunction → Endpoint` map by hand and stand up N Hermes processes on different ports.
-
-Expect leaf-only behavior on weak local models: the structured-envelope contract asks Hermes to emit `sub_aps` for decomposition, but many local models ignore it and return prose. The adapter falls back to raw text in `Output.Content` (set `Config.RequireStructured=true` if you want a parse failure to inhibit instead).
+`--hermes` (when Stage 5 reinstates it) will use `hermes.SingleEndpoint` — one Hermes per brain function via a per-action endpoint map remains the locked design.
 
 ## Conventions
 

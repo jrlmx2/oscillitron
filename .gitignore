@@ -19,6 +19,9 @@ oscillitron/bin/
 .claude/settings.local.json
 oscillitron/.claude/settings.local.json
 
+# Claude Code per-session worktrees (local-only; never tracked)
+oscillitron/.claude/worktrees/
+
 # Env files (none expected today; defensive)
 .env
 .env.*

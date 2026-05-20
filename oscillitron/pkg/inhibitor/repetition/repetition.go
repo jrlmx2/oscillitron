@@ -6,8 +6,9 @@
 //
 // v0 detection is intentionally simple: count exact content
 // duplicates inside a trailing Window. If any value appears
-// MinRepeats or more times, abort. Empty values (e.g. no Output yet)
-// are skipped — a missing payload isn't a repetition.
+// MinRepeats or more times, abort. Empty values (e.g. APs that did
+// not yet emit a return_result) are skipped — a missing payload
+// isn't a repetition.
 //
 // Future work: near-duplicate detection (cosine on small embeddings,
 // token-set Jaccard) once the project takes on a dependency that
@@ -19,7 +20,19 @@ import (
 	"fmt"
 
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
+	"github.com/jrlmx2/oscillitron/pkg/session"
 )
+
+// returnResultContent extracts the result content for a completed AP
+// that produced a return_result execute payload. Returns "" for any
+// AP that did not produce one (emit_subtree, verifier_signal, or
+// in-flight).
+func returnResultContent(e session.Envelope) string {
+	if e.Execute == nil || e.Execute.ReturnResult == nil {
+		return ""
+	}
+	return e.Execute.ReturnResult.Result.Content
+}
 
 // Inhibitor configures the repetition detector.
 type Inhibitor struct {
@@ -57,10 +70,11 @@ func (r *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
 	}
 	counts := make(map[string]int, window)
 	for _, e := range path[start:] {
-		if e.Output == nil || e.Output.Content == "" {
+		content := returnResultContent(e)
+		if content == "" {
 			continue
 		}
-		counts[e.Output.Content]++
+		counts[content]++
 	}
 	for content, n := range counts {
 		if n >= minRepeats {

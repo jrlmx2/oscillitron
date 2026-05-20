@@ -1,3 +1,5 @@
+//go:build hermes_stage5
+
 // CLAUDE GENERATED
 package hermes
 

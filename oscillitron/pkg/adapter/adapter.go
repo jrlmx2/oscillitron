@@ -1,17 +1,27 @@
 // CLAUDE GENERATED
-// Package adapter defines the contract between an oscillator and the
+// Package adapter defines the contract between the runner and the
 // substrate that actually runs the specialist work — a Hermes
-// instance (production), a stub (tests/demo), or the frontier baseline
-// (comparison harness only).
+// instance (production), a stub (tests/demo), or the frontier
+// baseline (comparison harness only).
 //
-// Under the call-tree model: the adapter takes an envelope IN (the
-// invocation) and returns an Output OUT. The oscillator stitches the
-// Output back into the envelope and returns it to the tree-walker,
-// which decides whether to descend into Output.SubAPs.
+// Under the uniform-node + evaluate/execute model: every AP runs the
+// same two steps.
+//
+//  1. Evaluate — picks the playbook for this AP. Cheap-local-first;
+//     the frontier is *not* freely selectable by evaluate.
+//  2. Execute — runs the chosen playbook; produces an Execute payload
+//     in one of the three Categories (emit_subtree, return_result,
+//     verifier_signal).
 //
 // Per-invocation session lifecycle is the adapter's responsibility.
-// A Hermes adapter, for example, may spin up a fresh Hermes process
-// per Call, seeded from the brain function's persistent memory store.
+// A Hermes adapter, for example, spawns or reuses a per-playbook
+// session keyed on envelope.ID inside the long-lived Hermes that
+// holds the specialist's persistent store.
+//
+// Both steps return the *envelope* (with Evaluate or Execute filled
+// in) so the runner can keep stitching call-tree state onto a single
+// record. On error, the runner wraps the failure into an
+// ExitInhibited envelope.
 package adapter
 
 import (
@@ -21,12 +31,17 @@ import (
 )
 
 // Adapter wraps a specialist substrate. Implementations: stub (this
-// package's stub subpackage), hermes (TBD — library-plan §9 step 4),
-// claude (frontier baseline, comparison harness only).
+// package's stub subpackage), hermes (lands in Stage 5 of the
+// uniform-node refactor), claude (frontier baseline, comparison
+// harness only).
 type Adapter interface {
 	// Name identifies the adapter in logs.
 	Name() string
-	// Call runs the invocation and returns its Output. On non-nil
-	// error, the caller wraps the failure in an ExitInhibited Output.
-	Call(ctx context.Context, env session.Envelope) (session.Output, error)
+	// Evaluate runs the playbook-pick step. The returned envelope has
+	// Evaluate populated. The runner reads env.Evaluate.Playbook and
+	// dispatches Execute next.
+	Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error)
+	// Execute runs the chosen playbook. The returned envelope has
+	// Execute populated. Category drives the runner's next move.
+	Execute(ctx context.Context, env session.Envelope) (session.Envelope, error)
 }

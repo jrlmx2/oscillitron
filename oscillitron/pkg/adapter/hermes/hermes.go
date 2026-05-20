@@ -1,3 +1,5 @@
+//go:build hermes_stage5
+
 // CLAUDE GENERATED
 // Package hermes implements adapter.Adapter against the
 // OpenAI-compatible HTTP gateway shipped by Nous Research's

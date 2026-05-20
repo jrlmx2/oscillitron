@@ -9,7 +9,14 @@ import (
 )
 
 func env(contras ...string) session.Envelope {
-	return session.Envelope{Output: &session.Output{Contradictions: contras}}
+	return session.Envelope{
+		Execute: &session.Execute{
+			Category: session.CategoryReturnResult,
+			ReturnResult: &session.ReturnResultPayload{
+				Signals: session.Signals{Contradictions: contras},
+			},
+		},
+	}
 }
 
 func TestSpikeAborts(t *testing.T) {

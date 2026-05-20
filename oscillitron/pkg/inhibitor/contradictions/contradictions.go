@@ -1,8 +1,10 @@
 // CLAUDE GENERATED
 // Package contradictions is an Inhibitor that watches the
-// Output.Contradictions field accumulating along a path through the
-// call tree. Per design-notes.md "Drift signals to watch":
-// contradiction with an earlier summary is a primary drift indicator.
+// return_result Signals.Contradictions field accumulating along a
+// path through the call tree. Per design-notes.md "Drift signals to
+// watch": contradiction with an earlier summary is a primary drift
+// indicator. APs that did not produce a return_result execute payload
+// contribute nothing to the count.
 //
 // Two thresholds:
 //
@@ -37,10 +39,10 @@ func New(spike, maxTotal int) *Inhibitor {
 func (c *Inhibitor) Check(edge inhibitor.Edge) inhibitor.Verdict {
 	total := 0
 	for i, e := range edge.Path {
-		if e.Output == nil {
+		if e.Execute == nil || e.Execute.ReturnResult == nil {
 			continue
 		}
-		n := len(e.Output.Contradictions)
+		n := len(e.Execute.ReturnResult.Signals.Contradictions)
 		total += n
 		if c.Spike > 0 && n >= c.Spike {
 			return inhibitor.Verdict{

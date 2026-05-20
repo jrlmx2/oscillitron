@@ -1,18 +1,28 @@
 // CLAUDE GENERATED
-// Package session defines the AP envelope under the call-tree model.
+// Package session defines the AP envelope under the uniform-node +
+// evaluate/execute call-tree model.
 //
-// An AP is an *invocation* of one brain function on one input
-// (siloed). A complex problem is solved by an invocation emitting
-// sub-APs (further invocations), recursively, until leaves return
-// concrete results that recompose back up the tree.
+// An AP is *one call*. Every AP runs the same two-step workflow:
 //
-// The envelope carries both the invocation in (BrainFunction, Input,
-// OutputSchema, Budget) and the result out (Output, populated by the
-// specialist on exit). Lean by design — token cost compounds over
-// every hop. Fat learning-loop records live in pkg/trace, not here.
+//  1. Evaluate — an LLM call picks the right Playbook for this AP from
+//     the v0 playbook set (plan / process / critique / verify_grounded /
+//     compose).
+//  2. Execute — runs the chosen playbook; produces a result that falls
+//     into one of three Categories (emit_subtree / return_result /
+//     verifier_signal).
 //
-// See parent CLAUDE.md "Architecture" (locked 2026-05-18) and
-// oscillitron/CLAUDE.md "Pending rework: call-tree model".
+// Specialization lives in the playbook substrate keyed by action, not
+// in distinct node types. There is no BrainFunction field on the
+// envelope — the playbook is *picked* by evaluate, not declared by the
+// caller.
+//
+// The envelope is the lean record the next invocation reads. Token cost
+// compounds over every hop, so anything that is a learning-loop signal
+// (verifier feedback, retrieval refs, cost ledger entries, full subtree
+// topology) goes in pkg/trace, not here.
+//
+// See parent CLAUDE.md "Architecture" (locks 2026-05-18 through
+// 2026-05-20) and scratch/design-notes.md "JSON envelope sketch".
 package session
 
 import (
@@ -21,34 +31,88 @@ import (
 
 // SchemaVersion lets the envelope evolve additively. Bumped only on
 // breaking shape changes; readers can downgrade gracefully.
-const SchemaVersion = "v1"
+const SchemaVersion = "v2"
 
-// ID uniquely identifies an envelope (an invocation in the call tree).
+// ID uniquely identifies an envelope (one AP in the call tree).
 type ID string
 
-// BrainFunction is the cognitive role an invocation invokes. Each AP
-// invokes exactly one (siloed). The registry binds these names to
-// specialist instances at runtime; names here are conventional.
-type BrainFunction string
+// ScopeHandle names a parent's scope channel — the shared sibling
+// result bus that compose APs pull from. Nil at the root (no parent).
+type ScopeHandle string
+
+// Playbook is the action tag the evaluate step picks. One per AP.
+// Each playbook produces output in exactly one Category (see below).
+type Playbook string
 
 const (
-	BrainPerception  BrainFunction = "perception"  // parse / classify input
-	BrainRetrieval   BrainFunction = "retrieval"   // pull relevant context
-	BrainPlanning    BrainFunction = "planning"    // decompose into steps
-	BrainReasoning   BrainFunction = "reasoning"   // apply transformation, derive
-	BrainCritic      BrainFunction = "critic"      // verify / check
-	BrainComposition BrainFunction = "composition" // produce output artifact
+	// PlaybookPlan decomposes a task. Output category: emit_subtree.
+	PlaybookPlan Playbook = "plan"
+	// PlaybookProcess does work on a task. Output category: return_result.
+	PlaybookProcess Playbook = "process"
+	// PlaybookCritique inspects a prior result. Output category: verifier_signal.
+	PlaybookCritique Playbook = "critique"
+	// PlaybookVerifyGrounded runs a grounded check (compile, exec,
+	// retrieval-match) carried on the envelope's VerifySpec. Output
+	// category: verifier_signal.
+	PlaybookVerifyGrounded Playbook = "verify_grounded"
+	// PlaybookCompose reduces sibling results pulled from a parent
+	// scope channel. Output category: return_result.
+	PlaybookCompose Playbook = "compose"
 )
 
-// ExitReason records why an invocation exited.
+// Category discriminates the Execute payload. Encoded on the envelope
+// so the runner knows what to do next.
+type Category string
+
+const (
+	// CategoryEmitSubtree — produces sub-APs into the parent's scope;
+	// doesn't return up. Used by plan.
+	CategoryEmitSubtree Category = "emit_subtree"
+	// CategoryReturnResult — value flows up the tree to the parent.
+	// Used by process and compose.
+	CategoryReturnResult Category = "return_result"
+	// CategoryVerifierSignal — pass/fail/issues flows to the runtime,
+	// not the next AP. Runtime owns retry/proceed/escalate policy.
+	// Used by critique and verify_grounded.
+	CategoryVerifierSignal Category = "verifier_signal"
+)
+
+// RecomposeSpec tells the parent's recomposer what shape the children
+// have. Carried on a plan AP's emit_subtree payload.
+type RecomposeSpec string
+
+const (
+	RecomposePairwise   RecomposeSpec = "pairwise"
+	RecomposeSequential RecomposeSpec = "sequential"
+	RecomposeNone       RecomposeSpec = "none"
+)
+
+// Verdict is a verifier_signal's pass/fail summary.
+type Verdict string
+
+const (
+	VerdictPass   Verdict = "pass"
+	VerdictFail   Verdict = "fail"
+	VerdictIssues Verdict = "issues"
+)
+
+// Severity ranks an Issue's seriousness for a verifier_signal payload.
+type Severity string
+
+const (
+	SeverityInfo    Severity = "info"
+	SeverityWarning Severity = "warning"
+	SeverityError   Severity = "error"
+)
+
+// ExitReason records why an invocation exited. Predicates read this.
 type ExitReason string
 
 const (
-	// ExitDone — invocation finished within its budget. Output is final
-	// for this AP (modulo sub-AP resolution and recomposition).
+	// ExitDone — invocation finished within its budget. Execute payload
+	// is final for this AP (modulo sub-AP resolution and recomposition).
 	ExitDone ExitReason = "done"
 	// ExitBudgetExhausted — invocation hit its token/depth budget.
-	// Output captures progress + remaining work.
 	ExitBudgetExhausted ExitReason = "budget_exhausted"
 	// ExitInhibited — inhibitor aborted this invocation or subtree.
 	ExitInhibited ExitReason = "inhibited"
@@ -62,75 +126,142 @@ type Budget struct {
 	DepthRemaining  int `json:"depth_remaining"`
 }
 
-// Envelope is one AP — a call to one brain function on one input, plus
-// (after the invocation runs) the result it produced.
+// Payload is the shared shape for an AP's input and a return_result's
+// output. Polymorphic by Kind ("task", "result", "scope_pull", ...).
+type Payload struct {
+	Kind        string `json:"kind"`
+	Content     string `json:"content"`
+	ContentHash string `json:"content_hash,omitempty"`
+}
+
+// VerifySpec carries a grounded-check description for a
+// verify_grounded AP. Opaque to the envelope; consumed by the adapter.
+type VerifySpec struct {
+	Kind string `json:"kind"` // "compile" | "exec" | "retrieval_match" | ...
+	Spec string `json:"spec"`
+}
+
+// Envelope is one AP — the call, plus (after evaluate and execute run)
+// the playbook pick and its execute payload.
 type Envelope struct {
-	SchemaVersion  string               `json:"schema_version"`
-	ID             ID                   `json:"id"`
-	BrainFunction  BrainFunction        `json:"brain_function"`
-	Classification classification.Level `json:"classification"`
-	Input          Input                `json:"input"`
-	// OutputSchema is the contract describing what a successful Output
-	// must contain. The producing brain function's prompt prepends this
-	// as the preloaded self-classification requirement: every LLM
-	// invocation is required to classify its output against this schema.
+	SchemaVersion string `json:"schema_version"`
+	ID            ID     `json:"id"`
+	// ParentID is the parent AP's ID. Nil at the root.
+	ParentID *ID `json:"parent_id,omitempty"`
+	// RootID is the topmost AP's ID. Equals ID at the root.
+	RootID ID `json:"root_id"`
+	// Path is the root→this chain (inclusive). The inhibitor's stateful
+	// detectors (confidence drop windows, cumulative contradictions,
+	// repetition) read this.
+	Path []ID `json:"path"`
+	// ScopeHandle is the parent's scope channel — the shared bus
+	// sibling results land on. Nil at the root.
+	ScopeHandle *ScopeHandle `json:"scope_handle,omitempty"`
+
+	// Input is what this AP operates on.
+	Input Payload `json:"input"`
+	// OutputSchema is the contract for what a successful Execute must
+	// produce. Doubles as the preloaded prompt requirement that forces
+	// the producing LLM to self-classify against it.
 	OutputSchema string `json:"output_schema"`
-	// ParentRef is the parent invocation's ID (nil for the root).
-	ParentRef *ID    `json:"parent_ref,omitempty"`
-	Budget    Budget `json:"budget"`
-	// Output is nil until the invocation runs and the adapter
-	// populates it. After sub-AP resolution + recomposition, Output may
-	// be replaced with the composed result.
-	Output *Output `json:"output,omitempty"`
+	// Classification is the expected level (from the envelope contract).
+	Classification classification.Level `json:"classification"`
+
+	// NeedsVerification is the parent override: forces a critique pass
+	// regardless of the verifier-policy sampling roll. Suppression by
+	// parent is not allowed in v0 — parent can pin, not unpin.
+	NeedsVerification bool `json:"needs_verification"`
+	// VerifySpec is populated only when this AP will execute
+	// verify_grounded. Carries the check (compile / exec / retrieval).
+	VerifySpec *VerifySpec `json:"verify_spec,omitempty"`
+
+	Budget Budget `json:"budget"`
+
+	// Evaluate is populated after the evaluate step runs.
+	Evaluate *Evaluate `json:"evaluate,omitempty"`
+	// Execute is populated after the execute step runs.
+	Execute *Execute `json:"execute,omitempty"`
+
+	// ExitReason records why the AP exited. Empty string until exit.
+	ExitReason ExitReason `json:"exit_reason,omitempty"`
 	// Trace is lean per-AP metrics. The fat learning-loop record lives
 	// in pkg/trace, off the inference path.
 	Trace Trace `json:"trace"`
-	// Audit is populated by the audit ledger from Phase 4 onward. Nil
-	// through Phase 3.
+	// Audit is populated by the audit ledger from Phase 4 onward.
 	Audit *Audit `json:"audit,omitempty"`
 }
 
-// Input is what the invocation operates on.
-type Input struct {
-	Type        string `json:"type"`         // "prompt", "subap_result", etc.
-	Content     string `json:"content"`
-	ContentHash string `json:"content_hash"` // sha256:hex; orchestrator populates
+// Evaluate captures the first-step LLM call that picks the playbook.
+// Only Playbook is structurally consumed downstream. Rationale is for
+// the trace and human inspection; nothing reads it programmatically.
+type Evaluate struct {
+	Playbook   Playbook `json:"playbook"`
+	Rationale  string   `json:"rationale,omitempty"`
+	Confidence float64  `json:"confidence"`
+	TokensUsed int      `json:"tokens_used"`
 }
 
-// SubAPSeed is what an invocation emits to spawn a child AP. Enough
-// information to construct the child envelope at dispatch time.
+// Execute captures the second-step playbook output. Exactly one of
+// EmitSubtree / ReturnResult / VerifierSignal is populated, matching
+// Category.
+type Execute struct {
+	Category       Category               `json:"category"`
+	EmitSubtree    *EmitSubtreePayload    `json:"emit_subtree,omitempty"`
+	ReturnResult   *ReturnResultPayload   `json:"return_result,omitempty"`
+	VerifierSignal *VerifierSignalPayload `json:"verifier_signal,omitempty"`
+	TokensUsed     int                    `json:"tokens_used"`
+}
+
+// EmitSubtreePayload is the execute output of plan. SubAPs are spawned
+// into the parent's scope; Recompose tells the parent's recomposer
+// what shape to expect.
+type EmitSubtreePayload struct {
+	SubAPs    []SubAPSeed   `json:"sub_aps"`
+	Recompose RecomposeSpec `json:"recompose"`
+}
+
+// SubAPSeed is what plan emits per child. Enough to construct a child
+// envelope at dispatch time. The runner assigns IDs, inherits budget,
+// and stamps Path / ParentID / RootID / ScopeHandle.
 type SubAPSeed struct {
-	BrainFunction BrainFunction `json:"brain_function"`
-	Input         Input         `json:"input"`
-	OutputSchema  string        `json:"output_schema"`
+	Input             Payload              `json:"input"`
+	OutputSchema      string               `json:"output_schema"`
+	Classification    classification.Level `json:"classification"`
+	NeedsVerification bool                 `json:"needs_verification,omitempty"`
+	VerifySpec        *VerifySpec          `json:"verify_spec,omitempty"`
 }
 
-// Output is the invocation's product. Populated by the specialist's
-// adapter when the invocation exits.
-type Output struct {
-	// Content is the actual produced result.
-	Content string `json:"content"`
-	// Classification is the LLM-emitted self-classification against
-	// OutputSchema. Preloaded prompt requirement forces this.
-	Classification string `json:"classification"`
-	// Confidence is the LLM-emitted confidence in this output. Drives
-	// inhibitor checks and (eventually) recomposer weighting.
+// ReturnResultPayload is the execute output of process and compose.
+// Result flows up to the parent.
+type ReturnResultPayload struct {
+	Result     Payload `json:"result"`
 	Confidence float64 `json:"confidence"`
-	// Signals are amorphous LLM-emitted grounding notes. Same channel
-	// the inhibitor reads for drift detection.
-	Signals []string `json:"signals,omitempty"`
-	// Contradictions are self-reported contradictions with prior
-	// context. Separate from Signals because the inhibitor weights
-	// them more heavily.
+	Signals    Signals `json:"signals"`
+}
+
+// Signals is the lean local-signal bundle the parent recomposer and
+// curation layer read. The rest of the signal record lives in
+// pkg/trace.
+type Signals struct {
+	// GroundedPass is the result of a co-located grounded check, if
+	// any. Pointer so absence is distinguishable from false.
+	GroundedPass   *bool    `json:"grounded_pass,omitempty"`
 	Contradictions []string `json:"contradictions,omitempty"`
-	// OpenQuestions are unresolved threads the invocation noticed but
-	// did not pursue. May seed future SubAPs.
-	OpenQuestions []string `json:"open_questions,omitempty"`
-	// SubAPs are the child invocations this one wants spawned before
-	// it is complete. Empty means this is a leaf (no further descent).
-	SubAPs []SubAPSeed `json:"sub_aps,omitempty"`
-	// ExitReason records why the invocation exited.
-	ExitReason ExitReason `json:"exit_reason"`
+	OpenQuestions  []string `json:"open_questions,omitempty"`
+}
+
+// VerifierSignalPayload is the execute output of critique and
+// verify_grounded. Goes to the runtime, not the next AP.
+type VerifierSignalPayload struct {
+	Verdict Verdict `json:"verdict"`
+	Issues  []Issue `json:"issues,omitempty"`
+}
+
+// Issue is a single finding inside a VerifierSignalPayload.
+type Issue struct {
+	Severity Severity `json:"severity"`
+	Where    string   `json:"where,omitempty"`
+	What     string   `json:"what"`
 }
 
 // Trace records lean per-AP operational metrics. The fat learning-loop
@@ -151,35 +282,78 @@ type Audit struct {
 	Signature string `json:"signature"`
 }
 
-// NewRoot constructs a root envelope (no parent) — the entry point a
-// caller fires at the tree-walker. Generated ID is the caller's
-// responsibility; budget governs the whole subtree.
-func NewRoot(id ID, bf BrainFunction, prompt, outputSchema string, budget Budget) Envelope {
+// NewRoot constructs a root envelope (no parent, no scope) — the entry
+// point a caller fires at the runner. Path is [id]; the runner walks
+// down from here.
+func NewRoot(id ID, prompt, outputSchema string, level classification.Level, budget Budget) Envelope {
 	return Envelope{
-		SchemaVersion: SchemaVersion,
-		ID:            id,
-		BrainFunction: bf,
-		Input:         Input{Type: "prompt", Content: prompt},
-		OutputSchema:  outputSchema,
-		Budget:        budget,
+		SchemaVersion:  SchemaVersion,
+		ID:             id,
+		RootID:         id,
+		Path:           []ID{id},
+		Input:          Payload{Kind: "task", Content: prompt},
+		OutputSchema:   outputSchema,
+		Classification: level,
+		Budget:         budget,
 	}
 }
 
-// IsLeaf reports whether this invocation requested no further sub-APs.
-// A leaf invocation's Output is the final result for this branch (no
-// recomposition needed below).
-func (e *Envelope) IsLeaf() bool {
-	return e.Output != nil && len(e.Output.SubAPs) == 0
+// NewChild constructs a child envelope from a parent + seed. The
+// runner is responsible for ID assignment, scope routing, and budget
+// derivation; this helper centralizes the path/parent/root plumbing.
+func NewChild(parent *Envelope, seed SubAPSeed, childID ID, scope ScopeHandle, budget Budget) Envelope {
+	path := make([]ID, 0, len(parent.Path)+1)
+	path = append(path, parent.Path...)
+	path = append(path, childID)
+	parentID := parent.ID
+	scopeCopy := scope
+	return Envelope{
+		SchemaVersion:     SchemaVersion,
+		ID:                childID,
+		ParentID:          &parentID,
+		RootID:            parent.RootID,
+		Path:              path,
+		ScopeHandle:       &scopeCopy,
+		Input:             seed.Input,
+		OutputSchema:      seed.OutputSchema,
+		Classification:    seed.Classification,
+		NeedsVerification: seed.NeedsVerification,
+		VerifySpec:        seed.VerifySpec,
+		Budget:            budget,
+	}
 }
 
-// IsInhibited reports whether the invocation (or its subtree) was
-// aborted by the inhibitor.
-func (e *Envelope) IsInhibited() bool {
-	return e.Output != nil && e.Output.ExitReason == ExitInhibited
-}
-
-// IsComplete reports whether the invocation has run (Output is set).
-// Does not imply the subtree below it has resolved.
+// IsComplete reports whether the AP has exited. Does not imply the
+// subtree below it has resolved.
 func (e *Envelope) IsComplete() bool {
-	return e.Output != nil
+	return e.ExitReason != ""
+}
+
+// IsLeaf reports whether this AP requested no further descent. A leaf
+// is any completed AP whose execute payload did not emit a subtree.
+// (Process / compose / critique / verify_grounded are always leaves;
+// plan is a leaf only when it emits zero sub-APs.)
+func (e *Envelope) IsLeaf() bool {
+	if !e.IsComplete() {
+		return false
+	}
+	if e.Execute == nil {
+		return true
+	}
+	if e.Execute.Category != CategoryEmitSubtree {
+		return true
+	}
+	return e.Execute.EmitSubtree == nil || len(e.Execute.EmitSubtree.SubAPs) == 0
+}
+
+// IsInhibited reports whether the AP (or its subtree) was aborted by
+// the inhibitor.
+func (e *Envelope) IsInhibited() bool {
+	return e.ExitReason == ExitInhibited
+}
+
+// Depth is the number of AP hops from the root to this AP (inclusive).
+// Root has Depth 1; its children have Depth 2; and so on.
+func (e *Envelope) Depth() int {
+	return len(e.Path)
 }

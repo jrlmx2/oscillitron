@@ -1,265 +1,55 @@
 // CLAUDE GENERATED
-// Package runner walks the call tree of AP invocations under the
-// call-tree model.
+// Package runner walks the AP call tree under the uniform-node +
+// evaluate/execute model.
 //
-// Given a root envelope, the runner:
+// This file is a placeholder. Stage 3 of the uniform-node refactor
+// (parent CLAUDE.md "Architecture", scratch/design-notes.md "JSON
+// envelope sketch") rewrites the runner to:
 //
-//  1. Dispatches it to the specialist registered for its BrainFunction
-//     (via pkg/registry).
-//  2. For non-root nodes, invokes the inhibitor on the parent→current
-//     edge after dispatch (inhibition is an edge property — see
-//     pkg/inhibitor and parent CLAUDE.md). The root has no incoming
-//     edge and is never checked.
-//  3. If the invocation emitted SubAPs, builds child envelopes from the
-//     seeds, walks each subtree synchronously in order (v0 has no
-//     sibling parallelism), and recomposes children outputs into the
-//     parent's final Output via pkg/recomposer.
-//  4. Returns the resolved root with its composed Output.
+//   - Call adapter.Evaluate then adapter.Execute on every AP.
+//   - Branch on Execute.Category:
+//   - emit_subtree → construct child envelopes, publish into the
+//     parent's scope channel, dispatch in randomized order.
+//   - return_result → bubble up.
+//   - verifier_signal → feed to runtime policy (verifier-policy
+//     happiness signal), not to the next AP.
+//   - Invoke the inhibitor on every parent→child edge after the child
+//     resolves. Root has no incoming edge and is never checked.
+//   - Enforce MaxDepth and per-AP Budget.
 //
-// Sync, no goroutines, no channels. Hardware parallelism is deferred
-// (see parent CLAUDE.md). If a sub-AP returns an inhibited or errored
-// envelope, the parent surfaces ExitInhibited and bails on remaining
-// siblings — strict semantics; partial recomposition is not allowed.
+// Until Stage 3 lands, Run panics with a clear stage-pending message.
 package runner
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log/slog"
-	"sync/atomic"
-	"time"
 
+	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
-	"github.com/jrlmx2/oscillitron/pkg/registry"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
-// Config bundles the tree-walker's dependencies.
+// ErrStagePending is returned by Run while Stage 3 of the
+// uniform-node refactor is in flight.
+var ErrStagePending = errors.New("runner: rewrite pending (Stage 3 of uniform-node refactor)")
+
+// Config bundles the tree-walker's dependencies. Shape is intentionally
+// preserved across the refactor so callers (cmd/oscillitron, tests)
+// don't churn twice.
 type Config struct {
-	Registry   *registry.Registry
-	Recomposer recomposer.Recomposer
+	Adapter    adapter.Adapter
 	Inhibitor  inhibitor.Inhibitor
-	Root       session.Envelope
-	Tracer     trace.Tracer // optional; nil-safe
-
-	// MaxDepth bounds the call tree's depth as a belt-and-suspenders.
-	// Distinct from Envelope.Budget.DepthRemaining (which is per-AP
-	// allotment, possibly specialized by brain functions). Defaults to
-	// 16 when zero or less.
-	MaxDepth int
-
-	// NextID generates IDs for child envelopes. Defaults to a monotonic
-	// per-run counter when nil.
-	NextID func() session.ID
+	Recomposer recomposer.Recomposer
+	Tracer     trace.Tracer
+	MaxDepth   int
 }
 
-// Reason describes the outcome of a Run.
-type Reason string
-
-const (
-	ReasonSuccess         Reason = "success"
-	ReasonInhibitorAbort  Reason = "inhibitor_abort"
-	ReasonContextDone     Reason = "context_done"
-	ReasonDispatchError   Reason = "dispatch_error"
-	ReasonRecomposeError  Reason = "recompose_error"
-	ReasonDepthExhausted  Reason = "depth_exhausted"
-)
-
-// Result is the runner's outcome. Root is the resolved root envelope
-// — its Output is the composed final result on success, or carries the
-// failure context (ExitInhibited) otherwise.
-type Result struct {
-	Root   session.Envelope
-	Reason Reason
-	Detail string
-}
-
-// Run walks the call tree rooted at cfg.Root and returns the resolved
-// root. Returns an error only for validation failures and ctx errors
-// the walker could not surface as ExitInhibited.
-func Run(ctx context.Context, cfg Config) (Result, error) {
-	if err := validate(cfg); err != nil {
-		return Result{}, err
-	}
-	if cfg.MaxDepth <= 0 {
-		cfg.MaxDepth = 16
-	}
-	if cfg.NextID == nil {
-		cfg.NextID = defaultIDGen()
-	}
-
-	resolved, err := walk(ctx, cfg, nil, cfg.Root, 0)
-	if err != nil {
-		// ctx done — surface as a Result with the partially-resolved
-		// root rather than discarding it.
-		return Result{Root: resolved, Reason: ReasonContextDone, Detail: err.Error()}, nil
-	}
-	reason := ReasonSuccess
-	detail := ""
-	if resolved.IsInhibited() {
-		reason = ReasonInhibitorAbort
-		if resolved.Output != nil {
-			detail = resolved.Output.Content
-		}
-	}
-	return Result{Root: resolved, Reason: reason, Detail: detail}, nil
-}
-
-// walk runs one node in the call tree and returns the resolved
-// envelope. The path argument is the root→current sequence (current
-// not yet appended).
-func walk(ctx context.Context, cfg Config, path []session.Envelope, current session.Envelope, depth int) (session.Envelope, error) {
-	if err := ctx.Err(); err != nil {
-		current.Output = inhibitedOutput("context cancelled before dispatch: " + err.Error())
-		return current, err
-	}
-	if depth >= cfg.MaxDepth {
-		current.Output = inhibitedOutput(
-			fmt.Sprintf("depth %d hit MaxDepth %d", depth, cfg.MaxDepth))
-		return current, nil
-	}
-	if current.Budget.DepthRemaining < 0 {
-		current.Output = &session.Output{
-			ExitReason: session.ExitBudgetExhausted,
-			Content:    "depth budget exhausted before dispatch",
-		}
-		return current, nil
-	}
-
-	// Dispatch the invocation.
-	osc, err := cfg.Registry.Lookup(current.BrainFunction)
-	if err != nil {
-		current.Output = inhibitedOutput("dispatch error: " + err.Error())
-		return current, nil
-	}
-	current = osc.Invoke(ctx, current)
-
-	// Edge-based inhibitor check on the parent→current traversal.
-	// Root has no incoming edge, so skip when path is empty.
-	pathWithCurrent := append(append([]session.Envelope(nil), path...), current)
-	if len(path) > 0 {
-		parent := path[len(path)-1]
-		edge := inhibitor.Edge{
-			Parent: &parent,
-			Child:  current,
-			Path:   pathWithCurrent,
-		}
-		v := cfg.Inhibitor.Check(edge)
-		if v.Decision != inhibitor.Continue {
-			detail := v.Reason
-			if v.Decision == inhibitor.Restart {
-				// No checkpointing yet — downgrade to abort with annotated reason.
-				detail = "restart-as-abort (no checkpointing yet): " + v.Reason
-			}
-			if cfg.Tracer != nil {
-				trace.Info(cfg.Tracer, ctx, "inhibitor_abort",
-					slog.Int("decision", int(v.Decision)),
-					slog.String("reason", v.Reason),
-					slog.Int("path_depth", len(pathWithCurrent)),
-					slog.String("session", string(current.ID)),
-				)
-			}
-			current.Output = inhibitedOutput(detail)
-			return current, nil
-		}
-	}
-
-	// Leaf — no SubAPs, no recomposition. Already inhibited (e.g. adapter
-	// error) also returns directly.
-	if current.IsInhibited() || current.IsLeaf() {
-		return current, nil
-	}
-
-	// Has SubAPs — walk each subtree in order.
-	seeds := current.Output.SubAPs
-	children := make([]session.Envelope, 0, len(seeds))
-	for i, seed := range seeds {
-		if err := ctx.Err(); err != nil {
-			return current, err
-		}
-		child := buildChild(current, seed, cfg.NextID())
-		resolvedChild, err := walk(ctx, cfg, pathWithCurrent, child, depth+1)
-		if err != nil {
-			return current, err
-		}
-		children = append(children, resolvedChild)
-		if resolvedChild.IsInhibited() {
-			// Strict: any inhibited child inhibits the parent. Stop
-			// dispatching siblings — partial recomposition is not allowed.
-			current.Output = inhibitedOutput(
-				fmt.Sprintf("child %d (%s) inhibited; abandoning remaining %d siblings",
-					i, resolvedChild.BrainFunction, len(seeds)-i-1))
-			return current, nil
-		}
-	}
-
-	// Recompose.
-	composed, err := cfg.Recomposer.Recompose(ctx, *current.Output, children)
-	if err != nil {
-		if cfg.Tracer != nil {
-			trace.Error(cfg.Tracer, ctx, "recompose_error",
-				slog.String("session", string(current.ID)),
-				slog.String("err", err.Error()),
-			)
-		}
-		current.Output = inhibitedOutput("recompose error: " + err.Error())
-		return current, nil
-	}
-	current.Output = &composed
-	return current, nil
-}
-
-func buildChild(parent session.Envelope, seed session.SubAPSeed, id session.ID) session.Envelope {
-	parentID := parent.ID
-	return session.Envelope{
-		SchemaVersion:  session.SchemaVersion,
-		ID:             id,
-		BrainFunction:  seed.BrainFunction,
-		Classification: parent.Classification,
-		Input:          seed.Input,
-		OutputSchema:   seed.OutputSchema,
-		ParentRef:      &parentID,
-		Budget: session.Budget{
-			TokensRemaining: parent.Budget.TokensRemaining, // adapter-level decrement later
-			DepthRemaining:  parent.Budget.DepthRemaining - 1,
-		},
-	}
-}
-
-func inhibitedOutput(content string) *session.Output {
-	return &session.Output{
-		ExitReason: session.ExitInhibited,
-		Content:    content,
-	}
-}
-
-func validate(cfg Config) error {
-	if cfg.Registry == nil {
-		return errors.New("runner: Config.Registry is nil")
-	}
-	if cfg.Recomposer == nil {
-		return errors.New("runner: Config.Recomposer is nil")
-	}
-	if cfg.Inhibitor == nil {
-		return errors.New("runner: Config.Inhibitor is nil")
-	}
-	if cfg.Root.BrainFunction == "" {
-		return errors.New("runner: Config.Root.BrainFunction is empty")
-	}
-	if _, err := cfg.Registry.Lookup(cfg.Root.BrainFunction); err != nil {
-		return fmt.Errorf("runner: root brain function %q not registered", cfg.Root.BrainFunction)
-	}
-	return nil
-}
-
-func defaultIDGen() func() session.ID {
-	var counter atomic.Int64
-	start := time.Now().UnixNano()
-	return func() session.ID {
-		n := counter.Add(1)
-		return session.ID(fmt.Sprintf("sess-%d-%d", start, n))
-	}
+// Run walks the call tree from root. Returns the resolved envelope.
+// Stage 3 of the uniform-node refactor will implement this; for now
+// it returns ErrStagePending so downstream callers see a clear
+// failure rather than silently doing nothing.
+func Run(ctx context.Context, cfg Config, root session.Envelope) (session.Envelope, error) {
+	return root, ErrStagePending
 }

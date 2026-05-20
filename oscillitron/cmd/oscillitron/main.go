@@ -26,6 +26,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/jrlmx2/oscillitron/pkg/adapter"
+	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/config"
@@ -46,25 +48,32 @@ func main() {
 
 func run() error {
 	var (
-		taskFlag    = flag.String("task", "draft a project plan", "root task description")
-		seedFlag    = flag.Uint64("seed", 42, "PCG seed for randomized sibling dispatch (0 = non-deterministic)")
-		maxDepth    = flag.Int("max-depth", 4, "absolute path-length cap (belt-and-suspenders)")
-		depthBudget = flag.Int("depth-budget", 3, "per-AP DepthRemaining for the root envelope")
-		configFlag  = flag.String("config", "", "optional .properties config path (Stage 5+ Hermes wiring; ignored in stub mode)")
-		verboseFlag = flag.Bool("v", false, "verbose tracer (slog Info events)")
+		taskFlag       = flag.String("task", "draft a project plan", "root task description")
+		seedFlag       = flag.Uint64("seed", 42, "PCG seed for randomized sibling dispatch (0 = non-deterministic)")
+		maxDepth       = flag.Int("max-depth", 4, "absolute path-length cap (belt-and-suspenders)")
+		depthBudget    = flag.Int("depth-budget", 3, "per-AP DepthRemaining for the root envelope")
+		configFlag     = flag.String("config", "", "optional .properties config path")
+		hermesFlag     = flag.String("hermes", "", "single-endpoint Hermes BaseURL (e.g. http://127.0.0.1:8642); pass empty to force stub mode")
+		hermesModel    = flag.String("hermes-model", "", "model identifier passed to Hermes (optional)")
+		strictFlag     = flag.Bool("strict", false, "require structured JSON from Hermes (error on parse failure)")
+		verboseFlag    = flag.Bool("v", false, "verbose tracer (slog Info events)")
 	)
 	flag.Parse()
 
-	// Load config if provided — kept live so Stage 5 can lean on it
-	// without reshaping the CLI surface. The properties file is
-	// presently informational only (no live Hermes wiring yet).
+	// Config file fills in any setting the user did not pass as a CLI
+	// flag. CLI flags always win.
+	var props config.Properties
 	if *configFlag != "" {
-		props, err := config.Load(*configFlag)
+		p, err := config.Load(*configFlag)
 		if err != nil {
 			return fmt.Errorf("load %s: %w", *configFlag, err)
 		}
-		if u := props.String("hermes.url", ""); u != "" {
-			fmt.Fprintf(os.Stderr, "demo: hermes.url=%q present in config; Hermes adapter is Stage 5, falling back to stub.\n", u)
+		props = p
+		if *hermesFlag == "" {
+			*hermesFlag = props.String("hermes.url", "")
+		}
+		if *hermesModel == "" {
+			*hermesModel = props.String("hermes.model", "")
 		}
 	}
 
@@ -74,10 +83,66 @@ func run() error {
 		tracer = trace.Slog{Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))}
 	}
 
-	// Build the stub adapter. Evaluator picks a playbook by inspecting
-	// the input content: the root task triggers plan; "verify" inputs
-	// trigger critique; everything else is process.
-	a := stub.New("demo").
+	var a adapter.Adapter
+	if *hermesFlag != "" {
+		cfg := hermes.SingleEndpoint(*hermesFlag, *hermesModel)
+		cfg.Tracer = tracer
+		cfg.RequireStructured = *strictFlag
+		ha, err := hermes.New(cfg)
+		if err != nil {
+			return fmt.Errorf("hermes adapter: %w", err)
+		}
+		a = ha
+		fmt.Fprintf(os.Stderr, "demo: using Hermes adapter at %s (model=%q strict=%v)\n", *hermesFlag, *hermesModel, *strictFlag)
+	} else {
+		a = buildStubAdapter()
+		fmt.Fprintln(os.Stderr, "demo: using stub adapter (pass --hermes URL or set hermes.url in config to wire a real Hermes)")
+	}
+
+	// Inhibitor: a hard depth cap as the v0 floor; the runner also
+	// honors Config.MaxDepth as a belt-and-suspenders layer.
+	inh := composite.New(hardcap.New(*maxDepth))
+
+	// PCG seed. 0 means "non-deterministic"; we still construct a
+	// rand.Rand so the runner has a stable handle.
+	var prng *rand.Rand
+	if *seedFlag == 0 {
+		prng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
+	} else {
+		prng = rand.New(rand.NewPCG(*seedFlag, *seedFlag^0xa5a5_5a5a_a5a5_5a5a))
+	}
+
+	root := session.NewRoot(
+		"ap-root",
+		*taskFlag,
+		"{combined_plan_output}",
+		classification.Internal,
+		session.Budget{TokensRemaining: 32_000, DepthRemaining: *depthBudget},
+	)
+
+	res, err := runner.Run(context.Background(), runner.Config{
+		Adapter:    a,
+		Inhibitor:  inh,
+		Recomposer: recomposer.Concat{Separator: recomposer.DefaultSeparator},
+		Tracer:     tracer,
+		MaxDepth:   *maxDepth,
+		Rand:       prng,
+	}, root)
+	if err != nil {
+		return fmt.Errorf("run: %w", err)
+	}
+
+	printSummary(os.Stdout, res, *taskFlag)
+	return nil
+}
+
+// buildStubAdapter constructs the deterministic stub the demo uses
+// when no Hermes endpoint is configured. The evaluator picks plan at
+// the root, critique for inputs starting "verify:", and process
+// otherwise; plan emits four sibling APs covering all three Execute
+// categories.
+func buildStubAdapter() adapter.Adapter {
+	return stub.New("demo").
 		WithEvaluator(func(env session.Envelope) (session.Playbook, float64) {
 			c := env.Input.Content
 			switch {
@@ -116,42 +181,6 @@ func run() error {
 			0.82,
 		).
 		WithVerifierSignal(session.PlaybookCritique, session.VerdictPass)
-
-	// Inhibitor: a hard depth cap as the v0 floor; the runner also
-	// honors Config.MaxDepth as a belt-and-suspenders layer.
-	inh := composite.New(hardcap.New(*maxDepth))
-
-	// PCG seed. 0 means "non-deterministic"; we still construct a
-	// rand.Rand so the runner has a stable handle.
-	var prng *rand.Rand
-	if *seedFlag == 0 {
-		prng = rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64()))
-	} else {
-		prng = rand.New(rand.NewPCG(*seedFlag, *seedFlag^0xa5a5_5a5a_a5a5_5a5a))
-	}
-
-	root := session.NewRoot(
-		"ap-root",
-		*taskFlag,
-		"{combined_plan_output}",
-		classification.Internal,
-		session.Budget{TokensRemaining: 32_000, DepthRemaining: *depthBudget},
-	)
-
-	res, err := runner.Run(context.Background(), runner.Config{
-		Adapter:    a,
-		Inhibitor:  inh,
-		Recomposer: recomposer.Concat{Separator: recomposer.DefaultSeparator},
-		Tracer:     tracer,
-		MaxDepth:   *maxDepth,
-		Rand:       prng,
-	}, root)
-	if err != nil {
-		return fmt.Errorf("run: %w", err)
-	}
-
-	printSummary(os.Stdout, res, *taskFlag)
-	return nil
 }
 
 // printSummary renders the result in a human-friendly form. Useful

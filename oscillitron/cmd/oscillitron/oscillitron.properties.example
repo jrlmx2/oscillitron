@@ -9,29 +9,41 @@
 # Use:
 #   go run ./cmd/oscillitron --config oscillitron.properties
 #   OSCILLITRON_CONFIG=oscillitron.properties go run ./cmd/oscillitron
+#
+# Under the uniform-node lock, specialization lives in the playbook
+# substrate keyed by action — there are no distinct brain-function
+# nodes. Endpoints below are keyed by playbook action tag (plan,
+# process, critique, verify_grounded, compose), matching the v0
+# playbook set.
+#
+# Hermes-backed runs are deferred to Stage 5 of the refactor; this
+# file is presently informational. The demo runs against the stub
+# adapter regardless of what's set here.
 
-# ----- Single-endpoint case: one Hermes serves every brain function.
+# ----- Single-endpoint case: one Hermes serves every playbook.
 # (Easiest for v0 dev — point at one local `hermes gateway` on :8642.)
 
 # hermes.url=http://127.0.0.1:8642
 # hermes.model=openrouter:openai/gpt-4o-mini
 
-# ----- Multi-endpoint case: one Hermes PER brain function.
-# (Matches the locked architecture — each specialist's persistent
-# store is its own long-lived Hermes process. Spawn N gateways on
-# different ports and bind them here.)
+# ----- Multi-endpoint case: one Hermes PER playbook action.
+# (Per-instance playbook substrate — each playbook's persistent store
+# is its own long-lived Hermes process. Spawn N gateways on different
+# ports and bind them here.)
 #
 # When ANY hermes.endpoints.* entry is present, the single-endpoint
 # settings above are ignored.
 
-# hermes.endpoints.planning.url=http://127.0.0.1:8642
-# hermes.endpoints.planning.model=openrouter:openai/gpt-4o-mini
-# hermes.endpoints.reasoning.url=http://127.0.0.1:8643
-# hermes.endpoints.reasoning.model=openrouter:openai/gpt-4o-mini
-# hermes.endpoints.retrieval.url=http://127.0.0.1:8644
-# hermes.endpoints.retrieval.model=openrouter:openai/gpt-4o-mini
-# hermes.endpoints.critic.url=http://127.0.0.1:8645
-# hermes.endpoints.critic.model=openrouter:anthropic/claude-3.5-haiku
+# hermes.endpoints.plan.url=http://127.0.0.1:8642
+# hermes.endpoints.plan.model=openrouter:openai/gpt-4o-mini
+# hermes.endpoints.process.url=http://127.0.0.1:8643
+# hermes.endpoints.process.model=openrouter:openai/gpt-4o-mini
+# hermes.endpoints.critique.url=http://127.0.0.1:8644
+# hermes.endpoints.critique.model=openrouter:anthropic/claude-3.5-haiku
+# hermes.endpoints.verify_grounded.url=http://127.0.0.1:8645
+# hermes.endpoints.verify_grounded.model=openrouter:openai/gpt-4o-mini
+# hermes.endpoints.compose.url=http://127.0.0.1:8646
+# hermes.endpoints.compose.model=openrouter:openai/gpt-4o-mini
 
 # ----- Misc.
 

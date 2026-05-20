@@ -63,7 +63,7 @@ Specialization seeds are **predetermined** (the scaffolding) and **grow organica
 
 **Specialists are nodes; processing flow is graph topology.** The router, and optionally a cheap intent classifier upstream of it, are also nodes. Everything else — input → reasoning → output sequencing, fast vs. slow paths — is a property of the graph (edges, weights, thresholds, path length, playbook richness), not separate node types. **The graph is the main learnable substrate.** Specialists grow within their niches via Hermes' skill creation; the bulk of self-improvement happens at the topology layer — strengthening edges, shifting thresholds, adding or pruning routes. Brain analog: cortical microcircuits are nearly identical across regions; specialization comes from what feeds in, not from a different circuit.
 
-**Specialists are brain-function roles, NOT subject domains (LOCKED 2026-05-18).** Seed nodes are typed by cognitive function — perception/parsing, retrieval, planning/decomposition, reasoning/transformation, critic/verification, composition/output — analogous to functional cortical roles (sensory cortex, hippocampus, PFC, ACC, Broca). They are NOT typed by subject ("code specialist", "math specialist", "legal specialist"). Subject competence is an *emergent* property of which playbooks, exemplars, and retrieval shards a brain-function node accumulates over time, plus the topology that routes subject-shaped inputs toward it. Rationale: cortical microcircuits are uniform; specialization comes from afferents and learned weights, not from a different circuit per topic. Subject-based seeding pre-commits the system to a taxonomy we don't yet trust and duplicates effort across topics that share cognitive structure. **Enforcement:** if a draft, demo, doc, or chat suggestion reintroduces subject-based seed names (code/math/legal/writer/fact-check/etc.), rename to the brain-function role it actually plays. The demo in `oscillitron/cmd/oscillitron` uses `reasoner → critic → composer` as canonical placeholders.
+**Specialists are brain-function roles, NOT subject domains (LOCKED 2026-05-18).** Seed nodes are typed by cognitive function — perception/parsing, retrieval, planning/decomposition, reasoning/transformation, critic/verification, composition/output — analogous to functional cortical roles (sensory cortex, hippocampus, PFC, ACC, Broca). They are NOT typed by subject ("code specialist", "math specialist", "legal specialist"). Subject competence is an *emergent* property of which playbooks, exemplars, and retrieval shards a brain-function node accumulates over time, plus the topology that routes subject-shaped inputs toward it. Rationale: cortical microcircuits are uniform; specialization comes from afferents and learned weights, not from a different circuit per topic. Subject-based seeding pre-commits the system to a taxonomy we don't yet trust and duplicates effort across topics that share cognitive structure. **Enforcement:** if a draft, demo, doc, or chat suggestion reintroduces subject-based seed names (code/math/legal/writer/fact-check/etc.), rename to the brain-function role it actually plays. Note that under the uniform-node lock (2026-05-19, below), brain functions are *playbook tags* on a single workflow, not distinct node types. The current demo's `reasoner → critic → composer` framing is superseded by the evaluate/execute + 5-playbook shape; the refactor is queued behind the JSON envelope sketch.
 
 **Inhibitor is an edge property, not a node (LOCKED 2026-05-18).** Drift detection and circuit-breaking attach to graph edges (and to chains via aggregate edge state), not to a dedicated inhibitor specialist. Rationale: inhibition is a *modulation* of signal flow between regions, not a separate cortical region; node-shaped inhibition would have to re-receive and re-judge everything the edge already carries. The composite inhibitor in `pkg/inhibitor` is the implementation surface; the runner invokes `Inhibitor.Check(Edge)` at each parent→child edge after the child resolves. Root has no incoming edge and is never checked. Restart-depth and hard-cap semantics are unchanged. Path-stateful detectors (confidence drop windows, cumulative contradictions, repetition) read `Edge.Path`.
 
@@ -91,6 +91,47 @@ Brain analog: working memory is per-task and dissolves; long-term memory in the 
 **Sub-AP emission is synchronous in v0 (LOCKED 2026-05-18; configurable later).** When an invocation emits sub-APs, the parent blocks on the whole subtree before recomposing and returning. Recursive function-call semantics. Async sub-AP emission (parent returns; sub-APs continue independently) is a real axis but stays deferred — it requires inhibition that can reason across in-flight asynchronous subtrees, which is its own design problem. v0 is fully synchronous, single-threaded sibling dispatch.
 
 **Hardware-level parallelism (multi-GPU, inference-server sharing, sibling-concurrent dispatch) is deferred past v0.** Not designed around. The dispatcher interface should still return a future-shaped result rather than a direct value — cheap insurance so this can be reintroduced without an interface break — but no concurrency, queueing, or backpressure logic ships in v0.
+
+**Uniform node model (LOCKED 2026-05-19).** No structurally distinct seed nodes per brain function. *One* AP-handling workflow runs at every recursion level. Specialization lives in the **playbook substrate keyed by action**, not in node types. This sharpens the brain-function lock-in (cortical microcircuits are uniform; specialization comes from learned weights, not different circuits) rather than breaking it. The "specialist" abstraction survives but moves out of the structural/code layer into the data layer — see "Specialists are substrate" below.
+
+**Two-step AP: evaluate → execute (LOCKED 2026-05-19).** Every AP runs the same two-step workflow:
+
+- **Evaluate** — an LLM call on Hermes-on-base that picks the right playbook for this AP from the v0 playbook set.
+- **Execute** — runs the chosen playbook; produces a result and/or emits sub-APs.
+
+Every AP evaluates — no trivial-skip path in v0. Evaluate is cheap-local-first; the frontier is *not* freely selectable by evaluate. Frontier model use is restricted to (a) the `delegate` runtime escalation gate (critic failed past retry budget) and (b) sampled `verify_judge` audits.
+
+**v0 playbook set (LOCKED 2026-05-19).** Five playbooks the evaluate step can pick from:
+
+| Playbook | Envelope-input | Execute-pulls | Output | Output category |
+|---|---|---|---|---|
+| `plan` | task | — | `{subtasks, recompose}` | emit_subtree |
+| `process` | task | — | result | return_result |
+| `critique` | prior result + context | — | pass / issues | verifier_signal |
+| `verify_grounded` | result + check spec (from envelope) | — | pass / fail | verifier_signal |
+| `compose` | `{scope_handle, expected_count}` | 2 results from scope channel | combined result | return_result |
+
+Cut from earlier proposals: `parse` (premature differentiation of `process`), `terminate` (envelope flag, not a playbook), `delegate` (runtime escalation mechanism, not evaluate-visible).
+
+**Three output categories (LOCKED 2026-05-19; non-uniform — envelope must encode).**
+
+- **`emit_subtree`** — produces sub-APs into the parent's scope; doesn't return up.
+- **`return_result`** — value flows up the tree to the parent.
+- **`verifier_signal`** — pass/fail/issues flows to **the runtime**, not the next AP. Runtime owns retry / proceed / escalate policy.
+
+**Plan bundles recompose spec (LOCKED 2026-05-19).** Plan's output is `{subtasks: [...], recompose: pairwise | sequential | none}`. Decomposition without a recompose spec is incomplete — can't decompose meaningfully without saying how it composes back.
+
+**Compose input is scope-channel-based (LOCKED 2026-05-19).** A compose AP doesn't *receive* sibling results in its input. It receives `{scope_handle, expected_count}` and pulls results from a parent-scoped channel at execute time. Sibling-triggered semantics.
+
+**Sibling dispatch is randomized (LOCKED 2026-05-19).** Runner pops ready sibling APs in random order, not emission order. Keeps v0 baseline honest about not relying on emission order; future parallel runtime won't change observable behavior.
+
+**Specialists are substrate, not nodes (LOCKED 2026-05-19).** Per-instance playbook stores keyed by action tag. The "specialist" abstraction (per-brain-function persistent memory of exemplars, recipes, retrieval shards) survives the uniform-node lock — it just moves from the code layer (no distinct node types) to the data layer (per-action playbook stores).
+
+**Verifier policy: phase ramp, not binary lock (LOCKED 2026-05-20).** Critique-emission is a *sampling policy* with a rate that ramps with substrate maturity, not a hard "(a) parent / (b) auto" pick. Bootstrap: 100% critique until N invocations. Steady-state: `sample_rate = max(floor, 1 - happiness_wilson_lower_bound)` over a sliding window of judge-sampling agreement. `happiness_scope ∈ {global, per_action}` is a runtime config; v0 records telemetry for both regardless of which drives the rate. Parent override (`needs_verification: true` on a child AP) forces critique on top of the baseline. v0 defaults: `bootstrap_threshold=10_000`, `floor=0.15`, `sliding_window=2_000`, `confidence_level=0.95`. All defaults are starting points; revisit on wild swings or saturation. Full design and rationale in [`scratch/design-notes.md`](scratch/design-notes.md) "Verifier policy."
+
+**Judge sampling policy (LOCKED 2026-05-19).** 100% judge on un-grounded outputs, 10% sample on grounded. Revisit if cost gets ugly. This is the *audit* layer that feeds the verifier-policy happiness signal — distinct from the critique-sampling rate above.
+
+**Pairwise compose: sequential self-chaining (LOCKED 2026-05-20).** One compose AP per scope, pulling pairs off the scope channel as siblings complete, reducing sequentially, re-entering its own result into the channel until `expected_count` reductions are done. *Not* pre-emission of N-1 compose APs. Rationale: sibling dispatch is already randomized, so pre-emission doesn't buy step-level determinism — just more APs. Trace stays faithful at the reduction level via `pkg/trace`. Full rationale in `scratch/design-notes.md` "Pairwise compose."
 
 ## Self-improvement loop
 
@@ -150,10 +191,21 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 - ~~**Router design.**~~ Under the call-tree model, "router" collapses to a brain-function *dispatcher* — map `BrainFunction → specialist instance`. LOCKED 2026-05-18. The interesting decisions move to decomposition (owned by each brain function), termination (owned by the runner walking the tree), and recomposition (owned by `pkg/recomposer` and the parent invocation). The static-edge-weight question is moot: there are no static routing weights. The existing `router.Decision.Destinations []Destination` slice becomes "sub-APs this invocation emits" and carries forward as the dispatch shape.
 - ~~**Playbook persistence unit.**~~ Both — exemplars feeding recipes, with consolidation as a background "sleep" job. LOCKED 2026-05-18 (principle); schemas to be designed when implementation lands. Exemplars are ground truth, per-specialist; recipes are consolidated distillations; vetted cross-specialist recipes can promote to the shared semantic pool (gated by curation).
 - ~~**AP shape — AP vs. trace split.**~~ Separate, lean AP vs. fat trace. LOCKED 2026-05-18. AP (envelope) is what the next invocation ingests — must stay lean (token cost compounds over every hop). Trace is what the learning loop reads — verifier feedback, retrieval refs, full tree topology, cost ledger, calibration metadata — kept off the inference path, can be as fat as needed. Brain analog: axonal action potential vs. hippocampal episodic index that feeds cortical consolidation; different timescales, different consumers. Final field-level schema stable once a real Hermes adapter exercises it; sketch in `scratch/design-notes.md`.
+- ~~**Uniform node model.**~~ One AP-handling workflow at every recursion level; specialization in the playbook substrate keyed by action, not in distinct node types. LOCKED 2026-05-19. See Architecture above.
+- ~~**Two-step AP: evaluate → execute.**~~ Every AP evaluates (picks a playbook) then executes (runs it). Evaluate is cheap-local-first; frontier reserved for `delegate` escalation and `verify_judge` audits. LOCKED 2026-05-19. See Architecture above.
+- ~~**v0 playbook set.**~~ Five playbooks: `plan`, `process`, `critique`, `verify_grounded`, `compose`. Cut: `parse`, `terminate`, `delegate`. LOCKED 2026-05-19. See Architecture above.
+- ~~**Three output categories.**~~ `emit_subtree`, `return_result`, `verifier_signal`. Verifier signals go to the runtime, not the next AP. LOCKED 2026-05-19. See Architecture above.
+- ~~**Plan bundles recompose spec.**~~ Plan output carries `{subtasks, recompose: pairwise|sequential|none}`. LOCKED 2026-05-19. See Architecture above.
+- ~~**Compose input is scope-channel-based.**~~ Compose receives `{scope_handle, expected_count}`, pulls results from parent-scoped channel at execute time. LOCKED 2026-05-19. See Architecture above.
+- ~~**Sibling dispatch is randomized.**~~ Runner pops ready sibling APs in random order. LOCKED 2026-05-19. See Architecture above.
+- ~~**Specialists are substrate, not nodes.**~~ Per-instance playbook stores keyed by action tag. LOCKED 2026-05-19. See Architecture above.
+- ~~**Verifier policy.**~~ Phase ramp with `sample_rate = max(floor, 1 - happiness_wilson_lower_bound)` over a sliding window of judge-sampling agreement; bootstrap at 100% for 10k invocations; `happiness_scope` configurable; defaults revisitable. LOCKED 2026-05-20. See Architecture above and `scratch/design-notes.md`.
+- ~~**Judge sampling policy.**~~ 100% on un-grounded, 10% sample on grounded. LOCKED 2026-05-19. See Architecture above.
+- ~~**Pairwise compose mechanism.**~~ Sequential self-chaining off the scope channel, not pre-emission of N-1 compose APs. LOCKED 2026-05-20. See Architecture above and `scratch/design-notes.md`.
 
 ### Still open
 
-(none currently blocking v0)
+(none currently blocking v0; next concrete artifact is the JSON envelope sketch — see `scratch/design-notes.md`)
 
 ### Deferred (not blocking v0)
 

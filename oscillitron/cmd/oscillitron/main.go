@@ -77,6 +77,16 @@ func run() error {
 		}
 	}
 
+	// Multi-endpoint takes precedence over single — if ANY
+	// hermes.endpoints.<playbook>.url is set in the loaded properties,
+	// build a MultiEndpoint config keyed by playbook. The hermes.url /
+	// hermes.model single-endpoint settings are ignored when multi is
+	// active, matching the comment in oscillitron.properties.example.
+	multiCfg, hasMulti, err := buildMultiEndpointFromProps(props)
+	if err != nil {
+		return err
+	}
+
 	// Tracer: slog (info+) when --v, otherwise silent.
 	var tracer trace.Tracer = trace.Discard{}
 	if *verboseFlag {
@@ -84,7 +94,18 @@ func run() error {
 	}
 
 	var a adapter.Adapter
-	if *hermesFlag != "" {
+	switch {
+	case hasMulti:
+		multiCfg.Tracer = tracer
+		multiCfg.RequireStructured = *strictFlag
+		ha, err := hermes.New(multiCfg)
+		if err != nil {
+			return fmt.Errorf("hermes multi-endpoint adapter: %w", err)
+		}
+		a = ha
+		fmt.Fprintf(os.Stderr, "demo: using Hermes multi-endpoint adapter (evaluate=%s; per-playbook endpoints configured, strict=%v)\n",
+			multiCfg.EvaluateEndpoint.BaseURL, *strictFlag)
+	case *hermesFlag != "":
 		cfg := hermes.SingleEndpoint(*hermesFlag, *hermesModel)
 		cfg.Tracer = tracer
 		cfg.RequireStructured = *strictFlag
@@ -94,9 +115,9 @@ func run() error {
 		}
 		a = ha
 		fmt.Fprintf(os.Stderr, "demo: using Hermes adapter at %s (model=%q strict=%v)\n", *hermesFlag, *hermesModel, *strictFlag)
-	} else {
+	default:
 		a = buildStubAdapter()
-		fmt.Fprintln(os.Stderr, "demo: using stub adapter (pass --hermes URL or set hermes.url in config to wire a real Hermes)")
+		fmt.Fprintln(os.Stderr, "demo: using stub adapter (pass --hermes URL, set hermes.url, or configure hermes.endpoints.* in config to wire a real Hermes)")
 	}
 
 	// Inhibitor: a hard depth cap as the v0 floor; the runner also
@@ -181,6 +202,49 @@ func buildStubAdapter() adapter.Adapter {
 			0.82,
 		).
 		WithVerifierSignal(session.PlaybookCritique, session.VerdictPass)
+}
+
+// buildMultiEndpointFromProps reads hermes.endpoints.<key>.url and
+// hermes.endpoints.<key>.model from the loaded properties and builds
+// a multi-endpoint hermes.Config when ANY per-playbook endpoint URL
+// is present. The "evaluate" key is the evaluate endpoint; the other
+// keys are playbook names from hermes.AllPlaybooks. If none of those
+// keys are set, returns (zero, false, nil) so the caller falls back
+// to the single-endpoint path.
+func buildMultiEndpointFromProps(props config.Properties) (hermes.Config, bool, error) {
+	if props == nil {
+		return hermes.Config{}, false, nil
+	}
+	evalURL := props.String("hermes.endpoints.evaluate.url", "")
+	evalModel := props.String("hermes.endpoints.evaluate.model", "")
+	perPlaybook := make(map[session.Playbook]hermes.Endpoint, len(hermes.AllPlaybooks))
+	anyURL := evalURL != ""
+	missing := make([]string, 0, len(hermes.AllPlaybooks))
+	for _, pb := range hermes.AllPlaybooks {
+		k := "hermes.endpoints." + string(pb)
+		url := props.String(k+".url", "")
+		model := props.String(k+".model", "")
+		if url == "" {
+			missing = append(missing, string(pb))
+			continue
+		}
+		anyURL = true
+		perPlaybook[pb] = hermes.Endpoint{BaseURL: url, Model: model}
+	}
+	if !anyURL {
+		return hermes.Config{}, false, nil
+	}
+	if evalURL == "" {
+		return hermes.Config{}, false, fmt.Errorf("hermes.endpoints.evaluate.url is required when any hermes.endpoints.<playbook>.url is set")
+	}
+	if len(missing) > 0 {
+		return hermes.Config{}, false, fmt.Errorf("hermes.endpoints.<playbook>.url missing for: %s", strings.Join(missing, ", "))
+	}
+	cfg, err := hermes.MultiEndpoint(hermes.Endpoint{BaseURL: evalURL, Model: evalModel}, perPlaybook)
+	if err != nil {
+		return hermes.Config{}, false, err
+	}
+	return cfg, true, nil
 }
 
 // printSummary renders the result in a human-friendly form. Useful

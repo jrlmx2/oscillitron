@@ -55,6 +55,8 @@ import (
 	"log/slog"
 	"math/rand/v2"
 
+	"sync"
+
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
@@ -63,6 +65,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/verifier"
+	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
 // Errors surfaced by Run.
@@ -131,6 +134,56 @@ type Config struct {
 	// rates (locked 2026-05-19). If nil while Judge is set, the runner
 	// uses judge.DefaultSamplePolicy().
 	JudgeSampler *judge.Sampler
+	// MaxConcurrency caps the number of sibling APs in flight at one
+	// time during emit_subtree dispatch. 0 or 1 = serial (the v0
+	// default; backwards-compatible). >1 enables goroutine-based
+	// sibling concurrency with strict cancellation on inhibitor.Abort
+	// — the first sibling to fire Abort cancels the others via context.
+	//
+	// Per the parent CLAUDE.md "sibling concurrent dispatch" unlock,
+	// the runner can run siblings in parallel but the parent still
+	// blocks on the whole subtree before returning. Async sub-AP
+	// emission across subtrees stays deferred.
+	MaxConcurrency int
+	// VRAMProbe + VRAMEstimator + VRAMModel together compute a
+	// dynamic concurrency cap each dispatch wave:
+	//
+	//   cap = max(1, VRAMProbe.Probe().Available / VRAMEstimator.Estimate(...))
+	//
+	// The dynamic cap is the *minimum* of MaxConcurrency and the
+	// VRAM-derived number; whichever is tighter wins. Set all three to
+	// enable VRAM-aware throttling; leave any of them nil to fall back
+	// to the static MaxConcurrency only.
+	VRAMProbe     vram.Probe
+	VRAMEstimator vram.Estimator
+	// VRAMModel describes the model the adapter is talking to. Used by
+	// the estimator's SessionEstimate.Model and ContextSize fields.
+	// Pass {ContextSize: 0} to disable the sliding-window cap.
+	VRAMModel VRAMModel
+	// MaxInputBytes optionally caps the size of an AP envelope's
+	// Input.Content. Calls exceeding the budget are inhibited with
+	// "input_bytes_exceeded" — surfaces prompt bloat as a test failure
+	// rather than silent VRAM growth. 0 = no cap.
+	MaxInputBytes int
+}
+
+// VRAMModel describes the model the adapter is talking to, for the
+// estimator's per-session math. Operator-supplied — there's no
+// reliable way to introspect this from a Hermes endpoint, and getting
+// it wrong matters more than getting it from a config flag.
+type VRAMModel struct {
+	// Name is the model identifier for trace records.
+	Name string
+	// ContextSize is the hard context-window ceiling (tokens). Passed
+	// through to the estimator as the sliding-window cap.
+	ContextSize int
+	// PrefixTokens is the persona + (optional) semantic pool +
+	// per-playbook instructions prefix size in tokens. Operator-
+	// supplied because the prefix is constructed in Hermes before
+	// Oscillitron sees it. Use 0 to leave the prefix out of the
+	// estimate; this is conservative (estimator over-allocates per
+	// session, dynamic cap is tighter than it needs to be).
+	PrefixTokens int
 }
 
 // Result is the return value of Run.
@@ -187,6 +240,15 @@ type RunState struct {
 	// runner does NOT fail the run on judge errors; an error is treated
 	// as "no audit signal for this AP" and is not fed to the policy.
 	JudgeErrors int
+	// PerPlaybookTokens aggregates Evaluate + Execute TokensUsed by
+	// playbook so the operator can see which playbook's prompt is
+	// fattest. Includes evaluate calls under the empty-playbook key
+	// (they happen before the playbook is picked).
+	PerPlaybookTokens map[session.Playbook]int64
+	// ConcurrentDispatches counts how many dispatch waves used N>1
+	// goroutines (i.e., MaxConcurrency>1 took effect). 0 means every
+	// descend ran serially.
+	ConcurrentDispatches int
 }
 
 // VerifierSignalRecord is one critique / verify_grounded outcome
@@ -237,6 +299,49 @@ type runner struct {
 	cfg     Config
 	state   *RunState
 	subtree map[session.ID][]session.Envelope
+	// mu protects state, subtree, and cfg.Rand for concurrent access
+	// when MaxConcurrency > 1. All shared mutations go through helpers
+	// (lockedStateInc, lockedSubtreeSet, lockedRandPerm) so the locking
+	// discipline is in one place.
+	mu sync.Mutex
+}
+
+// --- locked helpers (mu must NOT be held by caller) ---
+
+func (r *runner) lockedStateInc(field *int) {
+	r.mu.Lock()
+	*field++
+	r.mu.Unlock()
+}
+
+func (r *runner) lockedAddVerifierSignal(rec VerifierSignalRecord) {
+	r.mu.Lock()
+	r.state.VerifierSignals = append(r.state.VerifierSignals, rec)
+	r.mu.Unlock()
+}
+
+func (r *runner) lockedAddPerPlaybookTokens(pb session.Playbook, tokens int64) {
+	if tokens == 0 {
+		return
+	}
+	r.mu.Lock()
+	if r.state.PerPlaybookTokens == nil {
+		r.state.PerPlaybookTokens = map[session.Playbook]int64{}
+	}
+	r.state.PerPlaybookTokens[pb] += tokens
+	r.mu.Unlock()
+}
+
+func (r *runner) lockedSetSubtree(id session.ID, children []session.Envelope) {
+	r.mu.Lock()
+	r.subtree[id] = children
+	r.mu.Unlock()
+}
+
+func (r *runner) lockedRandPerm(n int) []int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.cfg.Rand.Perm(n)
 }
 
 // resolve recurses on a single AP. parentEnv and parentChain are the
@@ -260,7 +365,19 @@ func (r *runner) resolve(
 			slog.Int("depth", env.Depth()),
 			slog.Int("max", cfg),
 		)
-		r.state.InhibitCount++
+		r.lockedStateInc(&r.state.InhibitCount)
+		return env, session.ReturnResultPayload{}, nil
+	}
+
+	// Input size budget. Surfaces prompt bloat early.
+	if r.cfg.MaxInputBytes > 0 && len(env.Input.Content) > r.cfg.MaxInputBytes {
+		env.ExitReason = session.ExitInhibited
+		trace.Error(r.cfg.Tracer, ctx, "runner.input_bytes_exceeded",
+			slog.String("ap_id", string(env.ID)),
+			slog.Int("bytes", len(env.Input.Content)),
+			slog.Int("max", r.cfg.MaxInputBytes),
+		)
+		r.lockedStateInc(&r.state.InhibitCount)
 		return env, session.ReturnResultPayload{}, nil
 	}
 
@@ -274,8 +391,13 @@ func (r *runner) resolve(
 		)
 		return evalEnv, session.ReturnResultPayload{}, err
 	}
-	r.state.EvaluateCount++
+	r.lockedStateInc(&r.state.EvaluateCount)
 	env = evalEnv
+	if env.Evaluate != nil {
+		// Telemetry: evaluate tokens count under the empty-playbook key
+		// (the playbook IS the evaluate output — pre-pick attribution).
+		r.lockedAddPerPlaybookTokens("", int64(env.Evaluate.TokensUsed))
+	}
 	trace.Info(r.cfg.Tracer, ctx, "runner.evaluated",
 		slog.String("ap_id", string(env.ID)),
 		slog.String("playbook", string(env.Evaluate.Playbook)),
@@ -292,8 +414,11 @@ func (r *runner) resolve(
 		)
 		return execEnv, session.ReturnResultPayload{}, err
 	}
-	r.state.ExecuteCount++
+	r.lockedStateInc(&r.state.ExecuteCount)
 	env = execEnv
+	if env.Execute != nil && env.Evaluate != nil {
+		r.lockedAddPerPlaybookTokens(env.Evaluate.Playbook, int64(env.Execute.TokensUsed))
+	}
 
 	if env.Execute == nil {
 		return env, session.ReturnResultPayload{}, fmt.Errorf("%w: adapter returned nil Execute", ErrInvalidExecuteCategory)
@@ -318,7 +443,7 @@ func (r *runner) resolve(
 		case inhibitor.Abort, inhibitor.Restart:
 			// Restart→Abort downgrade: v0 has no checkpointing.
 			env.ExitReason = session.ExitInhibited
-			r.state.InhibitCount++
+			r.lockedStateInc(&r.state.InhibitCount)
 			trace.Error(r.cfg.Tracer, ctx, "runner.inhibited",
 				slog.String("ap_id", string(env.ID)),
 				slog.String("decision", decisionString(verdict.Decision)),
@@ -341,7 +466,7 @@ func (r *runner) resolve(
 			return env, session.ReturnResultPayload{}, fmt.Errorf("%w: verifier_signal with nil payload", ErrInvalidExecuteCategory)
 		}
 		// Verifier signals go to the runtime, not the next AP.
-		r.state.VerifierSignals = append(r.state.VerifierSignals, VerifierSignalRecord{
+		r.lockedAddVerifierSignal(VerifierSignalRecord{
 			APID:    env.ID,
 			Verdict: env.Execute.VerifierSignal.Verdict,
 			Issues:  env.Execute.VerifierSignal.Issues,
@@ -367,6 +492,13 @@ func (r *runner) resolve(
 // descend dispatches an emit_subtree AP's children, recurses into
 // each, collects return_result payloads, and recomposes per the
 // plan's RecomposeSpec.
+//
+// Concurrent dispatch (Config.MaxConcurrency > 1 and/or
+// Config.VRAMProbe set) runs siblings in parallel via goroutines
+// bounded by a semaphore. Strict cancellation: the first sibling to
+// fire inhibitor.Abort (or to error) cancels in-flight siblings via
+// context, matching the locked "one inhibited child inhibits the
+// parent" rule.
 func (r *runner) descend(
 	ctx context.Context,
 	plan session.Envelope,
@@ -402,68 +534,156 @@ func (r *runner) descend(
 
 	// Randomize dispatch order. Sibling dispatch is randomized
 	// (LOCKED 2026-05-19) — keeps v0 baseline honest about not
-	// relying on emission order.
-	order := r.cfg.Rand.Perm(len(children))
+	// relying on emission order. Use the locked helper for safe
+	// concurrent access to r.cfg.Rand.
+	order := r.lockedRandPerm(len(children))
 
 	// Recurse into each child, collecting return_result payloads.
 	chainForChildren := append([]session.Envelope(nil), parentChain...)
 	chainForChildren = append(chainForChildren, plan)
 
-	resolvedChildren := make([]session.Envelope, len(children))
-	bubbledPayloads := make([]session.ReturnResultPayload, 0, len(children))
-	for _, idx := range order {
-		resolved, payload, err := r.resolve(ctx, children[idx], &plan, chainForChildren)
-		resolvedChildren[idx] = resolved
-		if err != nil {
-			// Surface child error; mark parent inhibited.
-			plan.ExitReason = session.ExitInhibited
-			r.subtree[plan.ID] = resolvedChildren
-			return plan, session.ReturnResultPayload{}, err
+	concurrency := r.computeConcurrency(ctx, len(children))
+	if concurrency > 1 {
+		r.lockedStateInc(&r.state.ConcurrentDispatches)
+		trace.Info(r.cfg.Tracer, ctx, "runner.descend_concurrent",
+			slog.String("plan_id", string(plan.ID)),
+			slog.Int("siblings", len(children)),
+			slog.Int("concurrency", concurrency),
+		)
+	}
+
+	type outcome struct {
+		idx      int
+		resolved session.Envelope
+		payload  session.ReturnResultPayload
+		critique session.Envelope // empty ID if no critique was injected
+		err      error
+	}
+
+	dispatch := func(dispCtx context.Context, cancel context.CancelFunc, sem chan struct{}, idx int) outcome {
+		if err := dispCtx.Err(); err != nil {
+			return outcome{idx: idx, err: err}
 		}
-		if resolved.IsInhibited() {
-			// Strict semantics: one inhibited child inhibits the parent.
-			plan.ExitReason = session.ExitInhibited
-			r.subtree[plan.ID] = resolvedChildren
-			trace.Error(r.cfg.Tracer, ctx, "runner.parent_inhibited_by_child",
-				slog.String("plan_id", string(plan.ID)),
-				slog.String("child_id", string(resolved.ID)),
-			)
-			return plan, session.ReturnResultPayload{}, nil
-		}
-		// Only return_result children contribute to recomposition.
-		// verifier_signal children are recorded in RunState; empty
-		// emit_subtree children contribute nothing.
-		if resolved.Execute != nil && resolved.Execute.Category != session.CategoryVerifierSignal {
-			// Empty zero-payload check: payload.Result is the bubble.
-			if !isZeroPayload(payload) {
-				bubbledPayloads = append(bubbledPayloads, payload)
+		if sem != nil {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			if err := dispCtx.Err(); err != nil {
+				return outcome{idx: idx, err: err}
 			}
 		}
-
-		// Verifier policy: after a return_result resolves, optionally
-		// inject a critique sibling. Skipped for emit_subtree (its
-		// recomposed bubble is what would be critiqued — a v1 concern)
-		// and verifier_signal (no result to critique). Per the locked
-		// design, the critique runs in the *same scope* as the AP it
-		// critiques; its verifier_signal lands in RunState and does not
-		// reach the recomposer.
-		if resolved.Execute != nil && resolved.Execute.Category == session.CategoryReturnResult && !resolved.IsInhibited() {
-			critiqued, cerr := r.maybeInjectCritique(ctx, plan, resolved, scope, childBudget, chainForChildren)
+		resolved, payload, err := r.resolve(dispCtx, children[idx], &plan, chainForChildren)
+		o := outcome{idx: idx, resolved: resolved, payload: payload, err: err}
+		if err != nil || resolved.IsInhibited() {
+			cancel() // strict cancellation
+			return o
+		}
+		// Critique injection. Same conditions as the serial path.
+		if resolved.Execute != nil && resolved.Execute.Category == session.CategoryReturnResult {
+			critiqued, cerr := r.maybeInjectCritique(dispCtx, plan, resolved, scope, childBudget, chainForChildren)
 			if cerr != nil {
-				plan.ExitReason = session.ExitInhibited
-				r.subtree[plan.ID] = resolvedChildren
-				return plan, session.ReturnResultPayload{}, cerr
+				o.err = cerr
+				cancel()
+				return o
 			}
 			if critiqued.ID != "" {
-				// Resolved critique is recorded in the subtree under the
-				// plan for trace fidelity. The verifier_signal it produced
-				// is already in r.state.VerifierSignals via resolve's
-				// category branch.
-				resolvedChildren = append(resolvedChildren, critiqued)
+				o.critique = critiqued
 			}
 		}
+		return o
 	}
-	r.subtree[plan.ID] = resolvedChildren
+
+	outcomes := make([]outcome, len(children))
+	dispCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	if concurrency <= 1 {
+		// Serial path. Identical to the pre-concurrency behavior, kept
+		// as the fast path and for backwards compatibility.
+		for _, idx := range order {
+			outcomes[idx] = dispatch(dispCtx, cancel, nil, idx)
+			if outcomes[idx].err != nil || outcomes[idx].resolved.IsInhibited() {
+				break // strict semantics: stop dispatching after first inhibit
+			}
+		}
+	} else {
+		// Concurrent path. Goroutine-per-sibling, semaphore-bounded.
+		sem := make(chan struct{}, concurrency)
+		var wg sync.WaitGroup
+		for _, idx := range order {
+			idx := idx
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				outcomes[idx] = dispatch(dispCtx, cancel, sem, idx)
+			}()
+		}
+		wg.Wait()
+	}
+
+	// Reconstruct resolvedChildren + bubbledPayloads in randomized
+	// dispatch order so the recomposer sees the same payload sequence
+	// it would see in serial mode. Critiques appended after.
+	resolvedChildren := make([]session.Envelope, 0, len(children)+len(children))
+	for _, idx := range order {
+		o := outcomes[idx]
+		// Even cancelled siblings get recorded so the subtree map is
+		// faithful. Cancelled-by-context outcomes have err == ctx.Err()
+		// and an empty resolved envelope; we still slot them in.
+		resolvedChildren = append(resolvedChildren, o.resolved)
+	}
+	// Critiques in the same order their target dispatched in.
+	for _, idx := range order {
+		if outcomes[idx].critique.ID != "" {
+			resolvedChildren = append(resolvedChildren, outcomes[idx].critique)
+		}
+	}
+
+	// Surface failures: any error or any inhibited child marks the
+	// parent inhibited. First-encountered error in randomized order
+	// wins (matches the serial behavior).
+	var firstErr error
+	parentInhibited := false
+	for _, idx := range order {
+		o := outcomes[idx]
+		if o.err != nil && firstErr == nil {
+			// Don't propagate ctx.Canceled from siblings that were
+			// cancelled by a peer — surface the real cause.
+			if !errors.Is(o.err, context.Canceled) {
+				firstErr = o.err
+			}
+		}
+		if o.resolved.IsInhibited() {
+			parentInhibited = true
+		}
+	}
+	if firstErr != nil {
+		plan.ExitReason = session.ExitInhibited
+		r.lockedSetSubtree(plan.ID, resolvedChildren)
+		return plan, session.ReturnResultPayload{}, firstErr
+	}
+	if parentInhibited {
+		plan.ExitReason = session.ExitInhibited
+		r.lockedSetSubtree(plan.ID, resolvedChildren)
+		trace.Error(r.cfg.Tracer, ctx, "runner.parent_inhibited_by_child",
+			slog.String("plan_id", string(plan.ID)),
+		)
+		return plan, session.ReturnResultPayload{}, nil
+	}
+
+	// Build bubbledPayloads in randomized order, skipping
+	// verifier_signal children (whose verdict is in RunState) and
+	// zero payloads.
+	bubbledPayloads := make([]session.ReturnResultPayload, 0, len(children))
+	for _, idx := range order {
+		o := outcomes[idx]
+		if o.resolved.Execute == nil || o.resolved.Execute.Category == session.CategoryVerifierSignal {
+			continue
+		}
+		if !isZeroPayload(o.payload) {
+			bubbledPayloads = append(bubbledPayloads, o.payload)
+		}
+	}
+	r.lockedSetSubtree(plan.ID, resolvedChildren)
 
 	// Recompose. Spec rides on the plan's emit_subtree output.
 	if len(bubbledPayloads) == 0 {
@@ -520,6 +740,71 @@ func decisionString(d inhibitor.Decision) string {
 
 // defaultChildIDFn returns a closure that assigns sequential
 // child IDs of the form "<parent_id>-c<seed_index>".
+// computeConcurrency derives the actual sibling-concurrency cap for
+// this dispatch wave. It's the minimum of:
+//   - Config.MaxConcurrency (the static operator cap; 0/1 disable concurrency entirely)
+//   - VRAM-derived headroom (when probe + estimator are wired): floor(available / per_session_est)
+//   - len(siblings) (no point spawning more workers than children)
+//
+// Returns 1 (serial) when the static cap is <=1 OR the VRAM math says
+// "not enough for two concurrent sessions." The runner traces the
+// chosen value so operators can see throttling at work.
+func (r *runner) computeConcurrency(ctx context.Context, siblings int) int {
+	if siblings <= 1 {
+		return 1
+	}
+	static := r.cfg.MaxConcurrency
+	if static <= 0 {
+		static = 1
+	}
+	if static <= 1 {
+		return 1
+	}
+	cap := static
+	if cap > siblings {
+		cap = siblings
+	}
+	// VRAM-derived cap, if configured.
+	if r.cfg.VRAMProbe != nil && r.cfg.VRAMEstimator != nil {
+		report, err := r.cfg.VRAMProbe.Probe(ctx)
+		if err != nil {
+			trace.Error(r.cfg.Tracer, ctx, "runner.vram_probe_failed",
+				slog.String("err", err.Error()),
+			)
+			// Fall through with the static cap — probe failure is non-fatal.
+			return cap
+		}
+		est := r.cfg.VRAMEstimator.Estimate(vram.SessionEstimate{
+			Model:        r.cfg.VRAMModel.Name,
+			PrefixTokens: r.cfg.VRAMModel.PrefixTokens,
+			ContextSize:  r.cfg.VRAMModel.ContextSize,
+		})
+		if est == 0 {
+			// Estimator returned zero (e.g., new session with global
+			// prefix cache); no per-session cost to throttle against.
+			return cap
+		}
+		dynamic := int(report.AvailableBytes / est)
+		if dynamic < 1 {
+			dynamic = 1
+		}
+		trace.Info(r.cfg.Tracer, ctx, "runner.vram_dynamic_cap",
+			slog.String("source", string(report.Source)),
+			slog.Uint64("available_bytes", report.AvailableBytes),
+			slog.Uint64("est_per_session_bytes", est),
+			slog.Int("dynamic_cap", dynamic),
+			slog.Int("static_cap", cap),
+		)
+		if dynamic < cap {
+			cap = dynamic
+		}
+	}
+	if cap < 1 {
+		cap = 1
+	}
+	return cap
+}
+
 func defaultChildIDFn() func(session.Envelope, int) session.ID {
 	return func(parent session.Envelope, seedIndex int) session.ID {
 		return session.ID(fmt.Sprintf("%s-c%d", parent.ID, seedIndex))
@@ -558,10 +843,14 @@ func (r *runner) maybeInjectCritique(
 
 	// Even without a policy, an explicit NeedsVerification override
 	// forces a critique. With a policy, the policy decides (and honors
-	// the override on top of the baseline).
+	// the override on top of the baseline). Lock the Rand for the
+	// duration of the call — math/rand/v2.Rand isn't safe for
+	// concurrent use, and ShouldCritique calls Float64 on it.
 	shouldEmit := parentOverride
 	if r.cfg.VerifierPolicy != nil {
+		r.mu.Lock()
 		shouldEmit = r.cfg.VerifierPolicy.ShouldCritique(action, parentOverride, r.cfg.Rand)
+		r.mu.Unlock()
 	}
 	if !shouldEmit {
 		return session.Envelope{}, nil
@@ -591,7 +880,7 @@ func (r *runner) maybeInjectCritique(
 		)
 		return resolved, err
 	}
-	r.state.PolicyCritiquesEmitted++
+	r.lockedStateInc(&r.state.PolicyCritiquesEmitted)
 	trace.Info(r.cfg.Tracer, ctx, "runner.critique_emitted",
 		slog.String("target_id", string(target.ID)),
 		slog.String("critique_id", string(resolved.ID)),
@@ -631,11 +920,14 @@ func (r *runner) maybeAuditWithJudge(
 		defaultSampler := judge.NewSampler(judge.DefaultSamplePolicy())
 		sampler = defaultSampler
 	}
-	if !sampler.ShouldJudge(target, r.cfg.Rand) {
+	r.mu.Lock()
+	shouldJudge := sampler.ShouldJudge(target, r.cfg.Rand)
+	r.mu.Unlock()
+	if !shouldJudge {
 		return
 	}
 
-	r.state.JudgeSamplesTaken++
+	r.lockedStateInc(&r.state.JudgeSamplesTaken)
 	localVerdict := critique.Execute.VerifierSignal.Verdict
 	req := judge.Request{
 		Target:       target,
@@ -644,7 +936,7 @@ func (r *runner) maybeAuditWithJudge(
 	}
 	resp, err := r.cfg.Judge.Judge(ctx, req)
 	if err != nil {
-		r.state.JudgeErrors++
+		r.lockedStateInc(&r.state.JudgeErrors)
 		trace.Error(r.cfg.Tracer, ctx, "runner.judge_error",
 			slog.String("target_id", string(target.ID)),
 			slog.String("critique_id", string(critique.ID)),
@@ -654,9 +946,9 @@ func (r *runner) maybeAuditWithJudge(
 	}
 	agreed := resp.Verdict == localVerdict
 	if agreed {
-		r.state.JudgeAgreements++
+		r.lockedStateInc(&r.state.JudgeAgreements)
 	} else {
-		r.state.JudgeDisagreements++
+		r.lockedStateInc(&r.state.JudgeDisagreements)
 	}
 	if r.cfg.VerifierPolicy != nil {
 		r.cfg.VerifierPolicy.RecordJudgeAgreement(action, agreed)

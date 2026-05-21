@@ -18,13 +18,14 @@
 //     the delegate runtime escalation gate (critic failed past retry
 //     budget) and to sampled verify_judge audits.
 //   - Each AP runs two HTTP rounds: Evaluate (picks the playbook),
-//     then Execute (runs the playbook). Sessions are tree-scoped and
-//     role-scoped: all evaluate calls in one root tree share session
-//     "<RootID>:evaluate"; all execute calls for one playbook in the
-//     tree share session "<RootID>:<playbook>". This lets each Hermes
-//     accumulate conversation context across same-role APs in the tree
-//     and keeps the per-session instructions prefix byte-stable so
-//     Hermes' KV cache hits after the first call. See sessionIDFor.
+//     then Execute (runs the playbook). Sessions are per-AP per-phase
+//     ("<envID>:<phase>"), giving each invocation a fresh Hermes
+//     session per the locked "Specialist vs. invocation" rule (clean
+//     isolation, no cross-invocation contamination at the working-
+//     memory level). KV-cache hits come from the underlying engine's
+//     global prefix caching, not from sharing sessions across APs —
+//     see cmd/probe-prefix-cache. Per-AP isolation is also a
+//     prerequisite for sibling concurrency in the runner.
 //
 // The adapter speaks the /v1/runs surface (POST /v1/runs to start,
 // SSE on /v1/runs/{id}/events to drain) rather than the stateless
@@ -346,19 +347,22 @@ func (a *Adapter) oneRun(ctx context.Context, ep Endpoint, env session.Envelope,
 func (a *Adapter) startRun(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string) (string, error) {
 	body := map[string]any{
 		"input": env.Input.Content,
-		// Session ID is tree-scoped + role-scoped: all evaluate calls in
-		// the same root tree share one session ("<RootID>:evaluate"); all
-		// execute calls for one playbook in the same root tree share one
-		// session ("<RootID>:<playbook>"). Two consequences:
-		//   1. Each Hermes accumulates conversation context across same-
-		//      role APs in the tree, so later APs see earlier ones.
-		//   2. The instructions prefix is byte-stable within a session,
-		//      so Hermes' KV cache hits after the first call (the
-		//      "prefix changes break the cache" pain from
-		//      references/performance-operator-guide.md goes away).
-		// Retry no longer dedupes via session_id — a retry becomes a new
-		// turn in the existing session. Strict idempotency keys are a v1
-		// concern.
+		// Session ID is per-AP per-phase ("<envID>:<phase>") so each
+		// invocation gets a fresh Hermes session — per the locked
+		// "Specialist vs. invocation" rule (parent CLAUDE.md, 2026-05-18):
+		// "Session-bounded, clean isolation, no cross-invocation
+		// contamination at the working-memory level."
+		//
+		// KV-cache hits across calls come from the underlying engine's
+		// global prefix caching (vLLM-style, keyed by token-prefix bytes
+		// not by session_id), not from sharing sessions across APs. See
+		// references/performance-operator-guide.md and the probe at
+		// cmd/probe-prefix-cache for verification.
+		//
+		// Per-AP isolation is also a prerequisite for sibling concurrency
+		// (Config.MaxConcurrency in pkg/runner) — concurrent calls on the
+		// same session_id would either serialize at the engine layer or
+		// behave unpredictably.
 		"session_id":   sessionIDFor(env, phase),
 		"instructions": instructions,
 	}
@@ -517,40 +521,23 @@ func (a *Adapter) recordCost(ep Endpoint, usage tokenUsage) cost.Entry {
 }
 
 // sessionIDFor returns the Hermes session_id this AP+phase should use.
-// Tree-scoped + role-scoped per the comment in startRun.
+// Per-AP per-phase ("<envID>:<phase>") per the locked invocation-isolation
+// rule (parent CLAUDE.md "Specialist vs. invocation", 2026-05-18):
+// "Session-bounded, clean isolation, no cross-invocation contamination at
+// the working-memory level."
 //
-//   - "evaluate" phase   → "<RootID>:evaluate"          (one session for
-//                          every evaluate call in the tree)
-//   - "execute" phase    → "<RootID>:<playbook>"        (one session per
-//                          playbook in the tree; both phases of one AP
-//                          land on the same execute session even though
-//                          they hit different Hermeses in multi-endpoint)
+// KV-cache hits across calls come from the underlying engine's global
+// prefix caching (vLLM-style, keyed by token-prefix bytes not by
+// session_id), not from sharing sessions — so per-AP isolation costs
+// nothing in cache performance as long as the persona + instructions
+// prefix is byte-stable. See cmd/probe-prefix-cache and
+// references/performance-operator-guide.md.
 //
-// If RootID is empty (defensive: a caller constructed an envelope
-// without going through session.NewRoot), falls back to env.ID so the
-// session is at least unique. Phases other than "evaluate"/"execute"
-// fall back to "<RootID>:<phase>" — preserves uniqueness while keeping
-// the tree-scoped shape.
+// Per-AP isolation is also a prerequisite for sibling concurrency
+// (pkg/runner Config.MaxConcurrency): concurrent calls on the same
+// session_id would serialize at the engine or behave unpredictably.
 func sessionIDFor(env session.Envelope, phase string) string {
-	root := string(env.RootID)
-	if root == "" {
-		root = string(env.ID)
-	}
-	switch phase {
-	case "evaluate":
-		return root + ":evaluate"
-	case "execute":
-		pb := playbookOrEmpty(env)
-		if pb == "" {
-			// Defensive: Execute called without Evaluate populated. The
-			// adapter already errors on this earlier, but if a future
-			// caller bypasses that, fall back to a phase-tagged id.
-			return root + ":execute"
-		}
-		return root + ":" + pb
-	default:
-		return root + ":" + phase
-	}
+	return string(env.ID) + ":" + phase
 }
 
 func playbookOrEmpty(env session.Envelope) string {

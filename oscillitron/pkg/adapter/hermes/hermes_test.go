@@ -462,6 +462,18 @@ func TestCostTrackingAcrossBothPhases(t *testing.T) {
 			t.Errorf("cost entry model = %q, want test-model", e.Model)
 		}
 	}
+	// Envelope Trace should carry the sum of both phases' actual +
+	// frontier counterfactual costs.
+	wantActual := sum.TotalActualUSD
+	wantFrontier := sum.TotalFrontierUSD
+	if env.Trace.CostUSD != wantActual {
+		t.Errorf("env.Trace.CostUSD = %v, want %v (sum of both phases)",
+			env.Trace.CostUSD, wantActual)
+	}
+	if env.Trace.CostVsFrontierBaselineUSD != wantFrontier {
+		t.Errorf("env.Trace.CostVsFrontierBaselineUSD = %v, want %v",
+			env.Trace.CostVsFrontierBaselineUSD, wantFrontier)
+	}
 }
 
 func TestPostRunsServerError(t *testing.T) {

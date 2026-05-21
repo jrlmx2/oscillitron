@@ -12,6 +12,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
+	"github.com/jrlmx2/oscillitron/pkg/judge"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/verifier"
@@ -769,6 +770,212 @@ func TestRun_CostSummary_PopulatedEvenOnError(t *testing.T) {
 		t.Errorf("CostSummary on error path: entries = %d, want 1",
 			len(res.State.CostSummary.Entries))
 	}
+}
+
+// --- Judge sampling integration ---
+
+func TestRun_Judge_SamplesUngroundedAndFeedsPolicy(t *testing.T) {
+	// Plan emits one process child. Verifier policy is in bootstrap so
+	// critique always fires. Judge agrees with the critique → policy
+	// should record an agreement.
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 1000, SlidingWindow: 100,
+		Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal,
+	})
+	jstub := judge.NewStub("frontier") // agrees by default
+	sampler := judge.NewSampler(judge.DefaultSamplePolicy())
+
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol,
+		Judge: jstub, JudgeSampler: sampler,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.JudgeSamplesTaken != 1 {
+		t.Errorf("JudgeSamplesTaken = %d, want 1 (un-grounded → 100%%)",
+			res.State.JudgeSamplesTaken)
+	}
+	if res.State.JudgeAgreements != 1 {
+		t.Errorf("JudgeAgreements = %d, want 1", res.State.JudgeAgreements)
+	}
+	if res.State.JudgeDisagreements != 0 || res.State.JudgeErrors != 0 {
+		t.Errorf("unexpected disagreement/error counters: %+v", res.State)
+	}
+	// Policy's window should have one agreement recorded.
+	tel := pol.Telemetry()
+	if tel.Global.WindowCount != 1 {
+		t.Errorf("policy global window count = %d, want 1", tel.Global.WindowCount)
+	}
+	if jstub.Calls() != 1 {
+		t.Errorf("judge calls = %d, want 1", jstub.Calls())
+	}
+}
+
+func TestRun_Judge_DisagreementRecorded(t *testing.T) {
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 1000, SlidingWindow: 100,
+		Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal,
+	})
+	// Force disagreement: judge flips whatever the local verdict was.
+	jstub := judge.NewStub("frontier").
+		WithDisagreeWhen(func(judge.Request) bool { return true })
+
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol, Judge: jstub,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.JudgeDisagreements != 1 {
+		t.Errorf("JudgeDisagreements = %d, want 1", res.State.JudgeDisagreements)
+	}
+	if res.State.JudgeAgreements != 0 {
+		t.Errorf("JudgeAgreements = %d, want 0", res.State.JudgeAgreements)
+	}
+}
+
+func TestRun_Judge_GroundedTargetSampledAtLowerRate(t *testing.T) {
+	// Adapter produces a *grounded* process result (Signals.GroundedPass
+	// set). Critique fires (bootstrap). Sample rate for grounded is 10%
+	// per the lock — across many trials, judge calls should be ~10%.
+	groundedPass := true
+	var seeds []session.SubAPSeed
+	for i := 0; i < 200; i++ {
+		seeds = append(seeds, session.SubAPSeed{
+			Input: session.Payload{Kind: "task", Content: fmt.Sprintf("step%d", i)},
+		})
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+	groundedAdapter := &groundedProcessAdapter{
+		inner:        a,
+		groundedPass: &groundedPass,
+	}
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 100000, SlidingWindow: 1000,
+		Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal,
+	})
+	jstub := judge.NewStub("frontier")
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: groundedAdapter, Recomposer: rec, VerifierPolicy: pol, Judge: jstub,
+		Tracer: trace.Discard{}, Rand: rand.New(rand.NewPCG(7, 7)),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Expect ~10% sampling × 200 children = ~20.
+	got := res.State.JudgeSamplesTaken
+	if got < 10 || got > 35 {
+		t.Errorf("JudgeSamplesTaken = %d, want roughly 10-35 (10%% of 200, jitter)", got)
+	}
+}
+
+func TestRun_Judge_ErrorIsNonFatal(t *testing.T) {
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 1000, SlidingWindow: 100,
+		Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal,
+	})
+	jstub := judge.NewStub("frontier").
+		WithError(errors.New("frontier down"))
+
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol, Judge: jstub,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run should not fail on judge error: %v", err)
+	}
+	if res.State.JudgeErrors != 1 {
+		t.Errorf("JudgeErrors = %d, want 1", res.State.JudgeErrors)
+	}
+	if res.State.JudgeAgreements != 0 || res.State.JudgeDisagreements != 0 {
+		t.Errorf("error should not be counted as agreement/disagreement: %+v", res.State)
+	}
+	// Policy should NOT have recorded any agreement.
+	if pol.Telemetry().Global.WindowCount != 0 {
+		t.Errorf("policy window should be empty after judge error")
+	}
+}
+
+func TestRun_Judge_NoJudgeSkipsSampling(t *testing.T) {
+	// Verifier policy on, but no Judge wired → no samples taken.
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 1000, SlidingWindow: 100,
+		Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal,
+	})
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.JudgeSamplesTaken != 0 {
+		t.Errorf("JudgeSamplesTaken = %d, want 0 (no Judge wired)", res.State.JudgeSamplesTaken)
+	}
+}
+
+// groundedProcessAdapter wraps a stub.Adapter so process executions
+// emit a grounded return_result (Signals.GroundedPass set). Used to
+// drive the sampler's grounded-rate path without changing pkg/adapter/stub.
+type groundedProcessAdapter struct {
+	inner        *stub.Adapter
+	groundedPass *bool
+}
+
+func (g *groundedProcessAdapter) Name() string { return g.inner.Name() }
+func (g *groundedProcessAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
+	return g.inner.Evaluate(ctx, env)
+}
+func (g *groundedProcessAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {
+	env, err := g.inner.Execute(ctx, env)
+	if err != nil {
+		return env, err
+	}
+	if env.Execute != nil && env.Execute.Category == session.CategoryReturnResult &&
+		env.Execute.ReturnResult != nil &&
+		env.Evaluate != nil && env.Evaluate.Playbook == session.PlaybookProcess {
+		env.Execute.ReturnResult.Signals.GroundedPass = g.groundedPass
+	}
+	return env, nil
 }
 
 func TestRun_ContextCancellation(t *testing.T) {

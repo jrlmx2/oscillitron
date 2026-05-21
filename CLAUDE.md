@@ -88,9 +88,9 @@ Specialization seeds are **predetermined** (the scaffolding) and **grow organica
 
 Brain analog: working memory is per-task and dissolves; long-term memory in the cortical region accumulates across tasks via consolidation. Same pattern, same separation.
 
-**Sub-AP emission is synchronous in v0 (LOCKED 2026-05-18; configurable later).** When an invocation emits sub-APs, the parent blocks on the whole subtree before recomposing and returning. Recursive function-call semantics. Async sub-AP emission (parent returns; sub-APs continue independently) is a real axis but stays deferred — it requires inhibition that can reason across in-flight asynchronous subtrees, which is its own design problem. v0 is fully synchronous, single-threaded sibling dispatch.
+**Parent blocks on subtree (LOCKED 2026-05-18; sibling-concurrent dispatch UNLOCKED 2026-05-21).** When an invocation emits sub-APs, the parent still blocks on the whole subtree before recomposing and returning — that semantic stays. What changed 2026-05-21: siblings *within* a single subtree can now dispatch concurrently (via `runner.Config.MaxConcurrency`), bounded by a static cap and optionally by a dynamic VRAM-derived cap (`Config.VRAMProbe + VRAMEstimator`). Inhibition under concurrent siblings is **strict cancellation**: the first sibling to fire `inhibitor.Abort` cancels in-flight siblings via context, matching the locked "one inhibited child inhibits the parent" rule. Async sub-AP emission (parent returns; sub-APs continue independently across subtrees) stays deferred — it requires cross-subtree inhibition reasoning that is its own design problem.
 
-**Hardware-level parallelism (multi-GPU, inference-server sharing, sibling-concurrent dispatch) is deferred past v0.** Not designed around. The dispatcher interface should still return a future-shaped result rather than a direct value — cheap insurance so this can be reintroduced without an interface break — but no concurrency, queueing, or backpressure logic ships in v0.
+**Sibling concurrency in v0 (UNLOCKED 2026-05-21); multi-GPU and inference-server sharing still deferred.** The graph-walking layer can fan out sibling APs concurrently. The dispatcher interface stays future-shaped per the original lock — that paid off. What's still deferred: multi-GPU placement, inference-server sharing (one Hermes serving multiple tenants), backpressure/queueing across trees. The VRAM-aware dynamic concurrency cap (`pkg/vram`) is the v0 throttling mechanism — it bounds in-flight sessions per the operator's GPU headroom and a sliding-window per-session estimate capped by the model's context window. See `references/vram-platform-coverage.md` for the probe coverage matrix and `oscillitron/pkg/vram` for the estimator math.
 
 **Uniform node model (LOCKED 2026-05-19).** No structurally distinct seed nodes per brain function. *One* AP-handling workflow runs at every recursion level. Specialization lives in the **playbook substrate keyed by action**, not in node types. This sharpens the brain-function lock-in (cortical microcircuits are uniform; specialization comes from learned weights, not different circuits) rather than breaking it. The "specialist" abstraction survives but moves out of the structural/code layer into the data layer — see "Specialists are substrate" below.
 
@@ -202,6 +202,7 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 - ~~**Verifier policy.**~~ Phase ramp with `sample_rate = max(floor, 1 - happiness_wilson_lower_bound)` over a sliding window of judge-sampling agreement; bootstrap at 100% for 10k invocations; `happiness_scope` configurable; defaults revisitable. LOCKED 2026-05-20. See Architecture above and `scratch/design-notes.md`.
 - ~~**Judge sampling policy.**~~ 100% on un-grounded, 10% sample on grounded. LOCKED 2026-05-19. See Architecture above.
 - ~~**Pairwise compose mechanism.**~~ Sequential self-chaining off the scope channel, not pre-emission of N-1 compose APs. LOCKED 2026-05-20. See Architecture above and `scratch/design-notes.md`.
+- ~~**Sibling-concurrent dispatch.**~~ Unlocks the original "sync sub-AP emission" lock for siblings *within* a single subtree. Runner gains `Config.MaxConcurrency` (static cap) and optional `Config.VRAMProbe + VRAMEstimator` (dynamic VRAM-aware cap from `pkg/vram`). Strict cancellation on inhibitor.Abort. Parent still blocks on its subtree; cross-subtree async emission still deferred. UNLOCKED 2026-05-21. See Architecture above and `references/vram-platform-coverage.md`.
 
 ### Still open
 
@@ -210,8 +211,8 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 ### Deferred (not blocking v0)
 
 - **License.** Apache 2.0 leading per framework-design.md §11.1; not yet added. Repo is private, no urgency. Decide before going public.
-- **Hardware parallelism.** Multi-GPU, inference-server sharing, sibling-concurrent dispatch, backpressure/queueing. Out of scope for v0. Dispatcher interface should still be future-shaped (cheap insurance against an interface break later) but no concurrency logic ships.
-- **Async sub-AP emission.** v0 is synchronous; configurable async is a real axis but requires inhibition that reasons across in-flight asynchronous subtrees. Revisit when async workloads motivate it.
+- **Hardware parallelism beyond sibling-concurrent dispatch.** Multi-GPU placement, inference-server sharing (one Hermes serving multiple tenants), cross-tree backpressure/queueing. Sibling-concurrent dispatch landed 2026-05-21 with VRAM-aware throttling (`runner.Config.MaxConcurrency`, `pkg/vram`); the rest is still out of scope for v0.
+- **Async sub-AP emission across subtrees.** v0 still blocks the parent on its subtree; async emission (parent returns; sub-APs continue independently across subtrees) requires inhibition that reasons across in-flight asynchronous subtrees. Revisit when async workloads motivate it.
 
 ## Notes for Claude
 

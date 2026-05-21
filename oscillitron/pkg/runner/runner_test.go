@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
@@ -16,6 +17,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/verifier"
+	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
 // fakeRecomposer joins all children's Result.Content with " | " and
@@ -212,17 +214,28 @@ func TestRun_VerifierSignalChildDoesNotBubble(t *testing.T) {
 }
 
 // recordingInhibitor counts edges and can be configured to abort one.
+// Mutex-protected because concurrent dispatch (Config.MaxConcurrency > 1)
+// invokes Check from multiple goroutines.
 type recordingInhibitor struct {
+	mu        sync.Mutex
 	edges     []inhibitor.Edge
 	abortOnID session.ID
 }
 
 func (r *recordingInhibitor) Check(e inhibitor.Edge) inhibitor.Verdict {
+	r.mu.Lock()
 	r.edges = append(r.edges, e)
+	r.mu.Unlock()
 	if e.Child.ID == r.abortOnID {
 		return inhibitor.Verdict{Decision: inhibitor.Abort, Reason: "test abort"}
 	}
 	return inhibitor.Verdict{Decision: inhibitor.Continue}
+}
+
+func (r *recordingInhibitor) edgeCount() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.edges)
 }
 
 func TestRun_InhibitorChecksParentChildEdgesOnly(t *testing.T) {
@@ -989,4 +1002,243 @@ func TestRun_ContextCancellation(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("got %v, want context.Canceled", err)
 	}
+}
+
+// --- Concurrency, VRAM, telemetry, MaxInputBytes ---
+
+func planAdapterWithChildren(n int, returnContent string, returnConf float64) (*stub.Adapter, []session.SubAPSeed) {
+	seeds := make([]session.SubAPSeed, n)
+	for i := 0; i < n; i++ {
+		seeds[i] = session.SubAPSeed{Input: session.Payload{Kind: "task", Content: fmt.Sprintf("step%d", i)}}
+	}
+	a := stub.New("agent").
+		WithEvaluator(func(env session.Envelope) (session.Playbook, float64) {
+			if env.Input.Content == "go" {
+				return session.PlaybookPlan, 0.9
+			}
+			return session.PlaybookProcess, 0.9
+		}).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...).
+		WithReturnResult(session.PlaybookProcess,
+			session.Payload{Kind: "result", Content: returnContent}, returnConf)
+	return a, seeds
+}
+
+func TestRun_Concurrency_AllChildrenResolve(t *testing.T) {
+	a, _ := planAdapterWithChildren(8, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, MaxConcurrency: 4,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rec.lastChildren) != 8 {
+		t.Errorf("recomposer saw %d children, want 8", len(rec.lastChildren))
+	}
+	if res.State.ConcurrentDispatches != 1 {
+		t.Errorf("ConcurrentDispatches = %d, want 1", res.State.ConcurrentDispatches)
+	}
+}
+
+func TestRun_Concurrency_StrictCancellationOnInhibit(t *testing.T) {
+	// 6 children. The inhibitor aborts one of them. Under strict
+	// cancellation, in-flight siblings get cancelled via context; the
+	// parent ends up inhibited.
+	seeds := make([]session.SubAPSeed, 6)
+	for i := range seeds {
+		seeds[i] = session.SubAPSeed{Input: session.Payload{Kind: "task", Content: fmt.Sprintf("step%d", i)}}
+	}
+	a := stub.New("agent").
+		WithEvaluator(func(env session.Envelope) (session.Playbook, float64) {
+			if env.Input.Content == "go" {
+				return session.PlaybookPlan, 0.9
+			}
+			return session.PlaybookProcess, 0.9
+		}).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...).
+		WithReturnResult(session.PlaybookProcess,
+			session.Payload{Kind: "result", Content: "x"}, 0.8)
+
+	inh := &recordingInhibitor{abortOnID: "ap-root-c1"}
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Inhibitor: inh,
+		MaxConcurrency: 4,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.Root.IsInhibited() {
+		t.Errorf("root should be inhibited; got ExitReason=%q", res.Root.ExitReason)
+	}
+	if rec.calls != 0 {
+		t.Errorf("recomposer must NOT run on inhibited subtree; got %d", rec.calls)
+	}
+}
+
+func TestRun_Concurrency_RaceDetectorCleanWithVerifierAndJudge(t *testing.T) {
+	// Concurrent dispatch with verifier policy + judge + cost tracker
+	// all wired on. The assertions confirm telemetry aggregates across
+	// goroutines without races (run with `go test -race`).
+	a := verifierPolicyAdapter(t)
+	seeds := make([]session.SubAPSeed, 6)
+	for i := range seeds {
+		seeds[i] = session.SubAPSeed{Input: session.Payload{Kind: "task", Content: fmt.Sprintf("s%d", i)}}
+	}
+	a = a.WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 100, SlidingWindow: 100,
+		Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal,
+	})
+	jstub := judge.NewStub("frontier")
+	tracker := cost.New(cost.Pricing{InputUSDPerMTok: 10, OutputUSDPerMTok: 30})
+	tracker.Register("hermes", cost.Pricing{InputUSDPerMTok: 1, OutputUSDPerMTok: 3})
+
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		VerifierPolicy: pol, Judge: jstub, Cost: tracker,
+		MaxConcurrency: 3,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := res.State.PolicyCritiquesEmitted; got != 6 {
+		t.Errorf("PolicyCritiquesEmitted = %d, want 6", got)
+	}
+	if got := len(res.State.VerifierSignals); got != 6 {
+		t.Errorf("VerifierSignals = %d, want 6", got)
+	}
+	if got := res.State.JudgeSamplesTaken; got != 6 {
+		t.Errorf("JudgeSamplesTaken = %d, want 6", got)
+	}
+	if got := res.State.JudgeAgreements + res.State.JudgeDisagreements; got != 6 {
+		t.Errorf("agreements+disagreements = %d, want 6", got)
+	}
+}
+
+func TestRun_Concurrency_DynamicCapFromVRAMProbe(t *testing.T) {
+	// VRAM probe reports 1 GiB free; estimator says ~250 MiB per
+	// session. dynamic_cap = floor(1024 / 250) = 4. Run completes
+	// regardless; verify probe was consulted and ConcurrentDispatches
+	// incremented.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 1024 * 1024 * 1024}}
+	estimator := vram.SlidingWindowEstimator{
+		BytesPerToken:      80_000,
+		ModelResidentBytes: 250 * 1024 * 1024,
+	}
+
+	a, _ := planAdapterWithChildren(6, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		MaxConcurrency: 8,
+		VRAMProbe:      probe,
+		VRAMEstimator:  estimator,
+		VRAMModel:      VRAMModel{Name: "test-4b", ContextSize: 4096},
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.ConcurrentDispatches != 1 {
+		t.Errorf("ConcurrentDispatches = %d, want 1", res.State.ConcurrentDispatches)
+	}
+	if probe.calls == 0 {
+		t.Errorf("VRAM probe was never called")
+	}
+}
+
+func TestRun_Concurrency_VRAMProbeFailureFallsBackToStatic(t *testing.T) {
+	probe := &fakeVRAMProbe{err: errors.New("probe blew up")}
+	estimator := vram.SlidingWindowEstimator{BytesPerToken: 80_000}
+
+	a, _ := planAdapterWithChildren(4, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		MaxConcurrency: 4,
+		VRAMProbe:      probe,
+		VRAMEstimator:  estimator,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rec.lastChildren) != 4 {
+		t.Errorf("recomposer saw %d children, want 4 (probe failure should not abort)", len(rec.lastChildren))
+	}
+	if res.State.ConcurrentDispatches == 0 {
+		t.Errorf("ConcurrentDispatches = 0, want >0 (static cap should have taken effect)")
+	}
+}
+
+func TestRun_MaxInputBytes_InhibitsOversizedInput(t *testing.T) {
+	a := stub.New("agent").
+		WithDefaultPlaybook(session.PlaybookProcess).
+		WithReturnResult(session.PlaybookProcess, session.Payload{Kind: "result", Content: "ok"}, 0.8)
+	big := strings.Repeat("x", 5000)
+	root := session.NewRoot("ap-root", big, "{r}", "", session.Budget{DepthRemaining: 1})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, MaxInputBytes: 1000,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.Root.IsInhibited() {
+		t.Errorf("oversized input should inhibit; got ExitReason=%q", res.Root.ExitReason)
+	}
+	if res.State.InhibitCount == 0 {
+		t.Errorf("InhibitCount should be >0")
+	}
+}
+
+func TestRun_Telemetry_PerPlaybookTokens(t *testing.T) {
+	a, _ := planAdapterWithChildren(3, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.PerPlaybookTokens == nil {
+		t.Fatal("PerPlaybookTokens is nil; expected populated map")
+	}
+	// Evaluate tokens (empty key) come from the stub adapter's default
+	// of 40 per call. Execute tokens are zero by default in the stub —
+	// the assertion here is "evaluate telemetry plumbed through under
+	// concurrency-safe aggregation," not that every playbook has data.
+	if got := res.State.PerPlaybookTokens[""]; got == 0 {
+		t.Errorf("evaluate tokens (empty key) = 0, expected >0")
+	}
+}
+
+// fakeVRAMProbe implements vram.Probe for tests.
+type fakeVRAMProbe struct {
+	report vram.Report
+	err    error
+	calls  int
+}
+
+func (p *fakeVRAMProbe) Name() string { return "fake" }
+func (p *fakeVRAMProbe) Probe(_ context.Context) (vram.Report, error) {
+	p.calls++
+	if p.err != nil {
+		return vram.Report{}, p.err
+	}
+	return p.report, nil
 }

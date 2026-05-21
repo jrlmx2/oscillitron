@@ -209,7 +209,9 @@ func (a *Adapter) Evaluate(ctx context.Context, env session.Envelope) (session.E
 	if err != nil {
 		return env, err
 	}
-	a.recordCost(a.cfg.EvaluateEndpoint, usage)
+	entry := a.recordCost(a.cfg.EvaluateEndpoint, usage)
+	env.Trace.CostUSD += entry.ActualUSD
+	env.Trace.CostVsFrontierBaselineUSD += entry.FrontierUSD
 
 	parsed, structured, err := parseEvaluateResponse(raw)
 	if err != nil {
@@ -268,7 +270,9 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	if err != nil {
 		return env, err
 	}
-	a.recordCost(ep, usage)
+	entry := a.recordCost(ep, usage)
+	env.Trace.CostUSD += entry.ActualUSD
+	env.Trace.CostVsFrontierBaselineUSD += entry.FrontierUSD
 
 	execute, err := parseExecuteResponse(pb, raw, a.cfg.RequireStructured)
 	if err != nil {
@@ -450,15 +454,19 @@ func (a *Adapter) boundContext(ctx context.Context) (context.Context, context.Ca
 	return context.WithTimeout(ctx, a.cfg.RunTimeout)
 }
 
-func (a *Adapter) recordCost(ep Endpoint, usage tokenUsage) {
+// recordCost records the phase's usage into the tracker (when wired)
+// and returns the resulting Entry. When no tracker is set, returns a
+// zero Entry — callers can stitch its (zero) cost fields onto the
+// envelope without branching.
+func (a *Adapter) recordCost(ep Endpoint, usage tokenUsage) cost.Entry {
 	if a.cfg.Cost == nil || (usage.input == 0 && usage.output == 0) {
-		return
+		return cost.Entry{}
 	}
 	model := ep.Model
 	if model == "" {
 		model = adapterName
 	}
-	a.cfg.Cost.Record(model, usage.input, usage.output)
+	return a.cfg.Cost.Record(model, usage.input, usage.output)
 }
 
 func playbookOrEmpty(env session.Envelope) string {

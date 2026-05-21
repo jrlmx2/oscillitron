@@ -508,3 +508,215 @@ func TestRawInstructionsOverride(t *testing.T) {
 		t.Errorf("instructions = %q, want override", got)
 	}
 }
+
+// --- MultiEndpoint builder + per-playbook routing smoke test ---
+
+func TestMultiEndpoint_RejectsMissingPlaybooks(t *testing.T) {
+	_, err := MultiEndpoint(
+		Endpoint{BaseURL: "http://evaluate"},
+		map[session.Playbook]Endpoint{
+			session.PlaybookPlan:    {BaseURL: "http://plan"},
+			session.PlaybookProcess: {BaseURL: "http://process"},
+			// critique / verify_grounded / compose deliberately missing
+		},
+	)
+	if err == nil {
+		t.Fatal("MultiEndpoint with missing playbooks should error")
+	}
+	for _, wantSubstr := range []string{"critique", "verify_grounded", "compose"} {
+		if !strings.Contains(err.Error(), wantSubstr) {
+			t.Errorf("error %q missing %q", err.Error(), wantSubstr)
+		}
+	}
+}
+
+func TestMultiEndpoint_BindsAllPlaybooks(t *testing.T) {
+	cfg, err := MultiEndpoint(
+		Endpoint{BaseURL: "http://evaluate"},
+		map[session.Playbook]Endpoint{
+			session.PlaybookPlan:           {BaseURL: "http://plan"},
+			session.PlaybookProcess:        {BaseURL: "http://process"},
+			session.PlaybookCritique:       {BaseURL: "http://critique"},
+			session.PlaybookVerifyGrounded: {BaseURL: "http://verify"},
+			session.PlaybookCompose:        {BaseURL: "http://compose"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("MultiEndpoint: %v", err)
+	}
+	if cfg.EvaluateEndpoint.BaseURL != "http://evaluate" {
+		t.Errorf("EvaluateEndpoint = %+v, want http://evaluate", cfg.EvaluateEndpoint)
+	}
+	for _, pb := range AllPlaybooks {
+		got, ok := cfg.ExecuteEndpoints[pb]
+		if !ok {
+			t.Errorf("ExecuteEndpoints missing %q", pb)
+			continue
+		}
+		if !strings.HasPrefix(got.BaseURL, "http://") {
+			t.Errorf("ExecuteEndpoints[%q] = %+v, missing scheme", pb, got)
+		}
+	}
+}
+
+// TestMultiInstance_RoutesEachPlaybookToOwnHermes is the smoke test the
+// per-instance playbook substrate lock (parent CLAUDE.md, 2026-05-18)
+// implies. Stands up N independent fake Hermes processes — one for
+// evaluate plus one per playbook — and verifies each /v1/runs request
+// lands on the right server. The whole point of MultiEndpoint is
+// preserving per-instance learning substrate; a routing regression
+// silently mixes the per-playbook state. This test is the canary.
+func TestMultiInstance_RoutesEachPlaybookToOwnHermes(t *testing.T) {
+	servers := map[string]*fakeHermes{
+		"evaluate":        newFake(t),
+		"plan":            newFake(t),
+		"process":         newFake(t),
+		"critique":        newFake(t),
+		"verify_grounded": newFake(t),
+		"compose":         newFake(t),
+	}
+	servers["evaluate"].setEvents(completedEvent(`{"playbook":"plan","confidence":0.9,"rationale":"r"}`))
+	servers["plan"].setEvents(completedEvent(`{"sub_aps":[],"recompose":"none"}`))
+	servers["process"].setEvents(completedEvent(`{"content":"p","confidence":0.8}`))
+	servers["critique"].setEvents(completedEvent(`{"verdict":"pass"}`))
+	servers["verify_grounded"].setEvents(completedEvent(`{"verdict":"pass"}`))
+	servers["compose"].setEvents(completedEvent(`{"content":"c","confidence":0.9}`))
+
+	cfg, err := MultiEndpoint(
+		Endpoint{BaseURL: servers["evaluate"].server.URL, Model: "evaluate-model"},
+		map[session.Playbook]Endpoint{
+			session.PlaybookPlan:           {BaseURL: servers["plan"].server.URL, Model: "plan-model"},
+			session.PlaybookProcess:        {BaseURL: servers["process"].server.URL, Model: "process-model"},
+			session.PlaybookCritique:       {BaseURL: servers["critique"].server.URL, Model: "critique-model"},
+			session.PlaybookVerifyGrounded: {BaseURL: servers["verify_grounded"].server.URL, Model: "verify-model"},
+			session.PlaybookCompose:        {BaseURL: servers["compose"].server.URL, Model: "compose-model"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("MultiEndpoint: %v", err)
+	}
+	a, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	type step struct {
+		name     string
+		hit      func() error
+		expected string // server key that should have +1 postRuns
+	}
+	steps := []step{
+		{name: "evaluate", expected: "evaluate", hit: func() error {
+			_, err := a.Evaluate(context.Background(), envFor("ap-eval", "task", ""))
+			return err
+		}},
+		{name: "execute-plan", expected: "plan", hit: func() error {
+			_, err := a.Execute(context.Background(), envWithEvaluate("ap-plan", "task", session.PlaybookPlan))
+			return err
+		}},
+		{name: "execute-process", expected: "process", hit: func() error {
+			_, err := a.Execute(context.Background(), envWithEvaluate("ap-process", "task", session.PlaybookProcess))
+			return err
+		}},
+		{name: "execute-critique", expected: "critique", hit: func() error {
+			_, err := a.Execute(context.Background(), envWithEvaluate("ap-critique", "task", session.PlaybookCritique))
+			return err
+		}},
+		{name: "execute-verify-grounded", expected: "verify_grounded", hit: func() error {
+			_, err := a.Execute(context.Background(), envWithEvaluate("ap-verify", "task", session.PlaybookVerifyGrounded))
+			return err
+		}},
+		{name: "execute-compose", expected: "compose", hit: func() error {
+			_, err := a.Execute(context.Background(), envWithEvaluate("ap-compose", "task", session.PlaybookCompose))
+			return err
+		}},
+	}
+
+	baseline := make(map[string]int32, len(servers))
+	for k, s := range servers {
+		baseline[k] = s.postRuns.Load()
+	}
+	for _, s := range steps {
+		if err := s.hit(); err != nil {
+			t.Fatalf("%s: %v", s.name, err)
+		}
+		for k, srv := range servers {
+			got := srv.postRuns.Load() - baseline[k]
+			want := int32(0)
+			if k == s.expected {
+				want = 1
+			}
+			if got != want {
+				t.Errorf("after %s: server %q saw delta=%d, want %d", s.name, k, got, want)
+			}
+		}
+		for k, srv := range servers {
+			baseline[k] = srv.postRuns.Load()
+		}
+	}
+
+	// Sanity: every server got exactly one call by the end.
+	for k, s := range servers {
+		if s.postRuns.Load() != 1 {
+			t.Errorf("server %q: total postRuns = %d, want 1", k, s.postRuns.Load())
+		}
+	}
+}
+
+// TestMultiInstance_ModelSentPerEndpoint confirms each playbook's
+// Hermes receives its own configured model identifier — important so
+// the per-instance substrate actually runs on the operator-pinned
+// model for that playbook.
+func TestMultiInstance_ModelSentPerEndpoint(t *testing.T) {
+	planFake := newFake(t)
+	processFake := newFake(t)
+	planFake.setEvents(completedEvent(`{"sub_aps":[],"recompose":"none"}`))
+	processFake.setEvents(completedEvent(`{"content":"p","confidence":0.8}`))
+
+	// MultiEndpoint requires every playbook; the unused ones get throwaway
+	// fakes so cfg validation passes.
+	evalFake := newFake(t)
+	evalFake.setEvents(completedEvent(`{"playbook":"plan","confidence":0.9}`))
+	critiqueFake := newFake(t)
+	verifyFake := newFake(t)
+	composeFake := newFake(t)
+
+	cfg, err := MultiEndpoint(
+		Endpoint{BaseURL: evalFake.server.URL, Model: "evaluate-model"},
+		map[session.Playbook]Endpoint{
+			session.PlaybookPlan:           {BaseURL: planFake.server.URL, Model: "plan-model"},
+			session.PlaybookProcess:        {BaseURL: processFake.server.URL, Model: "process-model"},
+			session.PlaybookCritique:       {BaseURL: critiqueFake.server.URL, Model: "critique-model"},
+			session.PlaybookVerifyGrounded: {BaseURL: verifyFake.server.URL, Model: "verify-model"},
+			session.PlaybookCompose:        {BaseURL: composeFake.server.URL, Model: "compose-model"},
+		},
+	)
+	if err != nil {
+		t.Fatalf("MultiEndpoint: %v", err)
+	}
+	a, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if _, err := a.Execute(context.Background(), envWithEvaluate("ap-plan", "task", session.PlaybookPlan)); err != nil {
+		t.Fatalf("Execute plan: %v", err)
+	}
+	if _, err := a.Execute(context.Background(), envWithEvaluate("ap-process", "task", session.PlaybookProcess)); err != nil {
+		t.Fatalf("Execute process: %v", err)
+	}
+
+	planFake.mu.Lock()
+	planModel := planFake.lastBody["model"]
+	planFake.mu.Unlock()
+	processFake.mu.Lock()
+	processModel := processFake.lastBody["model"]
+	processFake.mu.Unlock()
+
+	if planModel != "plan-model" {
+		t.Errorf("plan endpoint received model %v, want plan-model", planModel)
+	}
+	if processModel != "process-model" {
+		t.Errorf("process endpoint received model %v, want process-model", processModel)
+	}
+}

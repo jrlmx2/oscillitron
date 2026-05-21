@@ -173,21 +173,54 @@ func New(cfg Config) (*Adapter, error) {
 // up N processes).
 func SingleEndpoint(baseURL, model string) Config {
 	ep := Endpoint{BaseURL: baseURL, Model: model}
-	all := []session.Playbook{
-		session.PlaybookPlan,
-		session.PlaybookProcess,
-		session.PlaybookCritique,
-		session.PlaybookVerifyGrounded,
-		session.PlaybookCompose,
-	}
-	exec := make(map[session.Playbook]Endpoint, len(all))
-	for _, pb := range all {
+	exec := make(map[session.Playbook]Endpoint, len(AllPlaybooks))
+	for _, pb := range AllPlaybooks {
 		exec[pb] = ep
 	}
 	return Config{
 		EvaluateEndpoint: ep,
 		ExecuteEndpoints: exec,
 	}
+}
+
+// MultiEndpoint constructs a Config that routes each playbook to its
+// own Hermes process — the per-instance playbook substrate shape
+// locked 2026-05-18. Every v0 playbook (plan / process / critique /
+// verify_grounded / compose) must have an entry in byPlaybook; missing
+// keys return an error rather than silently routing to evaluate.
+//
+// The returned Config is a value, not validated against the adapter
+// yet — pass it to New() for the final url-normalization + URL-blank
+// checks.
+func MultiEndpoint(evaluate Endpoint, byPlaybook map[session.Playbook]Endpoint) (Config, error) {
+	missing := make([]string, 0, len(AllPlaybooks))
+	exec := make(map[session.Playbook]Endpoint, len(AllPlaybooks))
+	for _, pb := range AllPlaybooks {
+		ep, ok := byPlaybook[pb]
+		if !ok {
+			missing = append(missing, string(pb))
+			continue
+		}
+		exec[pb] = ep
+	}
+	if len(missing) > 0 {
+		return Config{}, fmt.Errorf("hermes: MultiEndpoint missing endpoints for playbooks: %s", strings.Join(missing, ", "))
+	}
+	return Config{
+		EvaluateEndpoint: evaluate,
+		ExecuteEndpoints: exec,
+	}, nil
+}
+
+// AllPlaybooks lists every v0 playbook in the order locked 2026-05-19.
+// Exported so demo wiring and external test helpers can iterate the
+// set without duplicating it.
+var AllPlaybooks = []session.Playbook{
+	session.PlaybookPlan,
+	session.PlaybookProcess,
+	session.PlaybookCritique,
+	session.PlaybookVerifyGrounded,
+	session.PlaybookCompose,
 }
 
 // Name implements adapter.Adapter.

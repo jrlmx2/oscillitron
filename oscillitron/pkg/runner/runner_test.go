@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
+	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -691,6 +692,82 @@ func TestRun_VerifierPolicy_CritiqueRecordedInSubtree(t *testing.T) {
 	}
 	if !foundCritique {
 		t.Errorf("expected a verifier_signal child in plan's subtree; got %+v", got)
+	}
+}
+
+// --- Cost tracker integration ---
+
+func TestRun_CostSummary_SnapshotsTrackerWhenWired(t *testing.T) {
+	// Pre-record entries directly on the tracker (simulates what an
+	// adapter does on each phase). Run a stub-only tree, confirm
+	// RunState.CostSummary mirrors the tracker's Summary.
+	tracker := cost.New(cost.Pricing{InputUSDPerMTok: 10, OutputUSDPerMTok: 30})
+	tracker.Register("local", cost.Pricing{InputUSDPerMTok: 1, OutputUSDPerMTok: 3})
+	tracker.Record("local", 1000, 500)
+	tracker.Record("local", 2000, 1000)
+
+	a := stub.New("worker").
+		WithDefaultPlaybook(session.PlaybookProcess).
+		WithReturnResult(session.PlaybookProcess,
+			session.Payload{Kind: "result", Content: "ok"}, 0.8)
+	root := session.NewRoot("ap-root", "x", "y", "", session.Budget{DepthRemaining: 1})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Cost: tracker, Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	got := res.State.CostSummary
+	if len(got.Entries) != 2 {
+		t.Errorf("CostSummary.Entries = %d, want 2 (mirrors tracker)", len(got.Entries))
+	}
+	want := tracker.Summary()
+	if got.TotalActualUSD != want.TotalActualUSD ||
+		got.TotalFrontierUSD != want.TotalFrontierUSD ||
+		got.TotalSavingsUSD != want.TotalSavingsUSD {
+		t.Errorf("totals mismatch: got %+v want %+v", got, want)
+	}
+}
+
+func TestRun_CostSummary_ZeroWhenNoTracker(t *testing.T) {
+	a := stub.New("worker").
+		WithDefaultPlaybook(session.PlaybookProcess).
+		WithReturnResult(session.PlaybookProcess,
+			session.Payload{Kind: "result", Content: "ok"}, 0.8)
+	root := session.NewRoot("ap-root", "x", "y", "", session.Budget{DepthRemaining: 1})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := res.State.CostSummary; len(got.Entries) != 0 ||
+		got.TotalActualUSD != 0 || got.TotalFrontierUSD != 0 {
+		t.Errorf("CostSummary should be zero without a tracker; got %+v", got)
+	}
+}
+
+func TestRun_CostSummary_PopulatedEvenOnError(t *testing.T) {
+	// If the adapter fails mid-run, the caller still wants the cost so
+	// far. We pre-record into the tracker and force an adapter error.
+	tracker := cost.New(cost.Pricing{InputUSDPerMTok: 10, OutputUSDPerMTok: 30})
+	tracker.Register("local", cost.Pricing{InputUSDPerMTok: 1, OutputUSDPerMTok: 3})
+	tracker.Record("local", 500, 200)
+
+	boom := errors.New("evaluate exploded")
+	a := stub.New("worker").
+		WithDefaultPlaybook(session.PlaybookProcess).
+		WithEvalError(boom)
+	root := session.NewRoot("ap-root", "x", "y", "", session.Budget{DepthRemaining: 1})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Cost: tracker, Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if !errors.Is(err, boom) {
+		t.Errorf("got %v, want eval error", err)
+	}
+	if len(res.State.CostSummary.Entries) != 1 {
+		t.Errorf("CostSummary on error path: entries = %d, want 1",
+			len(res.State.CostSummary.Entries))
 	}
 }
 

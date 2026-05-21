@@ -185,12 +185,143 @@ func TestEvaluateHappyPath(t *testing.T) {
 	if env.Evaluate.Rationale != "single task" {
 		t.Errorf("Rationale = %q", env.Evaluate.Rationale)
 	}
-	// Session ID should be "<envID>:evaluate".
+	// Session ID is tree-scoped + role-scoped: "<RootID>:evaluate".
+	// For a root envelope (envFor sets RootID==ID), that's "ap-1:evaluate".
 	f.mu.Lock()
 	body := f.lastBody
 	f.mu.Unlock()
 	if body["session_id"] != "ap-1:evaluate" {
 		t.Errorf("session_id = %v, want ap-1:evaluate", body["session_id"])
+	}
+}
+
+// envChildFor builds a non-root envelope whose RootID and ID differ —
+// the case where tree-scoping actually changes behavior compared to
+// the old envID-based scheme.
+func envChildFor(id, rootID session.ID, content, schema string) session.Envelope {
+	return session.Envelope{
+		SchemaVersion: session.SchemaVersion,
+		ID:            id,
+		RootID:        rootID,
+		Path:          []session.ID{rootID, id},
+		Input:         session.Payload{Kind: "task", Content: content},
+		OutputSchema:  schema,
+		Budget:        session.Budget{DepthRemaining: 3},
+	}
+}
+
+func TestEvaluate_SessionIDIsTreeScopedAcrossAPs(t *testing.T) {
+	// Two APs in the same root tree should share the SAME evaluate
+	// session_id — that's what enables tree-scoped Hermes context.
+	f := newFake(t)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+
+	envA := envChildFor("ap-child-a", "tree-root-7", "step a", "")
+	envB := envChildFor("ap-child-b", "tree-root-7", "step b", "")
+
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+	if _, err := a.Evaluate(context.Background(), envA); err != nil {
+		t.Fatalf("Evaluate A: %v", err)
+	}
+	f.mu.Lock()
+	sidA := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+	if _, err := a.Evaluate(context.Background(), envB); err != nil {
+		t.Fatalf("Evaluate B: %v", err)
+	}
+	f.mu.Lock()
+	sidB := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	if sidA != sidB {
+		t.Errorf("two APs in the same tree should share evaluate session: A=%v B=%v", sidA, sidB)
+	}
+	if sidA != "tree-root-7:evaluate" {
+		t.Errorf("session_id = %v, want tree-root-7:evaluate", sidA)
+	}
+}
+
+func TestEvaluate_SessionIDDiffersAcrossTrees(t *testing.T) {
+	// APs in different trees must NOT share a session_id, or the
+	// Hermes would conflate working memory across unrelated work.
+	f := newFake(t)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+
+	envA := envChildFor("ap-x", "tree-A", "x", "")
+	envB := envChildFor("ap-y", "tree-B", "y", "")
+
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+	_, _ = a.Evaluate(context.Background(), envA)
+	f.mu.Lock()
+	sidA := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+	_, _ = a.Evaluate(context.Background(), envB)
+	f.mu.Lock()
+	sidB := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	if sidA == sidB {
+		t.Errorf("APs in different trees must NOT share a session: got %v for both", sidA)
+	}
+}
+
+func TestExecute_SessionIDIsTreeAndPlaybookScoped(t *testing.T) {
+	// Two process APs in the same tree share one execute session
+	// ("<root>:process"); a critique AP in the same tree gets its own
+	// ("<root>:critique"). This is what makes the per-instance
+	// playbook substrate accumulate context across same-role calls.
+	f := newFake(t)
+	a, _ := New(SingleEndpoint(f.server.URL, ""))
+
+	mkExec := func(id, root session.ID, pb session.Playbook) session.Envelope {
+		e := envChildFor(id, root, "task", "free-text")
+		e.Evaluate = &session.Evaluate{Playbook: pb, Confidence: 0.9}
+		return e
+	}
+
+	f.setEvents(completedEvent(`{"content":"a","confidence":0.8}`))
+	_, _ = a.Execute(context.Background(), mkExec("ap-1", "shared-root", session.PlaybookProcess))
+	f.mu.Lock()
+	sid1 := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	f.setEvents(completedEvent(`{"content":"b","confidence":0.8}`))
+	_, _ = a.Execute(context.Background(), mkExec("ap-2", "shared-root", session.PlaybookProcess))
+	f.mu.Lock()
+	sid2 := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	f.setEvents(completedEvent(`{"verdict":"pass"}`))
+	_, _ = a.Execute(context.Background(), mkExec("ap-3", "shared-root", session.PlaybookCritique))
+	f.mu.Lock()
+	sid3 := f.lastBody["session_id"]
+	f.mu.Unlock()
+
+	if sid1 != sid2 {
+		t.Errorf("two process APs in same tree should share execute session: %v vs %v", sid1, sid2)
+	}
+	if sid1 == sid3 {
+		t.Errorf("process and critique APs in same tree must NOT share a session: both got %v", sid1)
+	}
+	if sid1 != "shared-root:process" {
+		t.Errorf("session_id = %v, want shared-root:process", sid1)
+	}
+	if sid3 != "shared-root:critique" {
+		t.Errorf("session_id = %v, want shared-root:critique", sid3)
+	}
+}
+
+func TestSessionID_FallsBackWhenRootIDMissing(t *testing.T) {
+	// Defensive: a caller that constructs an envelope without going
+	// through session.NewRoot can leave RootID empty. We fall back to
+	// env.ID so the session is at least unique.
+	got := sessionIDFor(session.Envelope{ID: "ap-orphan"}, "evaluate")
+	if got != "ap-orphan:evaluate" {
+		t.Errorf("orphan envelope session_id = %q, want ap-orphan:evaluate", got)
 	}
 }
 

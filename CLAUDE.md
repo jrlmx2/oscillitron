@@ -205,7 +205,7 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 
 ### Still open
 
-(none currently blocking v0; next concrete artifact is the JSON envelope sketch — see `scratch/design-notes.md`)
+(none currently blocking v0; envelope sketch landed both in `scratch/design-notes.md` "JSON envelope sketch" and in code at `oscillitron/pkg/session`. Phase ramp wiring for the verifier policy is the next concrete code task — design locked 2026-05-20, runner integration in progress.)
 
 ### Deferred (not blocking v0)
 

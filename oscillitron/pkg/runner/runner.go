@@ -58,6 +58,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
+	"github.com/jrlmx2/oscillitron/pkg/judge"
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -115,6 +116,21 @@ type Config struct {
 	// is purely so callers have one entry point for call-tree state and
 	// aggregate cost.
 	Cost *cost.Tracker
+	// Judge is the frontier-model audit (the second-opinion layer that
+	// feeds VerifierPolicy.RecordJudgeAgreement). After a critique
+	// resolves, the JudgeSampler decides whether to sample; if so, the
+	// Judge produces an independent verdict and the runner records
+	// agreement on the policy. Judge errors are non-fatal — they
+	// surface in JudgeErrors but do not fail the run.
+	//
+	// Wiring Judge without JudgeSampler is a configuration error caught
+	// at Run-time; wiring JudgeSampler without Judge is allowed (the
+	// sampler short-circuits, useful for telemetry-only runs).
+	Judge judge.Judge
+	// JudgeSampler owns the 100% un-grounded / 10% grounded sampling
+	// rates (locked 2026-05-19). If nil while Judge is set, the runner
+	// uses judge.DefaultSamplePolicy().
+	JudgeSampler *judge.Sampler
 }
 
 // Result is the return value of Run.
@@ -155,6 +171,22 @@ type RunState struct {
 	// CostSummary is populated from Config.Cost.Summary() at the end of
 	// Run when a tracker is wired. Zero-valued when no tracker is set.
 	CostSummary cost.Summary
+	// JudgeSamplesTaken counts targets that were sampled by the
+	// JudgeSampler (i.e., a Judge.Judge call was attempted). A subset
+	// of PolicyCritiquesEmitted — only critiques that resolved with a
+	// verifier_signal verdict can be judge-sampled.
+	JudgeSamplesTaken int
+	// JudgeAgreements counts judge calls where the frontier verdict
+	// matched the local critique. Sum of agreements + disagreements +
+	// errors equals JudgeSamplesTaken.
+	JudgeAgreements int
+	// JudgeDisagreements counts judge calls where the frontier verdict
+	// differed from the local critique.
+	JudgeDisagreements int
+	// JudgeErrors counts judge calls that returned an error. The
+	// runner does NOT fail the run on judge errors; an error is treated
+	// as "no audit signal for this AP" and is not fed to the policy.
+	JudgeErrors int
 }
 
 // VerifierSignalRecord is one critique / verify_grounded outcome
@@ -565,5 +597,76 @@ func (r *runner) maybeInjectCritique(
 		slog.String("critique_id", string(resolved.ID)),
 		slog.Bool("parent_override", parentOverride),
 	)
+
+	// Judge-sampling audit. Only meaningful when the critique resolved
+	// into a verifier_signal (i.e., a local verdict exists to compare
+	// against). The sampler decides 100% un-grounded vs. 10% grounded
+	// based on the *target's* Signals.GroundedPass, then the runner
+	// records agreement on the verifier policy.
+	r.maybeAuditWithJudge(ctx, target, resolved, action)
 	return resolved, nil
+}
+
+// maybeAuditWithJudge runs the judge sampling layer (locked 2026-05-19)
+// against a just-resolved critique. Errors from the judge are recorded
+// in RunState.JudgeErrors but never fail the run — a frontier judge
+// outage shouldn't be able to kill a working call tree.
+func (r *runner) maybeAuditWithJudge(
+	ctx context.Context,
+	target, critique session.Envelope,
+	action session.Playbook,
+) {
+	if r.cfg.Judge == nil {
+		return
+	}
+	if critique.Execute == nil || critique.Execute.Category != session.CategoryVerifierSignal ||
+		critique.Execute.VerifierSignal == nil {
+		// Critique didn't produce a verifier_signal — nothing for the
+		// judge to second-guess.
+		return
+	}
+	sampler := r.cfg.JudgeSampler
+	if sampler == nil {
+		// Caller wired a Judge but no Sampler: use the v0 locked policy.
+		defaultSampler := judge.NewSampler(judge.DefaultSamplePolicy())
+		sampler = defaultSampler
+	}
+	if !sampler.ShouldJudge(target, r.cfg.Rand) {
+		return
+	}
+
+	r.state.JudgeSamplesTaken++
+	localVerdict := critique.Execute.VerifierSignal.Verdict
+	req := judge.Request{
+		Target:       target,
+		LocalVerdict: localVerdict,
+		LocalIssues:  critique.Execute.VerifierSignal.Issues,
+	}
+	resp, err := r.cfg.Judge.Judge(ctx, req)
+	if err != nil {
+		r.state.JudgeErrors++
+		trace.Error(r.cfg.Tracer, ctx, "runner.judge_error",
+			slog.String("target_id", string(target.ID)),
+			slog.String("critique_id", string(critique.ID)),
+			slog.String("err", err.Error()),
+		)
+		return
+	}
+	agreed := resp.Verdict == localVerdict
+	if agreed {
+		r.state.JudgeAgreements++
+	} else {
+		r.state.JudgeDisagreements++
+	}
+	if r.cfg.VerifierPolicy != nil {
+		r.cfg.VerifierPolicy.RecordJudgeAgreement(action, agreed)
+	}
+	trace.Info(r.cfg.Tracer, ctx, "runner.judge_audited",
+		slog.String("target_id", string(target.ID)),
+		slog.String("critique_id", string(critique.ID)),
+		slog.String("local_verdict", string(localVerdict)),
+		slog.String("judge_verdict", string(resp.Verdict)),
+		slog.Bool("agreed", agreed),
+		slog.Bool("grounded", judge.IsGrounded(target)),
+	)
 }

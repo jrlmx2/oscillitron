@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/jrlmx2/oscillitron/pkg/cost"
+	"github.com/jrlmx2/oscillitron/pkg/semanticpool"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
@@ -759,5 +760,67 @@ func TestMultiInstance_ModelSentPerEndpoint(t *testing.T) {
 	}
 	if processModel != "process-model" {
 		t.Errorf("process endpoint received model %v, want process-model", processModel)
+	}
+}
+
+// --- Semantic pool integration ---
+
+func TestSemanticPool_PreambleAppearsInInstructions(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+
+	pool := semanticpool.NewStatic(
+		semanticpool.Entry{ID: "term-1", Content: "prefer X to Y"},
+		semanticpool.Entry{ID: "term-2", Content: "latency is wall-clock"},
+	)
+	cfg := SingleEndpoint(f.server.URL, "")
+	cfg.SemanticPool = pool
+	a, _ := New(cfg)
+
+	if _, err := a.Evaluate(context.Background(), envFor("ap-1", "task", "")); err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	f.mu.Lock()
+	body := f.lastBody
+	f.mu.Unlock()
+	instructions, _ := body["instructions"].(string)
+	for _, want := range []string{"[semantic-pool: 2 entries]", "term-1", "prefer X to Y", "term-2", "[/semantic-pool]"} {
+		if !strings.Contains(instructions, want) {
+			t.Errorf("instructions missing %q", want)
+		}
+	}
+}
+
+func TestSemanticPool_AbsenceLeavesInstructionsUnchanged(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+
+	a, _ := New(SingleEndpoint(f.server.URL, "")) // no SemanticPool
+	if _, err := a.Evaluate(context.Background(), envFor("ap-1", "task", "")); err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	f.mu.Lock()
+	instructions, _ := f.lastBody["instructions"].(string)
+	f.mu.Unlock()
+	if strings.Contains(instructions, "[semantic-pool") {
+		t.Errorf("pool preamble should NOT appear when no pool configured; got: %s", instructions)
+	}
+}
+
+func TestSemanticPool_EmptyPoolEmitsNoPreamble(t *testing.T) {
+	f := newFake(t)
+	f.setEvents(completedEvent(`{"playbook":"process","confidence":0.9}`))
+
+	cfg := SingleEndpoint(f.server.URL, "")
+	cfg.SemanticPool = semanticpool.NewStatic() // empty pool
+	a, _ := New(cfg)
+	if _, err := a.Evaluate(context.Background(), envFor("ap-1", "task", "")); err != nil {
+		t.Fatalf("Evaluate: %v", err)
+	}
+	f.mu.Lock()
+	instructions, _ := f.lastBody["instructions"].(string)
+	f.mu.Unlock()
+	if strings.Contains(instructions, "[semantic-pool") {
+		t.Errorf("empty pool should emit no preamble; got: %s", instructions)
 	}
 }

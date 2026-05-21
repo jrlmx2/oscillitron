@@ -24,6 +24,7 @@ import (
 	"log/slog"
 	"math/rand/v2"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
@@ -37,7 +38,39 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/runner"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
+	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
+
+// parseBytes accepts "1024", "1024B", "8KB", "16MB", "8GB", "1TB"
+// (case-insensitive). Returns the byte count. Used for --vram-budget.
+func parseBytes(s string) (uint64, error) {
+	s = strings.TrimSpace(strings.ToUpper(s))
+	if s == "" {
+		return 0, fmt.Errorf("empty value")
+	}
+	mult := uint64(1)
+	switch {
+	case strings.HasSuffix(s, "TB"):
+		mult = 1024 * 1024 * 1024 * 1024
+		s = strings.TrimSuffix(s, "TB")
+	case strings.HasSuffix(s, "GB"):
+		mult = 1024 * 1024 * 1024
+		s = strings.TrimSuffix(s, "GB")
+	case strings.HasSuffix(s, "MB"):
+		mult = 1024 * 1024
+		s = strings.TrimSuffix(s, "MB")
+	case strings.HasSuffix(s, "KB"):
+		mult = 1024
+		s = strings.TrimSuffix(s, "KB")
+	case strings.HasSuffix(s, "B"):
+		s = strings.TrimSuffix(s, "B")
+	}
+	v, err := strconv.ParseUint(strings.TrimSpace(s), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse %q: %w", s, err)
+	}
+	return v * mult, nil
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -48,15 +81,21 @@ func main() {
 
 func run() error {
 	var (
-		taskFlag       = flag.String("task", "draft a project plan", "root task description")
-		seedFlag       = flag.Uint64("seed", 42, "PCG seed for randomized sibling dispatch (0 = non-deterministic)")
-		maxDepth       = flag.Int("max-depth", 4, "absolute path-length cap (belt-and-suspenders)")
-		depthBudget    = flag.Int("depth-budget", 3, "per-AP DepthRemaining for the root envelope")
-		configFlag     = flag.String("config", "", "optional .properties config path")
-		hermesFlag     = flag.String("hermes", "", "single-endpoint Hermes BaseURL (e.g. http://127.0.0.1:8642); pass empty to force stub mode")
-		hermesModel    = flag.String("hermes-model", "", "model identifier passed to Hermes (optional)")
-		strictFlag     = flag.Bool("strict", false, "require structured JSON from Hermes (error on parse failure)")
-		verboseFlag    = flag.Bool("v", false, "verbose tracer (slog Info events)")
+		taskFlag         = flag.String("task", "draft a project plan", "root task description")
+		seedFlag         = flag.Uint64("seed", 42, "PCG seed for randomized sibling dispatch (0 = non-deterministic)")
+		maxDepth         = flag.Int("max-depth", 4, "absolute path-length cap (belt-and-suspenders)")
+		depthBudget      = flag.Int("depth-budget", 3, "per-AP DepthRemaining for the root envelope")
+		configFlag       = flag.String("config", "", "optional .properties config path")
+		hermesFlag       = flag.String("hermes", "", "single-endpoint Hermes BaseURL (e.g. http://127.0.0.1:8642); pass empty to force stub mode")
+		hermesModel      = flag.String("hermes-model", "", "model identifier passed to Hermes (optional)")
+		strictFlag       = flag.Bool("strict", false, "require structured JSON from Hermes (error on parse failure)")
+		verboseFlag      = flag.Bool("v", false, "verbose tracer (slog Info events)")
+		maxConcurrency   = flag.Int("max-concurrency", 1, "sibling-concurrent dispatch cap (1 = serial; higher enables goroutine-per-sibling)")
+		vramBudgetFlag   = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 8GB, 4096MB, 8589934592); when set, bypasses platform auto-detection")
+		modelContextSize = flag.Int("model-context-size", 0, "model context window in tokens (0 disables the sliding-window cap)")
+		prefixTokens     = flag.Int("prefix-tokens", 0, "estimated persona+pool+instructions prefix size in tokens; used for VRAM per-session estimate")
+		bytesPerToken    = flag.Uint64("bytes-per-token", 0, "per-token KV-cache cost (default 80000 for 4B fp16; set explicitly for other model sizes)")
+		maxInputBytes    = flag.Int("max-input-bytes", 0, "inhibit any AP whose Input.Content exceeds this byte budget (0 = no cap)")
 	)
 	flag.Parse()
 
@@ -141,14 +180,43 @@ func run() error {
 		session.Budget{TokensRemaining: 32_000, DepthRemaining: *depthBudget},
 	)
 
-	res, err := runner.Run(context.Background(), runner.Config{
-		Adapter:    a,
-		Inhibitor:  inh,
-		Recomposer: recomposer.Concat{Separator: recomposer.DefaultSeparator},
-		Tracer:     tracer,
-		MaxDepth:   *maxDepth,
-		Rand:       prng,
-	}, root)
+	// VRAM probe + estimator wiring. --vram-budget always wins; absent
+	// that, auto-detect via registered probes (NVIDIA, AMD, Apple, Linux).
+	if *vramBudgetFlag != "" {
+		budget, err := parseBytes(*vramBudgetFlag)
+		if err != nil {
+			return fmt.Errorf("--vram-budget: %w", err)
+		}
+		vram.SetOverride(budget)
+		fmt.Fprintf(os.Stderr, "demo: VRAM budget overridden to %d bytes\n", budget)
+	}
+	runnerCfg := runner.Config{
+		Adapter:        a,
+		Inhibitor:      inh,
+		Recomposer:     recomposer.Concat{Separator: recomposer.DefaultSeparator},
+		Tracer:         tracer,
+		MaxDepth:       *maxDepth,
+		Rand:           prng,
+		MaxConcurrency: *maxConcurrency,
+		MaxInputBytes:  *maxInputBytes,
+	}
+	if *maxConcurrency > 1 || *vramBudgetFlag != "" {
+		// Auto-detect probe; honor override when set.
+		runnerCfg.VRAMProbe = vram.Auto()
+		est := vram.DefaultSlidingWindowEstimator()
+		if *bytesPerToken > 0 {
+			est.BytesPerToken = *bytesPerToken
+		}
+		runnerCfg.VRAMEstimator = est
+		runnerCfg.VRAMModel = runner.VRAMModel{
+			Name:         *hermesModel,
+			ContextSize:  *modelContextSize,
+			PrefixTokens: *prefixTokens,
+		}
+		fmt.Fprintf(os.Stderr, "demo: concurrency cap=%d, VRAM-aware throttling=%v\n",
+			*maxConcurrency, runnerCfg.VRAMProbe != nil)
+	}
+	res, err := runner.Run(context.Background(), runnerCfg, root)
 	if err != nil {
 		return fmt.Errorf("run: %w", err)
 	}

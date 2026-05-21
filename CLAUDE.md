@@ -203,6 +203,7 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 - ~~**Judge sampling policy.**~~ 100% on un-grounded, 10% sample on grounded. LOCKED 2026-05-19. See Architecture above.
 - ~~**Pairwise compose mechanism.**~~ Sequential self-chaining off the scope channel, not pre-emission of N-1 compose APs. LOCKED 2026-05-20. See Architecture above and `scratch/design-notes.md`.
 - ~~**Sibling-concurrent dispatch.**~~ Unlocks the original "sync sub-AP emission" lock for siblings *within* a single subtree. Runner gains `Config.MaxConcurrency` (static cap) and optional `Config.VRAMProbe + VRAMEstimator` (dynamic VRAM-aware cap from `pkg/vram`). Strict cancellation on inhibitor.Abort. Parent still blocks on its subtree; cross-subtree async emission still deferred. UNLOCKED 2026-05-21. See Architecture above and `references/vram-platform-coverage.md`.
+- ~~**Shared semantic pool implementation.**~~ Option 1 (locked 2026-05-21): whole pool injected as a stable preamble on every adapter call, operator-curated JSON file backing, mtime-based reload. Soft cap ~2000 tokens; over-budget emits a warning trace, doesn't fail the run. Programmatic writes deferred to a future curation layer. See `oscillitron/pkg/semanticpool` and the per-instance-vs-shared resource lock above.
 
 ### Still open
 

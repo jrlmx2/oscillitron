@@ -12,7 +12,7 @@ The parent project is the source of truth for **what** to build and **why**; thi
 
 ## Status
 
-Stage: **uniform-node refactor complete (Stages 1–6 all landed).** Envelope, adapter, runner, recomposer, Hermes adapter, and demo are all on the uniform-node + evaluate/execute shape (parent CLAUDE.md, scratch/design-notes.md "JSON envelope sketch"). Build is green; full test suite passes across every package.
+Stage: **uniform-node refactor complete (Stages 1–6 all landed); verifier-policy phase ramp wired into the runner.** Envelope, adapter, runner, recomposer, Hermes adapter, and demo are all on the uniform-node + evaluate/execute shape (parent CLAUDE.md, scratch/design-notes.md "JSON envelope sketch"). The verifier policy (locked 2026-05-20) now drives critique injection per return_result child, with parent override and per-action telemetry. Build is green; full test suite passes across every package.
 
 What's here:
 
@@ -34,6 +34,8 @@ What's here:
 - **Cost tracker** (`pkg/cost`) — `Pricing` + `Tracker` with actual + frontier-counterfactual ledgers. Not yet wired into the runner; lands with the real Hermes adapter.
 - **Eval harness** (`pkg/eval`) — decoupled from the orchestrator (Runner is `func(ctx, Task) (string, error)`); no changes needed for the call-tree refactor.
 - **Trace** (`pkg/trace`) — slog-backed `Tracer` with `Info` / `Error` sugar helpers and a `Discard` no-op. Oscillator, runner, and the demo now emit through `trace.Tracer` rather than `*slog.Logger` directly. The fat learning-loop trace record (verifier feedback, retrieval refs, etc.) lives here per the lean-AP-vs-fat-trace split.
+- **Verifier policy** (`pkg/verifier`) — implements the locked-2026-05-20 phase ramp. `Policy.ShouldCritique(action, parentOverride, rand)` returns whether to emit a critique on a return_result. Bootstrap (`invocations < BootstrapThreshold`) → 1.0; steady-state → `max(floor, 1 - happiness_wilson_lower_bound)` over a sliding ring window of judge-sampling agreements. `HappinessScope ∈ {global, per_action}` is runtime-configurable; telemetry is populated for both regardless of which drives the rate. Wilson lower bound uses Acklam's inverse normal CDF approximation (no external math libs). Parent override (envelope.NeedsVerification) forces critique on top of the baseline; suppression by parent is not allowed. v0 defaults via `DefaultConfig()` mirror the lock (10k bootstrap, 15% floor, 2k window, 95% CI, global scope). Judge sampling — the audit layer that feeds happiness — is still seam-reserved; `RecordJudgeAgreement(action, agreed)` is the entry point a future judge layer calls.
+- **Runner verifier integration** — `Config.VerifierPolicy *verifier.Policy` is optional. After each return_result child of an emit_subtree plan resolves cleanly, the runner consults the policy and, if it says yes (or the child's NeedsVerification is set), injects a critique AP into the same scope. The critique's verifier_signal flows into `RunState.VerifierSignals` via the existing category branch; the recomposer never sees it. New counter `RunState.PolicyCritiquesEmitted` distinguishes policy-injected critiques from adapter-emitted ones.
 
 **Deleted (no longer relevant under the uniform-node model):**
 - `pkg/oscillator` — uniform-node lock kills the brain-function-typed wrapper. One adapter handles every AP; the playbook is *picked* by evaluate, not declared.
@@ -43,7 +45,8 @@ What's here:
 What's deliberately NOT here yet:
 
 - Multi-instance Hermes exercised end-to-end — the adapter shape supports it (`ExecuteEndpoints` is keyed by playbook), but the demo only uses `SingleEndpoint` and no smoke-test against N concurrent processes has been done.
-- Verifier policy phase ramp wired into the runner — the verifier policy is locked in design (parent CLAUDE.md), but the runner currently records `VerifierSignals` without sampling-rate / Wilson-lower-bound / per-action telemetry.
+- Judge sampling layer that feeds the verifier policy's happiness signal — `pkg/verifier` exposes `RecordJudgeAgreement(action, agreed)` and the policy honors it, but no audit layer compares local critique verdicts against a frontier judge. The 100%-un-grounded / 10%-grounded sampling locked 2026-05-19 is unbuilt; the policy is exercised only via bootstrap and parent-override paths today.
+- Critique-on-recomposed-bubble — the runner only injects critiques after return_result *children*. A plan's recomposed bubble is not critiqued (would require a v1 compose-as-AP rework).
 - Approval handling — `/v1/runs/{id}/approval`. The adapter rejects approval.request events as inhibited; auto-approval / human-in-the-loop is a later PR.
 - Cost tracker wired into the runner (Hermes adapter records into it on each phase; the runner doesn't yet observe).
 - Real grader implementations beyond substring — LLM-as-judge and rules-DSL graders are seam-reserved but not built.

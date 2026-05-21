@@ -60,6 +60,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
+	"github.com/jrlmx2/oscillitron/pkg/verifier"
 )
 
 // Errors surfaced by Run.
@@ -98,6 +99,14 @@ type Config struct {
 	// ChildIDFn assigns an ID to a fresh child envelope. Required for
 	// trees that emit sub-APs. Defaults to a sequential helper if nil.
 	ChildIDFn func(parent session.Envelope, seedIndex int) session.ID
+	// VerifierPolicy decides whether to inject a critique AP on each
+	// return_result child of an emit_subtree plan. If nil, no critiques
+	// are auto-emitted (only adapter-emitted critique APs run). The
+	// parent override (child seed's NeedsVerification == true) is honored
+	// only when a policy is configured; without a policy, the override is
+	// a no-op since there is no runtime to react to it. The policy is
+	// locked in design 2026-05-20; see pkg/verifier.
+	VerifierPolicy *verifier.Policy
 }
 
 // Result is the return value of Run.
@@ -130,6 +139,11 @@ type RunState struct {
 	EvaluateCount   int
 	ExecuteCount    int
 	InhibitCount    int
+	// PolicyCritiquesEmitted counts critique APs the runner injected
+	// because the verifier policy (or parent override) said so. Distinct
+	// from VerifierSignals (which also counts adapter-emitted critique
+	// APs) and useful for asserting the phase ramp drove the rate.
+	PolicyCritiquesEmitted int
 }
 
 // VerifierSignalRecord is one critique / verify_grounded outcome
@@ -379,6 +393,29 @@ func (r *runner) descend(
 				bubbledPayloads = append(bubbledPayloads, payload)
 			}
 		}
+
+		// Verifier policy: after a return_result resolves, optionally
+		// inject a critique sibling. Skipped for emit_subtree (its
+		// recomposed bubble is what would be critiqued — a v1 concern)
+		// and verifier_signal (no result to critique). Per the locked
+		// design, the critique runs in the *same scope* as the AP it
+		// critiques; its verifier_signal lands in RunState and does not
+		// reach the recomposer.
+		if resolved.Execute != nil && resolved.Execute.Category == session.CategoryReturnResult && !resolved.IsInhibited() {
+			critiqued, cerr := r.maybeInjectCritique(ctx, plan, resolved, scope, childBudget, chainForChildren)
+			if cerr != nil {
+				plan.ExitReason = session.ExitInhibited
+				r.subtree[plan.ID] = resolvedChildren
+				return plan, session.ReturnResultPayload{}, cerr
+			}
+			if critiqued.ID != "" {
+				// Resolved critique is recorded in the subtree under the
+				// plan for trace fidelity. The verifier_signal it produced
+				// is already in r.state.VerifierSignals via resolve's
+				// category branch.
+				resolvedChildren = append(resolvedChildren, critiqued)
+			}
+		}
 	}
 	r.subtree[plan.ID] = resolvedChildren
 
@@ -441,4 +478,78 @@ func defaultChildIDFn() func(session.Envelope, int) session.ID {
 	return func(parent session.Envelope, seedIndex int) session.ID {
 		return session.ID(fmt.Sprintf("%s-c%d", parent.ID, seedIndex))
 	}
+}
+
+// maybeInjectCritique consults the verifier policy after a sibling
+// produces a return_result and, if the policy or the child's
+// NeedsVerification override says so, runs a critique AP on the result.
+// Returns the resolved critique envelope (empty-ID if no critique ran).
+//
+// The critique is dispatched into the same scope as the AP it critiques.
+// Its verifier_signal flows to RunState via resolve's category branch
+// (per the "verifier_signal goes to the runtime, not the next AP" lock),
+// so it never reaches the recomposer.
+func (r *runner) maybeInjectCritique(
+	ctx context.Context,
+	plan session.Envelope,
+	target session.Envelope,
+	scope session.ScopeHandle,
+	budget session.Budget,
+	parentChain []session.Envelope,
+) (session.Envelope, error) {
+	// No policy and no parent override → nothing to do.
+	parentOverride := target.NeedsVerification
+	if r.cfg.VerifierPolicy == nil && !parentOverride {
+		return session.Envelope{}, nil
+	}
+
+	// `action` is what the just-resolved AP did. The policy keys
+	// per_action telemetry off this.
+	var action session.Playbook
+	if target.Evaluate != nil {
+		action = target.Evaluate.Playbook
+	}
+
+	// Even without a policy, an explicit NeedsVerification override
+	// forces a critique. With a policy, the policy decides (and honors
+	// the override on top of the baseline).
+	shouldEmit := parentOverride
+	if r.cfg.VerifierPolicy != nil {
+		shouldEmit = r.cfg.VerifierPolicy.ShouldCritique(action, parentOverride, r.cfg.Rand)
+	}
+	if !shouldEmit {
+		return session.Envelope{}, nil
+	}
+
+	// Build the critique seed. Input carries the result content as the
+	// thing to critique; the adapter's Evaluate is expected to pick
+	// PlaybookCritique for input.kind == "critique_target". OutputSchema
+	// is the verifier verdict shape (pass|fail|issues).
+	seed := session.SubAPSeed{
+		Input: session.Payload{
+			Kind:    "critique_target",
+			Content: target.Execute.ReturnResult.Result.Content,
+		},
+		OutputSchema:      "{verdict, issues}",
+		Classification:    target.Classification,
+		NeedsVerification: false, // no double-critique
+	}
+	critiqueID := session.ID(fmt.Sprintf("%s-critique", target.ID))
+	critique := session.NewChild(&plan, seed, critiqueID, scope, budget)
+
+	resolved, _, err := r.resolve(ctx, critique, &plan, parentChain)
+	if err != nil {
+		trace.Error(r.cfg.Tracer, ctx, "runner.critique_error",
+			slog.String("target_id", string(target.ID)),
+			slog.String("err", err.Error()),
+		)
+		return resolved, err
+	}
+	r.state.PolicyCritiquesEmitted++
+	trace.Info(r.cfg.Tracer, ctx, "runner.critique_emitted",
+		slog.String("target_id", string(target.ID)),
+		slog.String("critique_id", string(resolved.ID)),
+		slog.Bool("parent_override", parentOverride),
+	)
+	return resolved, nil
 }

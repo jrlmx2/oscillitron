@@ -51,6 +51,7 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
+	"github.com/jrlmx2/oscillitron/pkg/semanticpool"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
@@ -131,6 +132,14 @@ type Config struct {
 	// RawExecuteInstructions overrides the adapter's default execute
 	// preamble per playbook. Most callers should leave this empty.
 	RawExecuteInstructions map[session.Playbook]string
+
+	// SemanticPool is the optional shared-knowledge store. When set,
+	// the adapter prepends the pool's rendered preamble to every
+	// call's instructions — a stable, cache-friendly addition (the
+	// prefix stays byte-stable until the operator edits the pool
+	// file). See pkg/semanticpool. Soft cap: 2000 tokens (~8 KB
+	// content); past that the adapter emits a warning trace.
+	SemanticPool semanticpool.Pool
 }
 
 // Adapter is an adapter.Adapter targeting one Hermes instance per
@@ -243,6 +252,7 @@ func (a *Adapter) Evaluate(ctx context.Context, env session.Envelope) (session.E
 	if instructions == "" {
 		instructions = renderEvaluateInstructions(env)
 	}
+	instructions = a.withPoolPreamble(ctx, instructions)
 	raw, usage, err := a.oneRun(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate")
 	if err != nil {
 		return env, err
@@ -304,6 +314,7 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	if instructions == "" {
 		instructions = renderExecuteInstructions(pb, env)
 	}
+	instructions = a.withPoolPreamble(ctx, instructions)
 	raw, usage, err := a.oneRun(ctx, ep, env, instructions, "execute")
 	if err != nil {
 		return env, err
@@ -509,6 +520,38 @@ func (a *Adapter) boundContext(ctx context.Context) (context.Context, context.Ca
 // and returns the resulting Entry. When no tracker is set, returns a
 // zero Entry — callers can stitch its (zero) cost fields onto the
 // envelope without branching.
+// withPoolPreamble prepends the semantic-pool preamble to the
+// given instructions when a Pool is configured. The preamble is
+// byte-stable across calls (the pool reloads only on file mtime
+// change), preserving KV-cache hits at the engine layer.
+//
+// Empty pool → instructions unchanged. Pool read failure → instructions
+// unchanged + a warning trace. Pool over the soft byte budget → also
+// a warning trace.
+func (a *Adapter) withPoolPreamble(ctx context.Context, instructions string) string {
+	if a.cfg.SemanticPool == nil {
+		return instructions
+	}
+	snap, err := a.cfg.SemanticPool.All(ctx)
+	if err != nil {
+		trace.Error(a.cfg.Tracer, ctx, "hermes_semanticpool_read_failed",
+			slog.String("err", err.Error()),
+		)
+		return instructions
+	}
+	if snap.IsOverBudget() {
+		trace.Info(a.cfg.Tracer, ctx, "hermes_semanticpool_over_budget",
+			slog.Int("bytes", snap.TotalBytes()),
+			slog.Int("budget_bytes", semanticpool.SoftByteBudget),
+		)
+	}
+	preamble := semanticpool.RenderPreamble(snap)
+	if preamble == "" {
+		return instructions
+	}
+	return preamble + "\n" + instructions
+}
+
 func (a *Adapter) recordCost(ep Endpoint, usage tokenUsage) cost.Entry {
 	if a.cfg.Cost == nil || (usage.input == 0 && usage.output == 0) {
 		return cost.Entry{}

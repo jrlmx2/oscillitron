@@ -13,6 +13,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
+	"github.com/jrlmx2/oscillitron/pkg/verifier"
 )
 
 // fakeRecomposer joins all children's Result.Content with " | " and
@@ -456,6 +457,240 @@ func TestRun_RandomizedDispatchVariesAcrossSeeds(t *testing.T) {
 	}
 	if sameTail {
 		t.Errorf("two different seeds produced identical child order: %v", a)
+	}
+}
+
+// --- Verifier policy integration tests ---
+
+// verifierPolicyAdapter wires the stub adapter for a plan + 2 process
+// children, plus a critique playbook that fires whenever the runner
+// injects a critique AP (input.kind == "critique_target").
+func verifierPolicyAdapter(t *testing.T) *stub.Adapter {
+	t.Helper()
+	return stub.New("agent").
+		WithEvaluator(func(env session.Envelope) (session.Playbook, float64) {
+			switch env.Input.Kind {
+			case "critique_target":
+				return session.PlaybookCritique, 0.95
+			}
+			if env.Input.Content == "go" {
+				return session.PlaybookPlan, 0.9
+			}
+			return session.PlaybookProcess, 0.9
+		}).
+		WithReturnResult(session.PlaybookProcess,
+			session.Payload{Kind: "result", Content: "result"}, 0.8).
+		WithVerifierSignal(session.PlaybookCritique, session.VerdictPass)
+}
+
+func TestRun_VerifierPolicy_BootstrapEmitsCritiqueForEveryChild(t *testing.T) {
+	// Plan emits 3 process children. Bootstrap threshold of 1000 means
+	// the policy is in bootstrap for the entire run → critique fires
+	// on every return_result.
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+		{Input: session.Payload{Kind: "task", Content: "b"}},
+		{Input: session.Payload{Kind: "task", Content: "c"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 1000,
+		SlidingWindow:      100,
+		ConfidenceLevel:    0.95,
+		Floor:              0.15,
+		HappinessScope:     verifier.ScopeGlobal,
+	})
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.PolicyCritiquesEmitted != 3 {
+		t.Errorf("PolicyCritiquesEmitted = %d, want 3 (bootstrap forces critique on all 3)",
+			res.State.PolicyCritiquesEmitted)
+	}
+	if len(res.State.VerifierSignals) != 3 {
+		t.Errorf("VerifierSignals = %d, want 3", len(res.State.VerifierSignals))
+	}
+	// Critiques must NOT feed the recomposer.
+	if len(rec.lastChildren) != 3 {
+		t.Errorf("recomposer received %d children, want 3 (critiques excluded)",
+			len(rec.lastChildren))
+	}
+}
+
+func TestRun_VerifierPolicy_ParentOverrideForcesCritiquePostBootstrap(t *testing.T) {
+	// Steady-state policy at the floor (0.15). With seeded rand and 200
+	// children, none of the rolls would (probabilistically) hit. But one
+	// seed has NeedsVerification: true — parent override forces critique
+	// for that child specifically.
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+		{Input: session.Payload{Kind: "task", Content: "b"}, NeedsVerification: true},
+		{Input: session.Payload{Kind: "task", Content: "c"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 0,
+		SlidingWindow:      500,
+		ConfidenceLevel:    0.95,
+		Floor:              0.0001, // effectively 0 so the override path is the only critique source
+		HappinessScope:     verifier.ScopeGlobal,
+	})
+	// Saturate happiness: judge always agrees → steady-state rate near 0.
+	for i := 0; i < 500; i++ {
+		pol.RecordJudgeAgreement(session.PlaybookProcess, true)
+	}
+
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// At least 1 critique — the parent-override seed must fire one.
+	if res.State.PolicyCritiquesEmitted < 1 {
+		t.Errorf("PolicyCritiquesEmitted = %d, want >=1 from parent override",
+			res.State.PolicyCritiquesEmitted)
+	}
+	// At least one verifier signal recorded; corresponds to the override.
+	if len(res.State.VerifierSignals) < 1 {
+		t.Errorf("VerifierSignals = %d, want >=1", len(res.State.VerifierSignals))
+	}
+}
+
+func TestRun_VerifierPolicy_NoPolicyAndNoOverride_NoCritique(t *testing.T) {
+	// No VerifierPolicy on Config, no NeedsVerification on seeds → no
+	// auto-critique is injected. The runner falls back to the prior
+	// behavior (only adapter-emitted critiques exist).
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+		{Input: session.Payload{Kind: "task", Content: "b"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.PolicyCritiquesEmitted != 0 {
+		t.Errorf("PolicyCritiquesEmitted = %d, want 0 (no policy)",
+			res.State.PolicyCritiquesEmitted)
+	}
+	if len(res.State.VerifierSignals) != 0 {
+		t.Errorf("VerifierSignals = %d, want 0 (adapter only emits process)",
+			len(res.State.VerifierSignals))
+	}
+}
+
+func TestRun_VerifierPolicy_OverrideWithoutPolicyStillFires(t *testing.T) {
+	// No VerifierPolicy but seed has NeedsVerification: true. The
+	// override is honored — a critique is injected.
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}, NeedsVerification: true},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.PolicyCritiquesEmitted != 1 {
+		t.Errorf("PolicyCritiquesEmitted = %d, want 1 (override forces)",
+			res.State.PolicyCritiquesEmitted)
+	}
+}
+
+func TestRun_VerifierPolicy_PerActionScope_TelemetryTracksBoth(t *testing.T) {
+	// Use per_action happiness scope. Run a few children; check that
+	// telemetry has populated both global and per-action streams for
+	// the process action.
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+		{Input: session.Payload{Kind: "task", Content: "b"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{
+		BootstrapThreshold: 1000,
+		SlidingWindow:      500,
+		ConfidenceLevel:    0.95,
+		Floor:              0.15,
+		HappinessScope:     verifier.ScopePerAction,
+	})
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	_, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	tel := pol.Telemetry()
+	if tel.Scope != verifier.ScopePerAction {
+		t.Errorf("Scope = %q, want per_action", tel.Scope)
+	}
+	if tel.Global.Invocations != 2 {
+		t.Errorf("Global.Invocations = %d, want 2 (two policy consultations)",
+			tel.Global.Invocations)
+	}
+	if pa, ok := tel.PerAction[session.PlaybookProcess]; !ok || pa.Invocations != 2 {
+		t.Errorf("per-action process telemetry missing or wrong: %+v", pa)
+	}
+}
+
+func TestRun_VerifierPolicy_CritiqueRecordedInSubtree(t *testing.T) {
+	seeds := []session.SubAPSeed{
+		{Input: session.Payload{Kind: "task", Content: "a"}},
+	}
+	a := verifierPolicyAdapter(t).
+		WithEmitSubtree(session.PlaybookPlan, session.RecomposeSequential, seeds...)
+
+	pol := verifier.New(verifier.Config{BootstrapThreshold: 1000, SlidingWindow: 100, Floor: 0.15, ConfidenceLevel: 0.95, HappinessScope: verifier.ScopeGlobal})
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, VerifierPolicy: pol,
+		Tracer: trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Plan's subtree should include the process child AND the critique.
+	got := res.Subtree[root.ID]
+	if len(got) != 2 {
+		t.Fatalf("subtree[plan] children = %d, want 2 (process + critique)", len(got))
+	}
+	// One of the two should be a critique with verifier_signal category.
+	foundCritique := false
+	for _, child := range got {
+		if child.Execute != nil && child.Execute.Category == session.CategoryVerifierSignal {
+			foundCritique = true
+		}
+	}
+	if !foundCritique {
+		t.Errorf("expected a verifier_signal child in plan's subtree; got %+v", got)
 	}
 }
 

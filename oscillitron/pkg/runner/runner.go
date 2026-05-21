@@ -135,16 +135,33 @@ type Config struct {
 	// uses judge.DefaultSamplePolicy().
 	JudgeSampler *judge.Sampler
 	// MaxConcurrency caps the number of sibling APs in flight at one
-	// time during emit_subtree dispatch. 0 or 1 = serial (the v0
-	// default; backwards-compatible). >1 enables goroutine-based
-	// sibling concurrency with strict cancellation on inhibitor.Abort
-	// — the first sibling to fire Abort cancels the others via context.
+	// time during emit_subtree dispatch.
+	//
+	//   - 0 (MaxConcurrencyAuto, the default): library-managed — the
+	//     runner auto-derives the cap from VRAM headroom each
+	//     dispatch wave, bounded above by MaxConcurrencyCeiling.
+	//   - 1: strict serial dispatch. Use when you explicitly want
+	//     no concurrency (deterministic tests, debugging).
+	//   - N>1: static cap at N. If VRAM probing is also configured,
+	//     the effective cap is min(N, vram-derived) — whichever is
+	//     tighter wins.
+	//
+	// Strict cancellation: the first sibling to fire inhibitor.Abort
+	// cancels the others via context.
 	//
 	// Per the parent CLAUDE.md "sibling concurrent dispatch" unlock,
-	// the runner can run siblings in parallel but the parent still
+	// the runner runs siblings in parallel but the parent still
 	// blocks on the whole subtree before returning. Async sub-AP
 	// emission across subtrees stays deferred.
 	MaxConcurrency int
+	// MaxConcurrencyCeiling is the hard ceiling on auto-derived
+	// concurrency (the MaxConcurrencyAuto path). Defaults to
+	// DefaultMaxConcurrencyCeiling (8). Prevents pathological
+	// resource use when VRAM is abundant — the inference engine and
+	// per-session overhead don't scale linearly with goroutine count.
+	// Ignored when MaxConcurrency is set to an explicit value (1 or
+	// N>1).
+	MaxConcurrencyCeiling int
 	// VRAMProbe + VRAMEstimator + VRAMModel together compute a
 	// dynamic concurrency cap each dispatch wave:
 	//
@@ -259,6 +276,38 @@ type VerifierSignalRecord struct {
 	Issues  []session.Issue
 }
 
+// MaxConcurrencyAuto is the sentinel value for Config.MaxConcurrency
+// that asks the runner to derive the concurrency cap automatically
+// from VRAM headroom. This is the default (zero-value) — operators
+// who want strict serial dispatch must set MaxConcurrency=1 explicitly.
+//
+// The library treats "operator forgot to configure concurrency" as
+// "operator wants the library to manage it safely" — the alternative
+// (default to serial, force operators to opt into concurrency) is
+// safe but underutilizes hardware silently, and the alternative
+// (default to N>1 concurrent, force operators to opt out) is
+// dangerous if hardware can't support it. Auto-derivation gets both
+// halves right.
+const MaxConcurrencyAuto = 0
+
+// DefaultMaxConcurrencyCeiling is the hard safety cap on auto-derived
+// concurrency. Even with abundant VRAM, the runner never spawns more
+// goroutines than this — the inference engine and the Hermes-side
+// per-session overhead don't scale linearly with concurrency, so a
+// ceiling prevents pathological resource use. Operators can override
+// via Config.MaxConcurrencyCeiling.
+const DefaultMaxConcurrencyCeiling = 8
+
+// DefaultVRAMModel is a conservative default the runner uses when the
+// operator hasn't supplied a VRAMModel. Sized for a 4B fp16 model
+// with a small KV-cache budget. Wrong defaults bias toward
+// under-utilization (safe) rather than OOM (dangerous).
+var DefaultVRAMModel = VRAMModel{
+	Name:         "auto-default-4b",
+	ContextSize:  4096,
+	PrefixTokens: 2000, // post-slim-down ballpark from references/hermes-persona-slim-down.md
+}
+
 // Run walks the call tree from root and returns the Result.
 func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error) {
 	if cfg.Adapter == nil {
@@ -272,6 +321,27 @@ func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error)
 	}
 	if cfg.ChildIDFn == nil {
 		cfg.ChildIDFn = defaultChildIDFn()
+	}
+
+	// Auto-manage VRAM throttling when the operator hasn't configured
+	// it. The default (MaxConcurrencyAuto + nil probe + nil estimator)
+	// gets the library-managed behavior: detect VRAM, derive a safe
+	// concurrency cap, throttle as conditions change. Operators
+	// override by setting any of the fields explicitly.
+	autoVRAM := cfg.VRAMProbe == nil && cfg.VRAMEstimator == nil
+	if autoVRAM {
+		cfg.VRAMProbe = vram.Auto()
+		cfg.VRAMEstimator = vram.DefaultSlidingWindowEstimator()
+	}
+	// VRAMModel defaults apply whenever it's zero, not just on the
+	// full auto path — an operator wiring a custom probe + estimator
+	// shouldn't end up with a zero per-session estimate just because
+	// they didn't think to set the model fields.
+	if cfg.VRAMModel == (VRAMModel{}) && cfg.VRAMProbe != nil && cfg.VRAMEstimator != nil {
+		cfg.VRAMModel = DefaultVRAMModel
+	}
+	if cfg.MaxConcurrencyCeiling <= 0 {
+		cfg.MaxConcurrencyCeiling = DefaultMaxConcurrencyCeiling
 	}
 
 	r := &runner{
@@ -741,63 +811,83 @@ func decisionString(d inhibitor.Decision) string {
 // defaultChildIDFn returns a closure that assigns sequential
 // child IDs of the form "<parent_id>-c<seed_index>".
 // computeConcurrency derives the actual sibling-concurrency cap for
-// this dispatch wave. It's the minimum of:
-//   - Config.MaxConcurrency (the static operator cap; 0/1 disable concurrency entirely)
-//   - VRAM-derived headroom (when probe + estimator are wired): floor(available / per_session_est)
-//   - len(siblings) (no point spawning more workers than children)
+// this dispatch wave. The math depends on whether MaxConcurrency is
+// auto (0) or explicit (>=1):
 //
-// Returns 1 (serial) when the static cap is <=1 OR the VRAM math says
-// "not enough for two concurrent sessions." The runner traces the
-// chosen value so operators can see throttling at work.
+//   - MaxConcurrency=1 → 1 (strict serial; honors operator intent).
+//   - MaxConcurrency>1 → min(MaxConcurrency, VRAM-derived if available, siblings).
+//   - MaxConcurrency=0 (auto) → VRAM-derived cap (with hard ceiling
+//     MaxConcurrencyCeiling), clamped to [1, siblings]. If the VRAM
+//     probe fails or returns no useful info, falls back to 1 (safest).
+//
+// The traces emitted let operators see which path the runner took:
+// runner.vram_dynamic_cap for the auto + explicit-with-VRAM paths,
+// runner.vram_probe_failed when the probe errored.
 func (r *runner) computeConcurrency(ctx context.Context, siblings int) int {
 	if siblings <= 1 {
 		return 1
 	}
-	static := r.cfg.MaxConcurrency
-	if static <= 0 {
-		static = 1
+	auto := r.cfg.MaxConcurrency == MaxConcurrencyAuto
+	if !auto && r.cfg.MaxConcurrency <= 1 {
+		return 1 // explicit strict-serial
 	}
-	if static <= 1 {
-		return 1
-	}
-	cap := static
-	if cap > siblings {
-		cap = siblings
-	}
-	// VRAM-derived cap, if configured.
+
+	// VRAM-derived cap. Always consulted when probe + estimator are
+	// configured (which the auto-management defaults guarantee).
+	vramCap := -1
 	if r.cfg.VRAMProbe != nil && r.cfg.VRAMEstimator != nil {
 		report, err := r.cfg.VRAMProbe.Probe(ctx)
 		if err != nil {
 			trace.Error(r.cfg.Tracer, ctx, "runner.vram_probe_failed",
 				slog.String("err", err.Error()),
 			)
-			// Fall through with the static cap — probe failure is non-fatal.
-			return cap
+		} else {
+			est := r.cfg.VRAMEstimator.Estimate(vram.SessionEstimate{
+				Model:        r.cfg.VRAMModel.Name,
+				PrefixTokens: r.cfg.VRAMModel.PrefixTokens,
+				ContextSize:  r.cfg.VRAMModel.ContextSize,
+			})
+			if est > 0 {
+				vramCap = int(report.AvailableBytes / est)
+				if vramCap < 1 {
+					vramCap = 1
+				}
+				trace.Info(r.cfg.Tracer, ctx, "runner.vram_dynamic_cap",
+					slog.String("source", string(report.Source)),
+					slog.Uint64("available_bytes", report.AvailableBytes),
+					slog.Uint64("est_per_session_bytes", est),
+					slog.Int("dynamic_cap", vramCap),
+				)
+			}
 		}
-		est := r.cfg.VRAMEstimator.Estimate(vram.SessionEstimate{
-			Model:        r.cfg.VRAMModel.Name,
-			PrefixTokens: r.cfg.VRAMModel.PrefixTokens,
-			ContextSize:  r.cfg.VRAMModel.ContextSize,
-		})
-		if est == 0 {
-			// Estimator returned zero (e.g., new session with global
-			// prefix cache); no per-session cost to throttle against.
-			return cap
+	}
+
+	var cap int
+	switch {
+	case auto:
+		// Auto path: VRAM-derived cap, clamped by the safety ceiling.
+		// If VRAM info is unavailable, fall back to serial — that's
+		// the safe choice when we can't measure.
+		if vramCap < 0 {
+			trace.Info(r.cfg.Tracer, ctx, "runner.concurrency_fallback_serial",
+				slog.String("reason", "no VRAM signal in auto-managed mode"),
+			)
+			return 1
 		}
-		dynamic := int(report.AvailableBytes / est)
-		if dynamic < 1 {
-			dynamic = 1
+		cap = vramCap
+		if ceiling := r.cfg.MaxConcurrencyCeiling; ceiling > 0 && cap > ceiling {
+			cap = ceiling
 		}
-		trace.Info(r.cfg.Tracer, ctx, "runner.vram_dynamic_cap",
-			slog.String("source", string(report.Source)),
-			slog.Uint64("available_bytes", report.AvailableBytes),
-			slog.Uint64("est_per_session_bytes", est),
-			slog.Int("dynamic_cap", dynamic),
-			slog.Int("static_cap", cap),
-		)
-		if dynamic < cap {
-			cap = dynamic
+	default:
+		// Explicit MaxConcurrency > 1. VRAM-derived cap further tightens
+		// when available.
+		cap = r.cfg.MaxConcurrency
+		if vramCap > 0 && vramCap < cap {
+			cap = vramCap
 		}
+	}
+	if cap > siblings {
+		cap = siblings
 	}
 	if cap < 1 {
 		cap = 1

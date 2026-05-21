@@ -56,6 +56,7 @@ import (
 	"math/rand/v2"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
+	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
@@ -107,6 +108,13 @@ type Config struct {
 	// a no-op since there is no runtime to react to it. The policy is
 	// locked in design 2026-05-20; see pkg/verifier.
 	VerifierPolicy *verifier.Policy
+	// Cost is an optional observer of the cost ledger the adapter writes
+	// into. When set, RunState.CostSummary is populated from this
+	// tracker after Run returns. The runner itself does not call Record;
+	// adapters do that (see pkg/adapter/hermes). Wiring the tracker here
+	// is purely so callers have one entry point for call-tree state and
+	// aggregate cost.
+	Cost *cost.Tracker
 }
 
 // Result is the return value of Run.
@@ -144,6 +152,9 @@ type RunState struct {
 	// from VerifierSignals (which also counts adapter-emitted critique
 	// APs) and useful for asserting the phase ramp drove the rate.
 	PolicyCritiquesEmitted int
+	// CostSummary is populated from Config.Cost.Summary() at the end of
+	// Run when a tracker is wired. Zero-valued when no tracker is set.
+	CostSummary cost.Summary
 }
 
 // VerifierSignalRecord is one critique / verify_grounded outcome
@@ -176,6 +187,9 @@ func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error)
 	}
 
 	resolved, payload, err := r.resolve(ctx, root, nil, nil)
+	if cfg.Cost != nil {
+		r.state.CostSummary = cfg.Cost.Summary()
+	}
 	if err != nil {
 		return Result{Root: resolved, State: *r.state, Subtree: r.subtree}, err
 	}

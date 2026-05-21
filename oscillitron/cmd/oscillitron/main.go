@@ -90,11 +90,12 @@ func run() error {
 		hermesModel      = flag.String("hermes-model", "", "model identifier passed to Hermes (optional)")
 		strictFlag       = flag.Bool("strict", false, "require structured JSON from Hermes (error on parse failure)")
 		verboseFlag      = flag.Bool("v", false, "verbose tracer (slog Info events)")
-		maxConcurrency   = flag.Int("max-concurrency", 1, "sibling-concurrent dispatch cap (1 = serial; higher enables goroutine-per-sibling)")
-		vramBudgetFlag   = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 8GB, 4096MB, 8589934592); when set, bypasses platform auto-detection")
-		modelContextSize = flag.Int("model-context-size", 0, "model context window in tokens (0 disables the sliding-window cap)")
-		prefixTokens     = flag.Int("prefix-tokens", 0, "estimated persona+pool+instructions prefix size in tokens; used for VRAM per-session estimate")
-		bytesPerToken    = flag.Uint64("bytes-per-token", 0, "per-token KV-cache cost (default 80000 for 4B fp16; set explicitly for other model sizes)")
+		maxConcurrency   = flag.Int("max-concurrency", 0, "sibling-concurrent dispatch cap: 0 = library-managed (auto-derived from detected VRAM, bounded by --max-concurrency-ceiling), 1 = strict serial, N>1 = static cap (still tightened by VRAM)")
+		ceilingFlag      = flag.Int("max-concurrency-ceiling", 0, "hard safety cap on auto-derived concurrency (0 = use runner default of 8)")
+		vramBudgetFlag   = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 8GB, 4096MB, 8589934592); when set, bypasses platform auto-detection. Absent → library auto-detects via nvidia-smi / rocm-smi / Apple unified / Linux DRM / /proc/meminfo")
+		modelContextSize = flag.Int("model-context-size", 0, "model context window in tokens (0 = use runner default of 4096)")
+		prefixTokens     = flag.Int("prefix-tokens", 0, "estimated persona+pool+instructions prefix size in tokens; used for VRAM per-session estimate (0 = use runner default of 2000)")
+		bytesPerToken    = flag.Uint64("bytes-per-token", 0, "per-token KV-cache cost (0 = use estimator default of 80000 for 4B fp16)")
 		maxInputBytes    = flag.Int("max-input-bytes", 0, "inhibit any AP whose Input.Content exceeds this byte budget (0 = no cap)")
 	)
 	flag.Parse()
@@ -180,8 +181,14 @@ func run() error {
 		session.Budget{TokensRemaining: 32_000, DepthRemaining: *depthBudget},
 	)
 
-	// VRAM probe + estimator wiring. --vram-budget always wins; absent
-	// that, auto-detect via registered probes (NVIDIA, AMD, Apple, Linux).
+	// VRAM management is library-managed by default — the runner
+	// auto-constructs vram.Auto() + DefaultSlidingWindowEstimator
+	// when no probe/estimator is set. Operator overrides are forwarded
+	// here when supplied:
+	//   --vram-budget        → vram.SetOverride (pins available bytes)
+	//   --bytes-per-token    → custom estimator
+	//   --model-context-size → VRAMModel.ContextSize override
+	//   --prefix-tokens      → VRAMModel.PrefixTokens override
 	if *vramBudgetFlag != "" {
 		budget, err := parseBytes(*vramBudgetFlag)
 		if err != nil {
@@ -191,30 +198,40 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "demo: VRAM budget overridden to %d bytes\n", budget)
 	}
 	runnerCfg := runner.Config{
-		Adapter:        a,
-		Inhibitor:      inh,
-		Recomposer:     recomposer.Concat{Separator: recomposer.DefaultSeparator},
-		Tracer:         tracer,
-		MaxDepth:       *maxDepth,
-		Rand:           prng,
-		MaxConcurrency: *maxConcurrency,
-		MaxInputBytes:  *maxInputBytes,
+		Adapter:               a,
+		Inhibitor:             inh,
+		Recomposer:            recomposer.Concat{Separator: recomposer.DefaultSeparator},
+		Tracer:                tracer,
+		MaxDepth:              *maxDepth,
+		Rand:                  prng,
+		MaxConcurrency:        *maxConcurrency,
+		MaxConcurrencyCeiling: *ceilingFlag,
+		MaxInputBytes:         *maxInputBytes,
 	}
-	if *maxConcurrency > 1 || *vramBudgetFlag != "" {
-		// Auto-detect probe; honor override when set.
-		runnerCfg.VRAMProbe = vram.Auto()
-		est := vram.DefaultSlidingWindowEstimator()
-		if *bytesPerToken > 0 {
-			est.BytesPerToken = *bytesPerToken
-		}
-		runnerCfg.VRAMEstimator = est
+	// Forward operator overrides to the runner's VRAMModel. Zero
+	// values leave the runner's defaults intact (4096 context, 2000
+	// prefix tokens — see runner.DefaultVRAMModel).
+	if *modelContextSize > 0 || *prefixTokens > 0 || *hermesModel != "" {
 		runnerCfg.VRAMModel = runner.VRAMModel{
 			Name:         *hermesModel,
 			ContextSize:  *modelContextSize,
 			PrefixTokens: *prefixTokens,
 		}
-		fmt.Fprintf(os.Stderr, "demo: concurrency cap=%d, VRAM-aware throttling=%v\n",
-			*maxConcurrency, runnerCfg.VRAMProbe != nil)
+	}
+	// Forward custom BytesPerToken to a fresh estimator. Otherwise
+	// the runner's auto-default (DefaultSlidingWindowEstimator) wins.
+	if *bytesPerToken > 0 {
+		est := vram.DefaultSlidingWindowEstimator()
+		est.BytesPerToken = *bytesPerToken
+		runnerCfg.VRAMEstimator = est
+	}
+	switch *maxConcurrency {
+	case 0:
+		fmt.Fprintln(os.Stderr, "demo: library-managed concurrency (auto-derived from VRAM)")
+	case 1:
+		fmt.Fprintln(os.Stderr, "demo: strict serial dispatch (MaxConcurrency=1)")
+	default:
+		fmt.Fprintf(os.Stderr, "demo: static concurrency cap=%d (tightened by VRAM when available)\n", *maxConcurrency)
 	}
 	res, err := runner.Run(context.Background(), runnerCfg, root)
 	if err != nil {

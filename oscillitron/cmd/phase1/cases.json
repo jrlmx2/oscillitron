@@ -1,0 +1,46 @@
+{
+  "_comment": "CLAUDE GENERATED. Phase 1 email-drafting workload — mundane office tasks with a nuance twist. Each case has an email thread plus a one-line intent that constrains the draft (tone, what to include/omit, what to ignore). Grading hits 4 dimensions: relevance, tone, completeness, professionalism.",
+  "cases": [
+    {
+      "id": "case-001-decline-vp-friday",
+      "email": "From: Priya Shah <priya@example.com>\nTo: me\nSubject: Q4 budget deep-dive — Friday 3pm?\n\nHi —\n\nI'd like to walk through the Q4 spend with you before the board meeting next Tuesday. Friday at 3pm works for me. If not, Monday morning at 9 is my backup.\n\nThanks,\nPriya",
+      "intent": "Decline Friday 3pm (I have my kid's recital). Confirm Monday at 9. Keep it warm — Priya is a VP and we have a good relationship, but don't over-explain the personal reason."
+    },
+    {
+      "id": "case-002-clarify-vague-ask",
+      "email": "From: Junior PM <pm@example.com>\nTo: me\nSubject: re: status update\n\nHey can you send me an update?",
+      "intent": "Ask for clarification — what update, by when, for which audience. Stay friendly but get the questions answered. Don't apologize for asking."
+    },
+    {
+      "id": "case-003-firm-late-vendor",
+      "email": "From: Vendor Sales <sales@vendor.example>\nTo: me\nSubject: Re: Re: Re: invoice #4471 — past due\n\nHi! Just circling back on this — wondering if there's an update on payment? Let me know if you need anything from our side!",
+      "intent": "I've already told them three times that payment is held pending the contract amendment they owe us. Be firm and direct without being rude. Reiterate the blocker; stop the loop."
+    },
+    {
+      "id": "case-004-redirect-wrong-recipient",
+      "email": "From: Director of Eng <director@example.com>\nTo: me, +5 others\nSubject: Outage retro — owner?\n\nWho's writing the retro for the Tuesday incident? I'd like a draft by EOW.",
+      "intent": "I'm not the owner — that's Sam's team. Reply-all so the director knows and Sam is on the hook. Don't throw Sam under the bus; just route the request cleanly."
+    },
+    {
+      "id": "case-005-acknowledge-and-defer",
+      "email": "From: Engineer <eng@example.com>\nTo: me\nSubject: Refactor proposal\n\n[Long technical proposal about restructuring the auth service — 2 pages. Has merit but is a quarter-sized project.]\n\nThoughts? Want to schedule a working session?",
+      "intent": "Acknowledge the thinking, signal genuine interest, but defer until after the launch in 3 weeks. Don't dismiss; don't commit to a timeline I can't keep. Avoid LLM-typical praise-sandwich phrasing.",
+      "_truncated_for_corpus": "the email body would be a real 2-page proposal in a real case; we elide it here so the corpus stays readable"
+    },
+    {
+      "id": "case-006-schedule-with-ambiguous-urgency",
+      "email": "From: CEO <ceo@example.com>\nTo: me\nSubject: 15 min?\n\nGot a few minutes this week?",
+      "intent": "Offer specific time slots — don't ask back. Be brief (CEO is famously terse). Don't ask what it's about; just respond as if I trust the request."
+    },
+    {
+      "id": "case-007-pushback-on-scope-creep",
+      "email": "From: Customer Success <cs@example.com>\nTo: me\nSubject: One small ask\n\nHey — customer is asking if we can add SSO support before contract renewal next month. Should be quick, right?\n\nThanks!",
+      "intent": "SSO is not quick. Push back on the framing without making CS feel attacked — they're the messenger. Surface what 'small' actually means in eng-weeks and propose a real conversation."
+    },
+    {
+      "id": "case-008-thank-you-but-no",
+      "email": "From: Recruiter <recruiter@another-company.example>\nTo: me\nSubject: Senior eng role at <Company> — interested?\n\n[Pitch about an interesting senior role with comp range and team description.]",
+      "intent": "I'm not looking. Decline graciously — recruiters network. Don't engage on specifics (no comp questions, no 'maybe in 6 months'). Two lines max."
+    }
+  ]
+}

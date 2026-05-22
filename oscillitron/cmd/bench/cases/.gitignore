@@ -1,0 +1,8 @@
+# CLAUDE GENERATED
+# Operator-downloaded benchmark datasets are licensed by their authors;
+# don't commit them. README files in this directory are tracked.
+*.json
+*.csv
+*.parquet
+*.jsonl
+!*.example.json

@@ -134,73 +134,37 @@ type Config struct {
 	// rates (locked 2026-05-19). If nil while Judge is set, the runner
 	// uses judge.DefaultSamplePolicy().
 	JudgeSampler *judge.Sampler
-	// MaxConcurrency caps the number of sibling APs in flight at one
-	// time during emit_subtree dispatch.
+	// Governor optionally coordinates VRAM headroom with every other
+	// component hitting the same inference substrate (grader, bench
+	// drivers, anything else calling the adapter through this runner).
 	//
-	//   - 0 (MaxConcurrencyAuto, the default): library-managed — the
-	//     runner auto-derives the cap from VRAM headroom each
-	//     dispatch wave, bounded above by MaxConcurrencyCeiling.
-	//   - 1: strict serial dispatch. Use when you explicitly want
-	//     no concurrency (deterministic tests, debugging).
-	//   - N>1: static cap at N. If VRAM probing is also configured,
-	//     the effective cap is min(N, vram-derived) — whichever is
-	//     tighter wins.
+	// When set, the runner Acquires a lease around each AP's
+	// Evaluate+Execute window and Releases before descending (so
+	// children claim their own slots — holding through descend would
+	// deadlock at depth ≥ ceiling). The runner does NOT own VRAM
+	// configuration — the governor self-manages probe, estimator,
+	// ModelSpec, ceiling, and reserve. The runner just consults it.
+	//
+	// Nil = no VRAM management (operator's explicit opt-out, fine for
+	// tests; in production wire a Governor or accept the consequences).
+	Governor *vram.Governor
+	// MaxConcurrency caps the number of sibling goroutines in flight
+	// during emit_subtree dispatch.
+	//
+	//   - 0: no per-wave goroutine cap (governor's per-call Acquire
+	//     still serializes inflight calls per its budget).
+	//   - 1: strict serial dispatch.
+	//   - N>1: cap at N siblings concurrent. If a Governor is also
+	//     wired, the effective cap is min(N, governor.Ceiling).
 	//
 	// Strict cancellation: the first sibling to fire inhibitor.Abort
 	// cancels the others via context.
-	//
-	// Per the parent CLAUDE.md "sibling concurrent dispatch" unlock,
-	// the runner runs siblings in parallel but the parent still
-	// blocks on the whole subtree before returning. Async sub-AP
-	// emission across subtrees stays deferred.
 	MaxConcurrency int
-	// MaxConcurrencyCeiling is the hard ceiling on auto-derived
-	// concurrency (the MaxConcurrencyAuto path). Defaults to
-	// DefaultMaxConcurrencyCeiling (8). Prevents pathological
-	// resource use when VRAM is abundant — the inference engine and
-	// per-session overhead don't scale linearly with goroutine count.
-	// Ignored when MaxConcurrency is set to an explicit value (1 or
-	// N>1).
-	MaxConcurrencyCeiling int
-	// VRAMProbe + VRAMEstimator + VRAMModel together compute a
-	// dynamic concurrency cap each dispatch wave:
-	//
-	//   cap = max(1, VRAMProbe.Probe().Available / VRAMEstimator.Estimate(...))
-	//
-	// The dynamic cap is the *minimum* of MaxConcurrency and the
-	// VRAM-derived number; whichever is tighter wins. Set all three to
-	// enable VRAM-aware throttling; leave any of them nil to fall back
-	// to the static MaxConcurrency only.
-	VRAMProbe     vram.Probe
-	VRAMEstimator vram.Estimator
-	// VRAMModel describes the model the adapter is talking to. Used by
-	// the estimator's SessionEstimate.Model and ContextSize fields.
-	// Pass {ContextSize: 0} to disable the sliding-window cap.
-	VRAMModel VRAMModel
 	// MaxInputBytes optionally caps the size of an AP envelope's
 	// Input.Content. Calls exceeding the budget are inhibited with
 	// "input_bytes_exceeded" — surfaces prompt bloat as a test failure
 	// rather than silent VRAM growth. 0 = no cap.
 	MaxInputBytes int
-}
-
-// VRAMModel describes the model the adapter is talking to, for the
-// estimator's per-session math. Operator-supplied — there's no
-// reliable way to introspect this from a Hermes endpoint, and getting
-// it wrong matters more than getting it from a config flag.
-type VRAMModel struct {
-	// Name is the model identifier for trace records.
-	Name string
-	// ContextSize is the hard context-window ceiling (tokens). Passed
-	// through to the estimator as the sliding-window cap.
-	ContextSize int
-	// PrefixTokens is the persona + (optional) semantic pool +
-	// per-playbook instructions prefix size in tokens. Operator-
-	// supplied because the prefix is constructed in Hermes before
-	// Oscillitron sees it. Use 0 to leave the prefix out of the
-	// estimate; this is conservative (estimator over-allocates per
-	// session, dynamic cap is tighter than it needs to be).
-	PrefixTokens int
 }
 
 // Result is the return value of Run.
@@ -276,39 +240,15 @@ type VerifierSignalRecord struct {
 	Issues  []session.Issue
 }
 
-// MaxConcurrencyAuto is the sentinel value for Config.MaxConcurrency
-// that asks the runner to derive the concurrency cap automatically
-// from VRAM headroom. This is the default (zero-value) — operators
-// who want strict serial dispatch must set MaxConcurrency=1 explicitly.
-//
-// The library treats "operator forgot to configure concurrency" as
-// "operator wants the library to manage it safely" — the alternative
-// (default to serial, force operators to opt into concurrency) is
-// safe but underutilizes hardware silently, and the alternative
-// (default to N>1 concurrent, force operators to opt out) is
-// dangerous if hardware can't support it. Auto-derivation gets both
-// halves right.
-const MaxConcurrencyAuto = 0
-
-// DefaultMaxConcurrencyCeiling is the hard safety cap on auto-derived
-// concurrency. Even with abundant VRAM, the runner never spawns more
-// goroutines than this — the inference engine and the Hermes-side
-// per-session overhead don't scale linearly with concurrency, so a
-// ceiling prevents pathological resource use. Operators can override
-// via Config.MaxConcurrencyCeiling.
-const DefaultMaxConcurrencyCeiling = 8
-
-// DefaultVRAMModel is a conservative default the runner uses when the
-// operator hasn't supplied a VRAMModel. Sized for a 4B fp16 model
-// with a small KV-cache budget. Wrong defaults bias toward
-// under-utilization (safe) rather than OOM (dangerous).
-var DefaultVRAMModel = VRAMModel{
-	Name:         "auto-default-4b",
-	ContextSize:  4096,
-	PrefixTokens: 2000, // post-slim-down ballpark from references/hermes-persona-slim-down.md
-}
-
 // Run walks the call tree from root and returns the Result.
+//
+// VRAM management: when Config.Governor is non-nil, the runner
+// Acquires/Releases a lease around each AP's Evaluate+Execute window
+// (released before descend to avoid deadlock at depth ≥ ceiling).
+// When nil, the runner runs without VRAM throttling — operator's
+// explicit opt-out, fine for tests, dangerous in production. The
+// runner itself owns no VRAM configuration; the governor self-manages
+// its probe, estimator, model, ceiling, and reserve.
 func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error) {
 	if cfg.Adapter == nil {
 		return Result{}, ErrAdapterRequired
@@ -321,27 +261,6 @@ func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error)
 	}
 	if cfg.ChildIDFn == nil {
 		cfg.ChildIDFn = defaultChildIDFn()
-	}
-
-	// Auto-manage VRAM throttling when the operator hasn't configured
-	// it. The default (MaxConcurrencyAuto + nil probe + nil estimator)
-	// gets the library-managed behavior: detect VRAM, derive a safe
-	// concurrency cap, throttle as conditions change. Operators
-	// override by setting any of the fields explicitly.
-	autoVRAM := cfg.VRAMProbe == nil && cfg.VRAMEstimator == nil
-	if autoVRAM {
-		cfg.VRAMProbe = vram.Auto()
-		cfg.VRAMEstimator = vram.DefaultSlidingWindowEstimator()
-	}
-	// VRAMModel defaults apply whenever it's zero, not just on the
-	// full auto path — an operator wiring a custom probe + estimator
-	// shouldn't end up with a zero per-session estimate just because
-	// they didn't think to set the model fields.
-	if cfg.VRAMModel == (VRAMModel{}) && cfg.VRAMProbe != nil && cfg.VRAMEstimator != nil {
-		cfg.VRAMModel = DefaultVRAMModel
-	}
-	if cfg.MaxConcurrencyCeiling <= 0 {
-		cfg.MaxConcurrencyCeiling = DefaultMaxConcurrencyCeiling
 	}
 
 	r := &runner{
@@ -451,6 +370,27 @@ func (r *runner) resolve(
 		return env, session.ReturnResultPayload{}, nil
 	}
 
+	// Governor coordination. Hold one lease for this AP's
+	// Evaluate+Execute adapter-call window only. Released before
+	// descend so children can claim their own slots — holding through
+	// the recursive subtree would deadlock at depth ≥ ceiling.
+	//
+	// Acquire returns a no-op lease on a nil governor, so the call
+	// shape is uniform whether or not the operator wired one.
+	lease, lerr := r.cfg.Governor.Acquire(ctx)
+	if lerr != nil {
+		env.ExitReason = session.ExitInhibited
+		trace.Error(r.cfg.Tracer, ctx, "runner.governor_acquire_error",
+			slog.String("ap_id", string(env.ID)),
+			slog.String("err", lerr.Error()),
+		)
+		return env, session.ReturnResultPayload{}, lerr
+	}
+	// Defer release covers every early-return error path; we also
+	// explicitly release before descend (Lease.Release is idempotent,
+	// so the defer there becomes a no-op).
+	defer lease.Release()
+
 	// Evaluate step.
 	evalEnv, err := r.cfg.Adapter.Evaluate(ctx, env)
 	if err != nil {
@@ -552,6 +492,10 @@ func (r *runner) resolve(
 		if env.Execute.EmitSubtree == nil {
 			return env, session.ReturnResultPayload{}, fmt.Errorf("%w: emit_subtree with nil payload", ErrInvalidExecuteCategory)
 		}
+		// Release before descending — children will Acquire their own
+		// slots. Holding through descend would deadlock the governor
+		// at depth ≥ ceiling.
+		lease.Release()
 		return r.descend(ctx, env, parentChain)
 
 	default:
@@ -641,6 +585,10 @@ func (r *runner) descend(
 				return outcome{idx: idx, err: err}
 			}
 		}
+		// Note: governor Acquire happens inside resolve(), around the
+		// Evaluate+Execute call window, NOT here. Holding a lease
+		// across the recursive descend would deadlock the governor
+		// at depth ≥ ceiling.
 		resolved, payload, err := r.resolve(dispCtx, children[idx], &plan, chainForChildren)
 		o := outcome{idx: idx, resolved: resolved, payload: payload, err: err}
 		if err != nil || resolved.IsInhibited() {
@@ -808,89 +756,43 @@ func decisionString(d inhibitor.Decision) string {
 	}
 }
 
-// defaultChildIDFn returns a closure that assigns sequential
-// child IDs of the form "<parent_id>-c<seed_index>".
-// computeConcurrency derives the actual sibling-concurrency cap for
-// this dispatch wave. The math depends on whether MaxConcurrency is
-// auto (0) or explicit (>=1):
+// computeConcurrency derives the per-wave goroutine cap.
 //
-//   - MaxConcurrency=1 → 1 (strict serial; honors operator intent).
-//   - MaxConcurrency>1 → min(MaxConcurrency, VRAM-derived if available, siblings).
-//   - MaxConcurrency=0 (auto) → VRAM-derived cap (with hard ceiling
-//     MaxConcurrencyCeiling), clamped to [1, siblings]. If the VRAM
-//     probe fails or returns no useful info, falls back to 1 (safest).
+//   - MaxConcurrency=1 → 1 (strict serial).
+//   - MaxConcurrency=0 → siblings (no per-wave goroutine cap; the
+//     governor's per-call Acquire is the throttle).
+//   - MaxConcurrency=N>1 → min(N, siblings).
+//   - With a Governor wired, further tightened by governor.Ceiling.
 //
-// The traces emitted let operators see which path the runner took:
-// runner.vram_dynamic_cap for the auto + explicit-with-VRAM paths,
-// runner.vram_probe_failed when the probe errored.
+// The runner owns no VRAM math. When set, the governor handles all
+// per-byte accounting through its Acquire/Release contract; the wave
+// cap exists only to bound goroutine count (each blocks on Acquire
+// regardless).
 func (r *runner) computeConcurrency(ctx context.Context, siblings int) int {
 	if siblings <= 1 {
 		return 1
 	}
-	auto := r.cfg.MaxConcurrency == MaxConcurrencyAuto
-	if !auto && r.cfg.MaxConcurrency <= 1 {
-		return 1 // explicit strict-serial
+	if r.cfg.MaxConcurrency == 1 {
+		return 1
 	}
 
-	// VRAM-derived cap. Always consulted when probe + estimator are
-	// configured (which the auto-management defaults guarantee).
-	vramCap := -1
-	if r.cfg.VRAMProbe != nil && r.cfg.VRAMEstimator != nil {
-		report, err := r.cfg.VRAMProbe.Probe(ctx)
-		if err != nil {
-			trace.Error(r.cfg.Tracer, ctx, "runner.vram_probe_failed",
-				slog.String("err", err.Error()),
-			)
-		} else {
-			est := r.cfg.VRAMEstimator.Estimate(vram.SessionEstimate{
-				Model:        r.cfg.VRAMModel.Name,
-				PrefixTokens: r.cfg.VRAMModel.PrefixTokens,
-				ContextSize:  r.cfg.VRAMModel.ContextSize,
-			})
-			if est > 0 {
-				vramCap = int(report.AvailableBytes / est)
-				if vramCap < 1 {
-					vramCap = 1
-				}
-				trace.Info(r.cfg.Tracer, ctx, "runner.vram_dynamic_cap",
-					slog.String("source", string(report.Source)),
-					slog.Uint64("available_bytes", report.AvailableBytes),
-					slog.Uint64("est_per_session_bytes", est),
-					slog.Int("dynamic_cap", vramCap),
-				)
-			}
-		}
-	}
-
-	var cap int
-	switch {
-	case auto:
-		// Auto path: VRAM-derived cap, clamped by the safety ceiling.
-		// If VRAM info is unavailable, fall back to serial — that's
-		// the safe choice when we can't measure.
-		if vramCap < 0 {
-			trace.Info(r.cfg.Tracer, ctx, "runner.concurrency_fallback_serial",
-				slog.String("reason", "no VRAM signal in auto-managed mode"),
-			)
-			return 1
-		}
-		cap = vramCap
-		if ceiling := r.cfg.MaxConcurrencyCeiling; ceiling > 0 && cap > ceiling {
-			cap = ceiling
-		}
-	default:
-		// Explicit MaxConcurrency > 1. VRAM-derived cap further tightens
-		// when available.
+	cap := siblings
+	if r.cfg.MaxConcurrency > 1 && r.cfg.MaxConcurrency < cap {
 		cap = r.cfg.MaxConcurrency
-		if vramCap > 0 && vramCap < cap {
-			cap = vramCap
-		}
 	}
-	if cap > siblings {
-		cap = siblings
+	if r.cfg.Governor != nil {
+		if c := r.cfg.Governor.Ceiling(); c > 0 && c < cap {
+			cap = c
+		}
 	}
 	if cap < 1 {
 		cap = 1
+	}
+	if cap > 1 {
+		trace.Info(r.cfg.Tracer, ctx, "runner.wave_cap",
+			slog.Int("cap", cap),
+			slog.Int("siblings", siblings),
+		)
 	}
 	return cap
 }

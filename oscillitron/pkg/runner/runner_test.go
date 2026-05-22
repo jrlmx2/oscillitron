@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
@@ -984,143 +985,10 @@ func (g *groundedProcessAdapter) Name() string { return g.inner.Name() }
 func (g *groundedProcessAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	return g.inner.Evaluate(ctx, env)
 }
-// --- Auto-managed defaults (MaxConcurrency=0 + nil probe/estimator) ---
-
-func TestRun_AutoManaged_NoConfigGetsAutoVRAM(t *testing.T) {
-	// Zero Config (no VRAMProbe, no VRAMEstimator, MaxConcurrency=0)
-	// should still produce a working run — the runner auto-constructs
-	// the probe stack. With no real GPU available in CI, the probe
-	// falls back to /proc/meminfo (Linux) or unified memory (darwin)
-	// or returns ErrNoSource; either way the runner falls back to
-	// serial dispatch.
-	a, _ := planAdapterWithChildren(3, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	_, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: seededRand(),
-		// No MaxConcurrency, no VRAMProbe, no VRAMEstimator — pure default.
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if len(rec.lastChildren) != 3 {
-		t.Errorf("recomposer saw %d children, want 3", len(rec.lastChildren))
-	}
-}
-
-func TestRun_AutoManaged_VRAMProbeFailureFallsBackToSerial(t *testing.T) {
-	// Auto path with a probe that always errors — runner should fall
-	// back to serial (safe) rather than spawning unbounded goroutines.
-	probe := &fakeVRAMProbe{err: errors.New("probe blew up")}
-	estimator := vram.SlidingWindowEstimator{BytesPerToken: 80_000}
-
-	a, _ := planAdapterWithChildren(4, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	res, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec,
-		MaxConcurrency: MaxConcurrencyAuto,
-		VRAMProbe:      probe,
-		VRAMEstimator:  estimator,
-		Tracer:         trace.Discard{}, Rand: seededRand(),
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if res.State.ConcurrentDispatches != 0 {
-		t.Errorf("expected serial fallback under auto + probe failure; ConcurrentDispatches=%d", res.State.ConcurrentDispatches)
-	}
-	if len(rec.lastChildren) != 4 {
-		t.Errorf("all 4 children should still resolve serially; got %d", len(rec.lastChildren))
-	}
-}
-
-func TestRun_AutoManaged_CeilingCapsHugeVRAM(t *testing.T) {
-	// Probe reports 1 TiB free; estimator says ~1 MiB per session.
-	// Naive math = 1M concurrent — clearly nuts. The safety ceiling
-	// (default 8) clamps it.
-	probe := &fakeVRAMProbe{report: vram.Report{
-		Source: "fake", AvailableBytes: 1024 * 1024 * 1024 * 1024,
-	}}
-	estimator := vram.SlidingWindowEstimator{
-		BytesPerToken:      1, // tiny per-token cost
-		ModelResidentBytes: 1024 * 1024,
-	}
-
-	a, _ := planAdapterWithChildren(20, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	res, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec,
-		MaxConcurrency: MaxConcurrencyAuto,
-		VRAMProbe:      probe,
-		VRAMEstimator:  estimator,
-		Tracer:         trace.Discard{}, Rand: seededRand(),
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	// Concurrent dispatch happened (good) but capped at the ceiling.
-	// We can't observe the cap directly, but we can verify the run
-	// completed (sanity) and no goroutine explosion occurred.
-	if res.State.ConcurrentDispatches == 0 {
-		t.Errorf("auto-managed with abundant VRAM should dispatch concurrently")
-	}
-	if len(rec.lastChildren) != 20 {
-		t.Errorf("all 20 children should resolve; got %d", len(rec.lastChildren))
-	}
-}
-
-func TestRun_AutoManaged_OperatorCeilingOverride(t *testing.T) {
-	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 1024 * 1024 * 1024}}
-	estimator := vram.SlidingWindowEstimator{BytesPerToken: 1, ModelResidentBytes: 0}
-
-	a, _ := planAdapterWithChildren(10, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	res, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec,
-		MaxConcurrency:        MaxConcurrencyAuto,
-		MaxConcurrencyCeiling: 2, // tight operator ceiling
-		VRAMProbe:             probe,
-		VRAMEstimator:         estimator,
-		Tracer:                trace.Discard{}, Rand: seededRand(),
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if res.State.ConcurrentDispatches == 0 {
-		t.Errorf("expected concurrent dispatch")
-	}
-	if len(rec.lastChildren) != 10 {
-		t.Errorf("all 10 children should resolve; got %d", len(rec.lastChildren))
-	}
-}
-
-func TestRun_StrictSerial_HonoredEvenWithVRAM(t *testing.T) {
-	// MaxConcurrency=1 must always mean strict serial, regardless of
-	// VRAM availability. Operators choose this for deterministic tests
-	// and debugging.
-	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 100 * 1024 * 1024 * 1024}}
-	estimator := vram.SlidingWindowEstimator{BytesPerToken: 1}
-
-	a, _ := planAdapterWithChildren(6, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	res, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec,
-		MaxConcurrency: 1, // strict serial
-		VRAMProbe:      probe,
-		VRAMEstimator:  estimator,
-		Tracer:         trace.Discard{}, Rand: seededRand(),
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if res.State.ConcurrentDispatches != 0 {
-		t.Errorf("MaxConcurrency=1 should never dispatch concurrently; got %d waves", res.State.ConcurrentDispatches)
-	}
-}
+// Auto-managed-VRAM tests deleted with the runner refactor (2026-05-22)
+// — the runner no longer owns probe/estimator construction. VRAM
+// management lives in vram.Governor; see TestRun_Governor_* below and
+// pkg/vram/governor_test.go for the unit-level coverage.
 
 func (g *groundedProcessAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	env, err := g.inner.Execute(ctx, env)
@@ -1274,63 +1142,10 @@ func TestRun_Concurrency_RaceDetectorCleanWithVerifierAndJudge(t *testing.T) {
 	}
 }
 
-func TestRun_Concurrency_DynamicCapFromVRAMProbe(t *testing.T) {
-	// VRAM probe reports 1 GiB free; estimator says ~250 MiB per
-	// session. dynamic_cap = floor(1024 / 250) = 4. Run completes
-	// regardless; verify probe was consulted and ConcurrentDispatches
-	// incremented.
-	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 1024 * 1024 * 1024}}
-	estimator := vram.SlidingWindowEstimator{
-		BytesPerToken:      80_000,
-		ModelResidentBytes: 250 * 1024 * 1024,
-	}
-
-	a, _ := planAdapterWithChildren(6, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	res, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec,
-		MaxConcurrency: 8,
-		VRAMProbe:      probe,
-		VRAMEstimator:  estimator,
-		VRAMModel:      VRAMModel{Name: "test-4b", ContextSize: 4096},
-		Tracer:         trace.Discard{}, Rand: seededRand(),
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if res.State.ConcurrentDispatches != 1 {
-		t.Errorf("ConcurrentDispatches = %d, want 1", res.State.ConcurrentDispatches)
-	}
-	if probe.calls == 0 {
-		t.Errorf("VRAM probe was never called")
-	}
-}
-
-func TestRun_Concurrency_VRAMProbeFailureFallsBackToStatic(t *testing.T) {
-	probe := &fakeVRAMProbe{err: errors.New("probe blew up")}
-	estimator := vram.SlidingWindowEstimator{BytesPerToken: 80_000}
-
-	a, _ := planAdapterWithChildren(4, "x", 0.8)
-	rec := &fakeRecomposer{}
-	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
-	res, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec,
-		MaxConcurrency: 4,
-		VRAMProbe:      probe,
-		VRAMEstimator:  estimator,
-		Tracer:         trace.Discard{}, Rand: seededRand(),
-	}, root)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if len(rec.lastChildren) != 4 {
-		t.Errorf("recomposer saw %d children, want 4 (probe failure should not abort)", len(rec.lastChildren))
-	}
-	if res.State.ConcurrentDispatches == 0 {
-		t.Errorf("ConcurrentDispatches = 0, want >0 (static cap should have taken effect)")
-	}
-}
+// TestRun_Concurrency_DynamicCap*, ProbeFailure*: deleted with the
+// runner refactor (2026-05-22). The runner no longer owns VRAM probe
+// or estimator — those moved entirely into vram.Governor. See
+// TestRun_Governor_* and pkg/vram/governor_test.go.
 
 func TestRun_MaxInputBytes_InhibitsOversizedInput(t *testing.T) {
 	a := stub.New("agent").
@@ -1376,8 +1191,10 @@ func TestRun_Telemetry_PerPlaybookTokens(t *testing.T) {
 	}
 }
 
-// fakeVRAMProbe implements vram.Probe for tests.
+// fakeVRAMProbe implements vram.Probe for tests. Safe for concurrent
+// use — the governor and runner both call Probe from goroutines.
 type fakeVRAMProbe struct {
+	mu     sync.Mutex
 	report vram.Report
 	err    error
 	calls  int
@@ -1385,9 +1202,177 @@ type fakeVRAMProbe struct {
 
 func (p *fakeVRAMProbe) Name() string { return "fake" }
 func (p *fakeVRAMProbe) Probe(_ context.Context) (vram.Report, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.calls++
 	if p.err != nil {
 		return vram.Report{}, p.err
 	}
 	return p.report, nil
+}
+
+// --- Governor wiring ---
+
+// testRunnerModelSpec builds a small valid ModelSpec for runner
+// integration tests. Per-call estimate is tiny so an abundant probe
+// reading easily fits many concurrent leases.
+func testRunnerModelSpec() vram.ModelSpec {
+	return vram.ModelSpec{
+		Name: "runner-test", Layers: 1, KVHiddenDim: 1, KVDtypeBytes: 2, ContextSize: 1, PrefixTokens: 1,
+	}
+}
+
+func TestRun_Governor_HappyPath(t *testing.T) {
+	// Governor wired with ceiling=4. A plan with 8 children should
+	// resolve all 8 with concurrent dispatch capped at the ceiling.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 64 * 1024 * 1024 * 1024}}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
+		Model:         testRunnerModelSpec(),
+		Ceiling:       4,
+		ProbeOverride: probe,
+	})
+	if err != nil {
+		t.Fatalf("NewGovernor: %v", err)
+	}
+
+	a, _ := planAdapterWithChildren(8, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		Governor: g,
+		Tracer:   trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rec.lastChildren) != 8 {
+		t.Errorf("recomposer saw %d children, want 8", len(rec.lastChildren))
+	}
+	if res.State.ConcurrentDispatches == 0 {
+		t.Errorf("expected concurrent dispatch with ceiling=4 and 8 siblings")
+	}
+	snap := g.Snapshot(context.Background())
+	if snap.ActiveLeases != 0 {
+		t.Errorf("ActiveLeases after Run = %d, want 0", snap.ActiveLeases)
+	}
+	if snap.QueuedWaiters != 0 {
+		t.Errorf("QueuedWaiters after Run = %d, want 0", snap.QueuedWaiters)
+	}
+}
+
+func TestRun_Governor_DepthDeeperThanCeiling_NoDeadlock(t *testing.T) {
+	// Governor with ceiling=1, recursive plan tree. The per-resolve
+	// Acquire/Release-before-descend contract is what prevents
+	// deadlock — holding a lease across descend would have a depth-2
+	// tree wait forever on itself.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 1024 * 1024 * 1024}}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
+		Model:         testRunnerModelSpec(),
+		Ceiling:       1, // strict — exposes any lease-stacking bug
+		ProbeOverride: probe,
+	})
+	if err != nil {
+		t.Fatalf("NewGovernor: %v", err)
+	}
+
+	a, _ := planAdapterWithChildren(2, "leaf", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err = Run(ctx, Config{
+		Adapter: a, Recomposer: rec,
+		Governor: g,
+		Tracer:   trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v (deadlock would surface as DeadlineExceeded)", err)
+	}
+	if len(rec.lastChildren) != 2 {
+		t.Errorf("got %d children, want 2", len(rec.lastChildren))
+	}
+}
+
+func TestRun_Governor_RespectsExplicitMaxConcurrency(t *testing.T) {
+	// Operator wires both a Governor (ceiling=8) and an explicit
+	// MaxConcurrency=2. The tighter cap wins for the wave dispatch.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 64 * 1024 * 1024 * 1024}}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
+		Model:         testRunnerModelSpec(),
+		Ceiling:       8,
+		ProbeOverride: probe,
+	})
+	if err != nil {
+		t.Fatalf("NewGovernor: %v", err)
+	}
+
+	a, _ := planAdapterWithChildren(6, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter:        a, Recomposer: rec,
+		Governor:       g,
+		MaxConcurrency: 2,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.ConcurrentDispatches == 0 {
+		t.Errorf("expected concurrent dispatch")
+	}
+	if len(rec.lastChildren) != 6 {
+		t.Errorf("got %d children, want 6", len(rec.lastChildren))
+	}
+}
+
+func TestRun_Governor_StrictSerialHonored(t *testing.T) {
+	// Even with a Governor allowing concurrency, MaxConcurrency=1 must
+	// still mean strict serial.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 64 * 1024 * 1024 * 1024}}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
+		Model:         testRunnerModelSpec(),
+		Ceiling:       8,
+		ProbeOverride: probe,
+	})
+	if err != nil {
+		t.Fatalf("NewGovernor: %v", err)
+	}
+
+	a, _ := planAdapterWithChildren(4, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter:        a, Recomposer: rec,
+		Governor:       g,
+		MaxConcurrency: 1,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.ConcurrentDispatches != 0 {
+		t.Errorf("MaxConcurrency=1 must never dispatch concurrently; got %d waves",
+			res.State.ConcurrentDispatches)
+	}
+}
+
+func TestRun_NoGovernor_RunsUnthrottled(t *testing.T) {
+	// Nil governor is allowed (operator's opt-out). The run should
+	// complete with no VRAM accounting and no surprise auto-management.
+	a, _ := planAdapterWithChildren(4, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	_, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: seededRand(),
+		// No Governor, no MaxConcurrency — un-throttled
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rec.lastChildren) != 4 {
+		t.Errorf("got %d children, want 4", len(rec.lastChildren))
+	}
 }

@@ -129,6 +129,9 @@ type aggregateStatsJSON struct {
 	TotalCalls        int     `json:"total_calls"`
 	TotalTokens       int     `json:"total_tokens"`
 	TotalGraderTokens int     `json:"total_grader_tokens"`
+	TotalActualUSD    float64 `json:"total_actual_usd"`
+	TotalFrontierUSD  float64 `json:"total_frontier_usd"`
+	SavingsRatio      float64 `json:"savings_ratio"`
 }
 
 type windowStatsJSON struct {

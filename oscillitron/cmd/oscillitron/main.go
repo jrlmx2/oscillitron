@@ -41,6 +41,16 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
+// firstNonEmpty returns the first non-empty string.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // parseBytes accepts "1024", "1024B", "8KB", "16MB", "8GB", "1TB"
 // (case-insensitive). Returns the byte count. Used for --vram-budget.
 func parseBytes(s string) (uint64, error) {
@@ -90,12 +100,16 @@ func run() error {
 		hermesModel      = flag.String("hermes-model", "", "model identifier passed to Hermes (optional)")
 		strictFlag       = flag.Bool("strict", false, "require structured JSON from Hermes (error on parse failure)")
 		verboseFlag      = flag.Bool("v", false, "verbose tracer (slog Info events)")
-		maxConcurrency   = flag.Int("max-concurrency", 0, "sibling-concurrent dispatch cap: 0 = library-managed (auto-derived from detected VRAM, bounded by --max-concurrency-ceiling), 1 = strict serial, N>1 = static cap (still tightened by VRAM)")
-		ceilingFlag      = flag.Int("max-concurrency-ceiling", 0, "hard safety cap on auto-derived concurrency (0 = use runner default of 8)")
-		vramBudgetFlag   = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 8GB, 4096MB, 8589934592); when set, bypasses platform auto-detection. Absent → library auto-detects via nvidia-smi / rocm-smi / Apple unified / Linux DRM / /proc/meminfo")
-		modelContextSize = flag.Int("model-context-size", 0, "model context window in tokens (0 = use runner default of 4096)")
-		prefixTokens     = flag.Int("prefix-tokens", 0, "estimated persona+pool+instructions prefix size in tokens; used for VRAM per-session estimate (0 = use runner default of 2000)")
-		bytesPerToken    = flag.Uint64("bytes-per-token", 0, "per-token KV-cache cost (0 = use estimator default of 80000 for 4B fp16)")
+		maxConcurrency   = flag.Int("max-concurrency", 0, "sibling-goroutine cap during emit_subtree dispatch: 0 = no per-wave cap (governor's per-call Acquire still serializes), 1 = strict serial, N>1 = static cap (further tightened by governor.Ceiling when wired)")
+		vramBudgetFlag   = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 8GB, 4096MB); when set, pins what the governor's probe reports. Absent → governor auto-detects via nvidia-smi / rocm-smi / Apple unified / Linux DRM / /proc/meminfo")
+		modelName        = flag.String("model-name", "", "ModelSpec.Name for trace records (optional; defaults to --hermes-model)")
+		modelLayers      = flag.Int("model-layers", 0, "transformer layer count — required for governor; absent → run without VRAM management")
+		modelKVHidden    = flag.Int("model-kv-hidden", 0, "num_kv_heads × head_dim — required for governor")
+		modelKVDtype     = flag.Int("model-kv-dtype-bytes", 0, "KV cache element size: 2 for fp16/bf16, 1 for fp8 — required for governor")
+		modelContextSize = flag.Int("model-context-size", 0, "model context window in tokens — required for governor")
+		prefixTokens     = flag.Int("prefix-tokens", 0, "estimated persona+pool+instructions prefix size in tokens (optional, used for sliding-window estimate)")
+		governorCeiling  = flag.Int("governor-ceiling", 0, "max concurrent leases the governor will grant (0 = runtime.NumCPU())")
+		reserveFraction  = flag.Float64("governor-reserve-fraction", 0, "share of available VRAM withheld as safety margin (0 = 5%)")
 		maxInputBytes    = flag.Int("max-input-bytes", 0, "inhibit any AP whose Input.Content exceeds this byte budget (0 = no cap)")
 	)
 	flag.Parse()
@@ -181,57 +195,60 @@ func run() error {
 		session.Budget{TokensRemaining: 32_000, DepthRemaining: *depthBudget},
 	)
 
-	// VRAM management is library-managed by default — the runner
-	// auto-constructs vram.Auto() + DefaultSlidingWindowEstimator
-	// when no probe/estimator is set. Operator overrides are forwarded
-	// here when supplied:
-	//   --vram-budget        → vram.SetOverride (pins available bytes)
-	//   --bytes-per-token    → custom estimator
-	//   --model-context-size → VRAMModel.ContextSize override
-	//   --prefix-tokens      → VRAMModel.PrefixTokens override
+	// VRAM management is opt-in via the governor. Operators construct
+	// it explicitly by providing the model architecture; without
+	// architecture flags, the demo runs without VRAM throttling
+	// (operator's explicit opt-out).
 	if *vramBudgetFlag != "" {
 		budget, err := parseBytes(*vramBudgetFlag)
 		if err != nil {
 			return fmt.Errorf("--vram-budget: %w", err)
 		}
 		vram.SetOverride(budget)
-		fmt.Fprintf(os.Stderr, "demo: VRAM budget overridden to %d bytes\n", budget)
+		fmt.Fprintf(os.Stderr, "demo: VRAM probe pinned to %d bytes (operator override)\n", budget)
 	}
-	runnerCfg := runner.Config{
-		Adapter:               a,
-		Inhibitor:             inh,
-		Recomposer:            recomposer.Concat{Separator: recomposer.DefaultSeparator},
-		Tracer:                tracer,
-		MaxDepth:              *maxDepth,
-		Rand:                  prng,
-		MaxConcurrency:        *maxConcurrency,
-		MaxConcurrencyCeiling: *ceilingFlag,
-		MaxInputBytes:         *maxInputBytes,
-	}
-	// Forward operator overrides to the runner's VRAMModel. Zero
-	// values leave the runner's defaults intact (4096 context, 2000
-	// prefix tokens — see runner.DefaultVRAMModel).
-	if *modelContextSize > 0 || *prefixTokens > 0 || *hermesModel != "" {
-		runnerCfg.VRAMModel = runner.VRAMModel{
-			Name:         *hermesModel,
+	var governor *vram.Governor
+	if *modelLayers > 0 && *modelKVHidden > 0 && *modelKVDtype > 0 && *modelContextSize > 0 {
+		spec := vram.ModelSpec{
+			Name:         firstNonEmpty(*modelName, *hermesModel),
+			Layers:       *modelLayers,
+			KVHiddenDim:  *modelKVHidden,
+			KVDtypeBytes: *modelKVDtype,
 			ContextSize:  *modelContextSize,
 			PrefixTokens: *prefixTokens,
 		}
+		g, err := vram.NewGovernor(vram.GovernorConfig{
+			Model:           spec,
+			Ceiling:         *governorCeiling,
+			ReserveFraction: *reserveFraction,
+			Tracer:          tracer,
+		})
+		if err != nil {
+			return fmt.Errorf("vram.NewGovernor: %w", err)
+		}
+		governor = g
+		fmt.Fprintf(os.Stderr, "demo: VRAM governor enabled (%s, ceiling=%d)\n", spec, g.Ceiling())
+	} else {
+		fmt.Fprintln(os.Stderr, "demo: no VRAM governor (provide --model-layers/--model-kv-hidden/--model-kv-dtype-bytes/--model-context-size to enable)")
 	}
-	// Forward custom BytesPerToken to a fresh estimator. Otherwise
-	// the runner's auto-default (DefaultSlidingWindowEstimator) wins.
-	if *bytesPerToken > 0 {
-		est := vram.DefaultSlidingWindowEstimator()
-		est.BytesPerToken = *bytesPerToken
-		runnerCfg.VRAMEstimator = est
+	runnerCfg := runner.Config{
+		Adapter:        a,
+		Inhibitor:      inh,
+		Recomposer:     recomposer.Concat{Separator: recomposer.DefaultSeparator},
+		Tracer:         tracer,
+		MaxDepth:       *maxDepth,
+		Rand:           prng,
+		MaxConcurrency: *maxConcurrency,
+		Governor:       governor,
+		MaxInputBytes:  *maxInputBytes,
 	}
 	switch *maxConcurrency {
 	case 0:
-		fmt.Fprintln(os.Stderr, "demo: library-managed concurrency (auto-derived from VRAM)")
+		fmt.Fprintln(os.Stderr, "demo: no per-wave goroutine cap (governor controls inflight calls when wired)")
 	case 1:
 		fmt.Fprintln(os.Stderr, "demo: strict serial dispatch (MaxConcurrency=1)")
 	default:
-		fmt.Fprintf(os.Stderr, "demo: static concurrency cap=%d (tightened by VRAM when available)\n", *maxConcurrency)
+		fmt.Fprintf(os.Stderr, "demo: per-wave goroutine cap=%d\n", *maxConcurrency)
 	}
 	res, err := runner.Run(context.Background(), runnerCfg, root)
 	if err != nil {

@@ -170,20 +170,13 @@ func run() error {
 	// don't smuggle frontier capability into the cheap path.
 	synthesizer := recomposer.AdapterSynth{Adapter: orchestratorAdapter}
 
-	// Grader is provider-agnostic in spec but for measurement
-	// integrity we want a frontier judge. Only Anthropic supported
-	// today; reject other substrate values explicitly rather than
-	// silently routing through the orchestrator path.
-	if *graderSubstrate != "anthropic" {
-		return fmt.Errorf("--grader-substrate=%q not supported; only 'anthropic' is wired today", *graderSubstrate)
-	}
-	g, err := grader.NewAnthropic(grader.AnthropicConfig{
-		APIKey:  os.Getenv("ANTHROPIC_API_KEY"),
-		BaseURL: *graderURL,
-		Model:   *graderModel,
-	})
+	// Grader: substrate-pluggable. For measurement integrity, anthropic
+	// is recommended (Sonnet/Opus produces less judge noise than a 4B
+	// local model). hermes mode is supported for pure-local
+	// measurements where you accept noisier judgments.
+	g, err := buildGrader(*graderSubstrate, *graderURL, *graderModel)
 	if err != nil {
-		return fmt.Errorf("grader: %w", err)
+		return err
 	}
 
 	// Print the wiring so operators can see what they're actually measuring.
@@ -221,6 +214,36 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "wrote per-case results to %s\n", *out)
 	}
 	return nil
+}
+
+// buildGrader constructs a grader.Grader from the requested substrate.
+// anthropic uses pkg/grader.AnthropicGrader (Sonnet-class judge);
+// hermes uses pkg/grader.AdapterGrader wrapping the local Hermes
+// adapter (noisier but offline-capable).
+func buildGrader(substrate, url, model string) (grader.Grader, error) {
+	switch substrate {
+	case "anthropic":
+		g, err := grader.NewAnthropic(grader.AnthropicConfig{
+			APIKey:  os.Getenv("ANTHROPIC_API_KEY"),
+			BaseURL: url,
+			Model:   model,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("grader (anthropic): %w", err)
+		}
+		return g, nil
+	case "hermes":
+		if url == "" {
+			url = "http://127.0.0.1:8642"
+		}
+		a, err := hermes.New(hermes.SingleEndpoint(url, model))
+		if err != nil {
+			return nil, fmt.Errorf("grader (hermes %s): %w", url, err)
+		}
+		return grader.AdapterGrader{Adapter: a}, nil
+	default:
+		return nil, fmt.Errorf("grader: unknown substrate %q (want 'hermes' or 'anthropic')", substrate)
+	}
 }
 
 // buildAdapter constructs an adapter.Adapter for the given role using

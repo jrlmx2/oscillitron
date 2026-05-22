@@ -410,17 +410,27 @@ func planDraftCount(
 }
 
 // critiqueDraft runs one critique playbook call against the current
-// draft. Returns the verdict, joined issue-notes (for use in revise),
-// and token count.
+// draft. The prompt is **calibrated to default to pass** — only flag
+// issues when a human reviewer would clearly want a revision before
+// sending. The earlier "strict but fair" framing over-fired on minor
+// stylistic preferences and degraded already-good drafts via the
+// downstream revise step (case-002, case-003 in the v2 measurement).
 func critiqueDraft(
 	ctx context.Context,
 	a *adapterAnth.Adapter,
 	task, draft string,
 ) (session.Verdict, string, int, error) {
-	input := "Review this draft response against the user's intent. Be strict but fair.\n\n" +
+	input := "Review this draft response. Decide if a human would want a revision before sending — not whether they would tweak a word here or there.\n\n" +
 		"--- TASK ---\n" + task +
 		"\n\n--- DRAFT ---\n" + draft +
-		"\n\nReturn JSON {verdict, issues[]}. Use 'issues' verdict for any real problem worth a revision; 'pass' if the draft is solid."
+		"\n\nReturn JSON {verdict, issues[]}. " +
+		"Default to 'pass'. Only return 'issues' or 'fail' if the draft would clearly benefit from rewriting because: " +
+		"(a) it misses or contradicts the user's stated intent, " +
+		"(b) it has the wrong tone for the recipient and context, " +
+		"(c) it omits a structural element the intent required (e.g., a specific time, a clear ask), or " +
+		"(d) it contains content the intent told us to omit (over-explanation, hedging, generic filler). " +
+		"Do NOT flag: minor word-choice preferences, alternative phrasings, optional structural elements the intent did not require, or tone observations like 'could be warmer/firmer/more concise' unless the deviation is clear and material. " +
+		"If 'pass', return issues: []."
 	env := session.NewRoot("phase1-critique", input, "", classification.Internal,
 		session.Budget{TokensRemaining: 8_000, DepthRemaining: 1})
 	env.Evaluate = &session.Evaluate{Playbook: session.PlaybookCritique, Confidence: 1.0}

@@ -4,13 +4,17 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
@@ -46,6 +50,17 @@ type Vote struct {
 	// Governor optionally bounds concurrent attempts against a shared
 	// VRAM budget.
 	Governor *vram.Governor
+	// Tracer emits per-attempt and final-tally events for
+	// observability. Nil = trace.Discard{}. Events emitted:
+	//
+	//   vote.attempt_start    case, orchestrator, attempt_idx
+	//   vote.attempt_done     case, orchestrator, attempt_idx,
+	//                         extracted, tokens, duration_ms
+	//   vote.attempt_error    case, orchestrator, attempt_idx, err
+	//   vote.tally            case, orchestrator, successes, errors,
+	//                         winning_answer, winning_votes,
+	//                         vote_distribution
+	Tracer trace.Tracer
 }
 
 // Name implements benchmark.Orchestrator.
@@ -64,6 +79,11 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		return benchmark.Answer{}, fmt.Errorf("vote: Extractor is required")
 	}
 
+	tracer := v.Tracer
+	if tracer == nil {
+		tracer = trace.Discard{}
+	}
+
 	type result struct {
 		raw    string
 		tokens int
@@ -76,9 +96,21 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			start := time.Now()
+			trace.Info(tracer, ctx, "vote.attempt_start",
+				slog.String("case", c.ID),
+				slog.String("orchestrator", v.NameStr),
+				slog.Int("attempt_idx", i),
+			)
 			lease, err := v.Governor.Acquire(ctx)
 			if err != nil {
 				results[i].err = fmt.Errorf("governor acquire: %w", err)
+				trace.Error(tracer, ctx, "vote.attempt_error",
+					slog.String("case", c.ID),
+					slog.String("orchestrator", v.NameStr),
+					slog.Int("attempt_idx", i),
+					slog.String("err", results[i].err.Error()),
+				)
 				return
 			}
 			defer lease.Release()
@@ -97,14 +129,35 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			out, err := v.Adapter.Execute(ctx, env)
 			if err != nil {
 				results[i].err = fmt.Errorf("execute: %w", err)
+				trace.Error(tracer, ctx, "vote.attempt_error",
+					slog.String("case", c.ID),
+					slog.String("orchestrator", v.NameStr),
+					slog.Int("attempt_idx", i),
+					slog.String("err", results[i].err.Error()),
+				)
 				return
 			}
 			if out.Execute == nil || out.Execute.ReturnResult == nil {
 				results[i].err = fmt.Errorf("empty return_result")
+				trace.Error(tracer, ctx, "vote.attempt_error",
+					slog.String("case", c.ID),
+					slog.String("orchestrator", v.NameStr),
+					slog.Int("attempt_idx", i),
+					slog.String("err", results[i].err.Error()),
+				)
 				return
 			}
 			results[i].raw = out.Execute.ReturnResult.Result.Content
 			results[i].tokens = out.Execute.TokensUsed
+			extracted := v.Extractor.Extract(results[i].raw)
+			trace.Info(tracer, ctx, "vote.attempt_done",
+				slog.String("case", c.ID),
+				slog.String("orchestrator", v.NameStr),
+				slog.Int("attempt_idx", i),
+				slog.String("extracted", extracted),
+				slog.Int("tokens", results[i].tokens),
+				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
+			)
 		}()
 	}
 	wg.Wait()
@@ -139,6 +192,16 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		// Every attempt produced text but extraction failed on all.
 		// Surface the answers verbatim so the grader can record the
 		// failure mode rather than silently passing an empty.
+		trace.Info(tracer, ctx, "vote.tally",
+			slog.String("case", c.ID),
+			slog.String("orchestrator", v.NameStr),
+			slog.Int("attempts", v.N),
+			slog.Int("successes", successes),
+			slog.Int("errors", v.N-successes),
+			slog.String("winning_answer", ""),
+			slog.Int("winning_votes", 0),
+			slog.String("distribution", "all-extractions-empty"),
+		)
 		return benchmark.Answer{
 			Raw:        strings.Join(rawParts, "\n---\n"),
 			Extracted:  "",
@@ -161,12 +224,40 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		}
 	}
 
+	errCount := v.N - successes
+	trace.Info(tracer, ctx, "vote.tally",
+		slog.String("case", c.ID),
+		slog.String("orchestrator", v.NameStr),
+		slog.Int("attempts", v.N),
+		slog.Int("successes", successes),
+		slog.Int("errors", errCount),
+		slog.String("winning_answer", bestKey),
+		slog.Int("winning_votes", bestCount),
+		slog.String("distribution", formatVoteDistribution(votes)),
+	)
+
 	return benchmark.Answer{
 		Raw:        strings.Join(rawParts, "\n---\n"),
 		Extracted:  bestKey,
 		Calls:      successes,
 		TokensUsed: totalTokens,
 	}, nil
+}
+
+// formatVoteDistribution renders the vote map as a stable
+// "A=3,B=1,C=1"-style string. Sorted alphabetically for
+// reproducibility in trace output.
+func formatVoteDistribution(votes map[string]int) string {
+	keys := make([]string, 0, len(votes))
+	for k := range votes {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	parts := make([]string, len(keys))
+	for i, k := range keys {
+		parts[i] = fmt.Sprintf("%s=%d", k, votes[k])
+	}
+	return strings.Join(parts, ",")
 }
 
 // Compile-time check.

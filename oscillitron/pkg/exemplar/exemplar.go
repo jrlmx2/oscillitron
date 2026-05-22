@@ -79,9 +79,12 @@ type Store interface {
 	Add(ctx context.Context, e Exemplar) error
 
 	// Retrieve returns up to k exemplars relevant to (action, prompt).
-	// The v0 ranking is score-descending then recency-descending — a
-	// placeholder for the BM25 retrieval that lands in v2 PR 2.
-	// Updates LastRetrievedAt on returned exemplars.
+	// Ranking is BM25 over exemplar Prompts (the question-similarity
+	// signal is what matters for "show me past examples like this
+	// one"). When BM25 scores tie (or are all zero — query shares no
+	// terms with the corpus), falls back to curation Score
+	// descending then AddedAt descending. Updates LastRetrievedAt
+	// on returned exemplars and flushes to disk.
 	Retrieve(ctx context.Context, action, prompt string, k int) ([]Exemplar, error)
 
 	// GC enforces budget caps. Returns the number of exemplars
@@ -177,10 +180,16 @@ func (s *FileStore) Add(ctx context.Context, e Exemplar) error {
 	return s.writeActionLocked(e.Action, existing)
 }
 
-// Retrieve returns up to k exemplars for the action, ranked
-// score-descending then most-recent-first. prompt is currently
-// unused by FileStore (v0 placeholder); v2 PR 2 wires BM25 over
-// prompts here.
+// Retrieve returns up to k exemplars for the action, ranked by BM25
+// over Prompts with curation Score + AddedAt as tiebreakers.
+//
+// When BM25 scores are all zero (query shares no terms with any
+// exemplar's prompt — typical when the corpus is empty or the query
+// is too novel), falls back to the curation-quality ordering so
+// callers still get *something* if exemplars exist. Callers who want
+// strict relevance can check that returned exemplars have non-zero
+// overlap themselves; in practice the wrapping adapter just trusts
+// whatever comes back.
 func (s *FileStore) Retrieve(ctx context.Context, action, prompt string, k int) ([]Exemplar, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -202,36 +211,47 @@ func (s *FileStore) Retrieve(ctx context.Context, action, prompt string, k int) 
 		return nil, nil
 	}
 
-	// Sort by Score desc, then AddedAt desc. Stable sort so equal
-	// keys retain insertion order — operator's curation order survives.
-	sort.SliceStable(all, func(i, j int) bool {
-		if all[i].Score != all[j].Score {
-			return all[i].Score > all[j].Score
+	// Build BM25 index over the corpus, score the query.
+	idx := buildBM25Index(all)
+	queryTokens := tokenize(prompt)
+	hits := make([]rankedHit, len(all))
+	maxScore := 0.0
+	for i := range all {
+		hits[i] = rankedHit{idx: i, score: idx.score(queryTokens, i)}
+		if hits[i].score > maxScore {
+			maxScore = hits[i].score
 		}
-		return all[i].AddedAt.After(all[j].AddedAt)
+	}
+
+	// Sort: BM25 desc, then curation Score desc, then AddedAt desc.
+	// Stable sort preserves operator's insertion order for full ties.
+	sort.SliceStable(hits, func(a, b int) bool {
+		if hits[a].score != hits[b].score {
+			return hits[a].score > hits[b].score
+		}
+		ea, eb := all[hits[a].idx], all[hits[b].idx]
+		if ea.Score != eb.Score {
+			return ea.Score > eb.Score
+		}
+		return ea.AddedAt.After(eb.AddedAt)
 	})
 
-	if k > len(all) {
-		k = len(all)
+	if k > len(hits) {
+		k = len(hits)
 	}
 	out := make([]Exemplar, k)
-	copy(out, all[:k])
+	for i := 0; i < k; i++ {
+		out[i] = all[hits[i].idx]
+	}
 
-	// Update LastRetrievedAt on the returned exemplars in the
-	// underlying file. Done in a single rewrite to amortize I/O.
+	// Update LastRetrievedAt on returned exemplars in the underlying
+	// file. Single rewrite amortizes I/O.
 	now := time.Now()
 	for i := range out {
 		out[i].LastRetrievedAt = now
 	}
-	// Apply the update to the full slice (find by SourceCase, or by
-	// pointer-equality on prompt+output if no SourceCase).
-	for _, ret := range out {
-		for j, ex := range all {
-			if matches(ret, ex) {
-				all[j].LastRetrievedAt = now
-				break
-			}
-		}
+	for i := 0; i < k; i++ {
+		all[hits[i].idx].LastRetrievedAt = now
 	}
 	if err := s.writeActionLocked(action, all); err != nil {
 		return nil, err

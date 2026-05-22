@@ -11,6 +11,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
 // AdapterGrader is a Grader backed by any adapter.Adapter — Anthropic,
@@ -39,6 +40,13 @@ type AdapterGrader struct {
 	// SystemPromptOverride lets callers replace the built-in rubric
 	// preamble. Most callers should leave this empty.
 	SystemPromptOverride string
+	// Governor optionally coordinates VRAM headroom with other
+	// components hitting the same inference substrate (typically the
+	// runner during the same bench case). When set, each Grade call
+	// Acquires a lease, runs the adapter, and Releases — blocking if
+	// granting would push past the governor's budget. Nil = no
+	// coordination (legacy behavior).
+	Governor *vram.Governor
 }
 
 const adapterGraderPrompt = `You are a strict quality grader. ` +
@@ -79,6 +87,13 @@ func (g AdapterGrader) Grade(ctx context.Context, req Request) (Result, error) {
 		Playbook:   session.PlaybookProcess,
 		Confidence: 1.0,
 	}
+	// Optional VRAM coordination. Acquire returns a no-op lease for a
+	// nil governor, so the call shape is uniform.
+	lease, err := g.Governor.Acquire(ctx)
+	if err != nil {
+		return Result{}, fmt.Errorf("adapter-grader: governor acquire: %w", err)
+	}
+	defer lease.Release()
 	out, err := g.Adapter.Execute(ctx, env)
 	if err != nil {
 		return Result{}, fmt.Errorf("adapter-grader: execute: %w", err)

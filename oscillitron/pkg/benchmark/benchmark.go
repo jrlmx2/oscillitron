@@ -282,26 +282,28 @@ func Run(ctx context.Context, cfg RunnerConfig) (Report, error) {
 			break
 		}
 		cr := CaseResult{CaseID: c.ID, Case: c}
+		// Stamp the case ID for every event emitted by downstream
+		// orchestrators, graders, runners, governors, and adapters.
+		caseCtx := trace.WithCorrelation(ctx, "case", c.ID)
 		for _, o := range cfg.Orchestrators {
 			or := OrchestratorResult{OrchestratorName: o.Name()}
-			answer, oerr := o.Answer(ctx, c)
+			// Stamp the orchestrator name so events from inside
+			// the orchestrator (Vote attempts, etc.) carry it too.
+			oCtx := trace.WithCorrelation(caseCtx, "orchestrator", o.Name())
+			answer, oerr := o.Answer(oCtx, c)
 			if oerr != nil {
 				or.Err = fmt.Errorf("orchestrator %s: %w", o.Name(), oerr)
-				trace.Error(tracer, ctx, "benchmark.orchestrator_error",
-					slog.String("case", c.ID),
-					slog.String("orchestrator", o.Name()),
+				trace.Error(tracer, oCtx, "benchmark.orchestrator_error",
 					slog.String("err", oerr.Error()),
 				)
 				cr.Results = append(cr.Results, or)
 				continue
 			}
 			or.Answer = answer
-			verdict, gerr := cfg.Grader.Grade(ctx, c, answer)
+			verdict, gerr := cfg.Grader.Grade(oCtx, c, answer)
 			if gerr != nil {
 				or.Err = fmt.Errorf("grader %s: %w", cfg.Grader.Name(), gerr)
-				trace.Error(tracer, ctx, "benchmark.grader_error",
-					slog.String("case", c.ID),
-					slog.String("orchestrator", o.Name()),
+				trace.Error(tracer, oCtx, "benchmark.grader_error",
 					slog.String("err", gerr.Error()),
 				)
 				cr.Results = append(cr.Results, or)
@@ -309,9 +311,7 @@ func Run(ctx context.Context, cfg RunnerConfig) (Report, error) {
 			}
 			or.Verdict = verdict
 			cr.Results = append(cr.Results, or)
-			trace.Info(tracer, ctx, "benchmark.case_graded",
-				slog.String("case", c.ID),
-				slog.String("orchestrator", o.Name()),
+			trace.Info(tracer, oCtx, "benchmark.case_graded",
 				slog.Bool("pass", verdict.Pass),
 				slog.Float64("score", verdict.Score),
 				slog.String("extracted", answer.Extracted),

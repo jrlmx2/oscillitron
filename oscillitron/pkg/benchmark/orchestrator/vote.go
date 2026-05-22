@@ -96,19 +96,15 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			// Stamp attempt_idx so the adapter/governor events
+			// downstream of this goroutine carry it too.
+			aCtx := trace.WithCorrelation(ctx, "attempt_idx", fmt.Sprintf("%d", i))
 			start := time.Now()
-			trace.Info(tracer, ctx, "vote.attempt_start",
-				slog.String("case", c.ID),
-				slog.String("orchestrator", v.NameStr),
-				slog.Int("attempt_idx", i),
-			)
-			lease, err := v.Governor.Acquire(ctx)
+			trace.Info(tracer, aCtx, "vote.attempt_start")
+			lease, err := v.Governor.Acquire(aCtx)
 			if err != nil {
 				results[i].err = fmt.Errorf("governor acquire: %w", err)
-				trace.Error(tracer, ctx, "vote.attempt_error",
-					slog.String("case", c.ID),
-					slog.String("orchestrator", v.NameStr),
-					slog.Int("attempt_idx", i),
+				trace.Error(tracer, aCtx, "vote.attempt_error",
 					slog.String("err", results[i].err.Error()),
 				)
 				return
@@ -126,23 +122,17 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 				Playbook:   session.PlaybookProcess,
 				Confidence: 1.0,
 			}
-			out, err := v.Adapter.Execute(ctx, env)
+			out, err := v.Adapter.Execute(aCtx, env)
 			if err != nil {
 				results[i].err = fmt.Errorf("execute: %w", err)
-				trace.Error(tracer, ctx, "vote.attempt_error",
-					slog.String("case", c.ID),
-					slog.String("orchestrator", v.NameStr),
-					slog.Int("attempt_idx", i),
+				trace.Error(tracer, aCtx, "vote.attempt_error",
 					slog.String("err", results[i].err.Error()),
 				)
 				return
 			}
 			if out.Execute == nil || out.Execute.ReturnResult == nil {
 				results[i].err = fmt.Errorf("empty return_result")
-				trace.Error(tracer, ctx, "vote.attempt_error",
-					slog.String("case", c.ID),
-					slog.String("orchestrator", v.NameStr),
-					slog.Int("attempt_idx", i),
+				trace.Error(tracer, aCtx, "vote.attempt_error",
 					slog.String("err", results[i].err.Error()),
 				)
 				return
@@ -150,10 +140,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			results[i].raw = out.Execute.ReturnResult.Result.Content
 			results[i].tokens = out.Execute.TokensUsed
 			extracted := v.Extractor.Extract(results[i].raw)
-			trace.Info(tracer, ctx, "vote.attempt_done",
-				slog.String("case", c.ID),
-				slog.String("orchestrator", v.NameStr),
-				slog.Int("attempt_idx", i),
+			trace.Info(tracer, aCtx, "vote.attempt_done",
 				slog.String("extracted", extracted),
 				slog.Int("tokens", results[i].tokens),
 				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
@@ -193,8 +180,6 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		// Surface the answers verbatim so the grader can record the
 		// failure mode rather than silently passing an empty.
 		trace.Info(tracer, ctx, "vote.tally",
-			slog.String("case", c.ID),
-			slog.String("orchestrator", v.NameStr),
 			slog.Int("attempts", v.N),
 			slog.Int("successes", successes),
 			slog.Int("errors", v.N-successes),
@@ -226,8 +211,6 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 
 	errCount := v.N - successes
 	trace.Info(tracer, ctx, "vote.tally",
-		slog.String("case", c.ID),
-		slog.String("orchestrator", v.NameStr),
 		slog.Int("attempts", v.N),
 		slog.Int("successes", successes),
 		slog.Int("errors", errCount),

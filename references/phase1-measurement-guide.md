@@ -20,32 +20,72 @@ The corpus (`oscillitron/cmd/phase1/cases.json`) carries 8 hand-curated cases co
 
 ## How to run
 
+Three roles, each independently configurable: **orchestrator** (the call tree — plan, drafts, synth, critique, revise), **frontier** (the single-call baseline), **grader** (the LLM-as-judge). Defaults wire orchestrator to local Hermes and frontier+grader to Anthropic API.
+
 ```bash
-# Required: ANTHROPIC_API_KEY in your environment.
+# Required when any role talks to Anthropic — frontier + grader by default.
 export ANTHROPIC_API_KEY=sk-ant-...
 
-# Default run — 8 cases, Haiku orchestrator vs Sonnet frontier, Sonnet grader.
-go run ./cmd/phase1
-
-# Verbose — per-case detail to stderr.
+# Default: local Hermes orchestrator vs Sonnet 1-shot frontier, Sonnet grader.
+# Assumes `hermes gateway start` has been run and the gateway is reachable
+# at http://127.0.0.1:8642 with a model loaded (see "Local Hermes setup" below).
 go run ./cmd/phase1 -v
 
-# Limit to the first 2 cases for a quick smoke.
+# Limit to first 2 cases for a smoke check.
 go run ./cmd/phase1 -v --limit 2
 
-# Save per-case results for review.
+# Save per-case results for inspection.
 go run ./cmd/phase1 --out results.json
 
-# Disable ensembling (1 draft per case) — measures whether even
-# a single Haiku call closes any quality gap on its own.
+# Plan-decided ensemble width (the default; intent-conditioned).
+# Override: force serial drafts.
 go run ./cmd/phase1 --drafts-per-case 1
-
-# Stronger orchestrator — use Sonnet on both sides to isolate
-# the orchestration wedge from the model wedge.
-go run ./cmd/phase1 --orchestrator-model claude-sonnet-4-6
 ```
 
-**Approximate cost per full run:** $0.10 – $0.50 depending on how chatty the model is per draft. Phase 1 is cheap.
+### Substrate examples
+
+```bash
+# Original "Haiku-vs-Sonnet via API" comparison — useful as a baseline
+# when local infra isn't ready. (Skips the local Hermes hop entirely.)
+go run ./cmd/phase1 \
+  --orchestrator-substrate=anthropic --orchestrator-model=claude-haiku-4-5-20251001
+
+# Test orchestration on Opus — does the architectural wedge hold at
+# the top tier? Frontier baseline stays Opus 1-shot for apples-to-apples.
+go run ./cmd/phase1 \
+  --orchestrator-substrate=anthropic --orchestrator-model=claude-opus-4-7 \
+  --frontier-model=claude-opus-4-7
+
+# Pure-local-everything (no external API calls). Compares local
+# orchestrated vs local 1-shot vs local grader. Loses the frontier-quality
+# anchor and the grader is noisier, but useful when offline.
+go run ./cmd/phase1 \
+  --frontier-substrate=hermes --frontier-url=http://127.0.0.1:8642 \
+  --grader-substrate=hermes --grader-url=http://127.0.0.1:8642
+# (Grader-as-hermes is not yet wired in pkg/grader — would need
+#  AdapterGrader added before this works end-to-end.)
+
+# Register pricing for a local model so the cost-ratio math is honest.
+go run ./cmd/phase1 \
+  --prices "local-gemma-4b=0.10:0.10"
+```
+
+### Local Hermes setup
+
+The default configuration assumes Hermes is running on the same machine:
+
+```bash
+# In a separate shell, with hermes-agent installed and a model loaded
+# via your inference backend (LM Studio, llama.cpp, vLLM, etc.):
+hermes gateway start
+
+# Verify it's reachable:
+curl -s http://127.0.0.1:8642/v1/models
+```
+
+Persona slimming matters here — the per-call overhead from default Hermes persona (~14k tokens) will dominate the orchestration calls. See `references/hermes-persona-slim-down.md` for what to cut before measuring.
+
+**Approximate cost per full run:** with the default wiring, only the frontier baseline + grader hit the API. Roughly $0.02-$0.05 per 8-case run. Per-call wall-clock on Apple Silicon (4B local model): ~7s warm, ~30s+ cold. A full run takes 15-30 minutes depending on cold-call shape.
 
 ## What the verdict means
 

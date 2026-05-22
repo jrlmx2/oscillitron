@@ -54,6 +54,7 @@ func run() error {
 		limit     = flag.Int("limit", 0, "cap the number of cases (0 = all)")
 		voteN     = flag.Int("vote-n", 5, "N attempts for the vote orchestrator")
 		windowN   = flag.Int("sliding-window", 25, "sliding-window size in cases (0 = disable window stats)")
+		reportOut = flag.String("report-out", "", "optional: dump the full Report as indented JSON to this path after the run completes")
 
 		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "orchestrator substrate (hermes|anthropic)")
 		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "hermes gateway URL or anthropic BaseURL")
@@ -151,6 +152,13 @@ func run() error {
 	}
 
 	printReport(os.Stdout, report)
+
+	if *reportOut != "" {
+		if err := benchmark.WriteJSONFile(*reportOut, report); err != nil {
+			return fmt.Errorf("--report-out: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "bench: wrote JSON report to %s\n", *reportOut)
+	}
 	return nil
 }
 

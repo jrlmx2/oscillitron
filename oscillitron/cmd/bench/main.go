@@ -55,6 +55,7 @@ func run() error {
 		voteN     = flag.Int("vote-n", 5, "N attempts for the vote orchestrator")
 		windowN   = flag.Int("sliding-window", 25, "sliding-window size in cases (0 = disable window stats)")
 		reportOut = flag.String("report-out", "", "optional: dump the full Report as indented JSON to this path after the run completes")
+		streamOut = flag.String("stream-out", "", "optional: append each CaseResult as one JSON line to this path as the run progresses (crash-safety on long runs; tail -f for live progress)")
 
 		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "orchestrator substrate (hermes|anthropic)")
 		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "hermes gateway URL or anthropic BaseURL")
@@ -140,12 +141,26 @@ func run() error {
 		Primary: grader.Multichoice{},
 	}
 
+	// Optional per-case JSONL streamer for crash-safe long runs.
+	var onCase func(benchmark.CaseResult) error
+	if *streamOut != "" {
+		f, err := os.Create(*streamOut)
+		if err != nil {
+			return fmt.Errorf("--stream-out: %w", err)
+		}
+		defer f.Close()
+		streamer := &benchmark.JSONLStreamer{W: f, Flusher: f.Sync}
+		onCase = streamer.AppendCase
+		fmt.Fprintf(os.Stderr, "bench: streaming per-case JSONL to %s\n", *streamOut)
+	}
+
 	report, err := benchmark.Run(context.Background(), benchmark.RunnerConfig{
 		Loader:            loader,
 		Orchestrators:     orchestrators,
 		Grader:            mainGrader,
 		SlidingWindowSize: *windowN,
 		Tracer:            tracer,
+		OnCase:            onCase,
 	})
 	if err != nil {
 		return err

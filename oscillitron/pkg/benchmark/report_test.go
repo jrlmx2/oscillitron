@@ -3,6 +3,7 @@ package benchmark
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -199,5 +200,124 @@ func TestWriteJSONFile_BadPath(t *testing.T) {
 	err := WriteJSONFile("/nonexistent-dir/report.json", sampleReport(t))
 	if err == nil {
 		t.Fatal("expected error writing to missing directory")
+	}
+}
+
+func TestAppendCaseJSONL_OnePerLine(t *testing.T) {
+	r := sampleReport(t)
+	var buf bytes.Buffer
+	for _, cr := range r.Cases {
+		if err := AppendCaseJSONL(&buf, cr); err != nil {
+			t.Fatalf("AppendCaseJSONL: %v", err)
+		}
+	}
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	if len(lines) != 2 {
+		t.Fatalf("expected 2 lines, got %d: %q", len(lines), buf.String())
+	}
+	// Each line must be valid JSON on its own.
+	for i, line := range lines {
+		var decoded caseResultJSON
+		if err := json.Unmarshal([]byte(line), &decoded); err != nil {
+			t.Errorf("line %d not valid JSON: %v (%q)", i, err, line)
+		}
+	}
+	// First line is case c-001 with frontier + vote-3 results.
+	if !strings.Contains(lines[0], `"case_id":"c-001"`) {
+		t.Errorf("line 0 should be c-001; got %q", lines[0])
+	}
+	// Second line is c-002 with the simulated error stringified.
+	if !strings.Contains(lines[1], `"case_id":"c-002"`) {
+		t.Errorf("line 1 should be c-002")
+	}
+	if !strings.Contains(lines[1], `"error":"simulated failure"`) {
+		t.Errorf("line 1 should contain stringified error; got %q", lines[1])
+	}
+}
+
+func TestJSONLStreamer_AppendsAndFlushes(t *testing.T) {
+	var buf bytes.Buffer
+	flushCount := 0
+	s := &JSONLStreamer{
+		W:       &buf,
+		Flusher: func() error { flushCount++; return nil },
+	}
+	r := sampleReport(t)
+	for _, cr := range r.Cases {
+		if err := s.AppendCase(cr); err != nil {
+			t.Fatalf("AppendCase: %v", err)
+		}
+	}
+	if flushCount != 2 {
+		t.Errorf("flushCount = %d, want 2", flushCount)
+	}
+	if strings.Count(buf.String(), "\n") != 2 {
+		t.Errorf("expected 2 newlines (one per case), got %d", strings.Count(buf.String(), "\n"))
+	}
+}
+
+func TestJSONLStreamer_FlusherErrorSurfaces(t *testing.T) {
+	s := &JSONLStreamer{
+		W:       &bytes.Buffer{},
+		Flusher: func() error { return errors.New("disk full") },
+	}
+	err := s.AppendCase(sampleReport(t).Cases[0])
+	if err == nil || err.Error() != "disk full" {
+		t.Errorf("expected flusher error to surface; got %v", err)
+	}
+}
+
+func TestRun_OnCase_FiresPerCase_AfterWindow(t *testing.T) {
+	cases := makeCases(7)
+	answers := map[string]string{
+		"c00": "A", "c01": "A", "c02": "A", "c03": "A",
+		"c04": "A", "c05": "A", "c06": "A",
+	}
+	var got []CaseResult
+	report, err := Run(context.Background(), RunnerConfig{
+		Loader:            stubLoader{name: "test", cases: cases},
+		Orchestrators:     []Orchestrator{&stubOrchestrator{name: "o", answers: answers}},
+		Grader:            stubGrader{},
+		SlidingWindowSize: 5,
+		OnCase: func(cr CaseResult) error {
+			got = append(got, cr)
+			return nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(got) != 7 {
+		t.Errorf("OnCase fired %d times, want 7", len(got))
+	}
+	// Order matches case order.
+	for i, cr := range got {
+		want := cases[i].ID
+		if cr.CaseID != want {
+			t.Errorf("got[%d].CaseID = %q, want %q", i, cr.CaseID, want)
+		}
+	}
+	// Sanity: report still complete.
+	if len(report.Cases) != 7 {
+		t.Errorf("report Cases = %d, want 7", len(report.Cases))
+	}
+}
+
+func TestRun_OnCase_ErrorRecordedNotFatal(t *testing.T) {
+	report, err := Run(context.Background(), RunnerConfig{
+		Loader: stubLoader{name: "test", cases: makeCases(3)},
+		Orchestrators: []Orchestrator{&stubOrchestrator{name: "o", answers: map[string]string{
+			"c00": "A", "c01": "A", "c02": "A",
+		}}},
+		Grader: stubGrader{},
+		OnCase: func(cr CaseResult) error {
+			return errors.New("disk failure for " + cr.CaseID)
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run should not fail on OnCase error: %v", err)
+	}
+	if len(report.Cases) != 3 {
+		t.Errorf("Cases = %d, want 3 (all should still run)", len(report.Cases))
 	}
 }

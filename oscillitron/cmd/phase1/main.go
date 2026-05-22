@@ -41,10 +41,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	adapterAnth "github.com/jrlmx2/oscillitron/pkg/adapter/anthropic"
+	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
 	"github.com/jrlmx2/oscillitron/pkg/grader"
@@ -90,21 +93,36 @@ type caseResult struct {
 
 func run() error {
 	var (
-		casesFlag         = flag.String("cases", "cmd/phase1/cases.json", "path to cases.json")
-		orchModel         = flag.String("orchestrator-model", adapterAnth.DefaultOrchestratorModel, "cheap-proxy model for the orchestrator path")
-		frontierModel     = flag.String("frontier-model", adapterAnth.DefaultFrontierModel, "frontier model for the single-call baseline")
-		graderModel       = flag.String("grader-model", grader.DefaultModel, "model used by the LLM-as-judge grader")
-		draftsPerCase     = flag.Int("drafts-per-case", 0, "operator override for ensemble width; 0 = plan playbook decides (intent-conditioned), 1 = no ensembling, N>1 = static")
-		limit             = flag.Int("limit", 0, "if >0, only run the first N cases")
-		verbose           = flag.Bool("v", false, "print per-case detail to stderr")
-		out               = flag.String("out", "", "if set, write per-case results as JSON to this path")
+		casesFlag     = flag.String("cases", "cmd/phase1/cases.json", "path to cases.json")
+		draftsPerCase = flag.Int("drafts-per-case", 0, "operator override for ensemble width; 0 = plan playbook decides (intent-conditioned), 1 = no ensembling, N>1 = static")
+		limit         = flag.Int("limit", 0, "if >0, only run the first N cases")
+		verbose       = flag.Bool("v", false, "print per-case detail to stderr")
+		out           = flag.String("out", "", "if set, write per-case results as JSON to this path")
+
+		// Per-role substrate configuration. Defaults wire us to the
+		// production-shaped path: local Hermes for the orchestrator
+		// (the actual project thesis), Anthropic Sonnet for the
+		// frontier baseline (comparison), Anthropic Sonnet for the
+		// grader (the judge needs to be strong regardless of what
+		// produced the candidate).
+		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "substrate for orchestrator calls: hermes | anthropic")
+		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "for hermes substrate: gateway URL; for anthropic: BaseURL (empty = api.anthropic.com)")
+		orchModel     = flag.String("orchestrator-model", "", "model id (for anthropic substrate; for hermes the model is set in ~/.hermes/config.yaml)")
+
+		frontierSubstrate = flag.String("frontier-substrate", "anthropic", "substrate for frontier baseline: hermes | anthropic")
+		frontierURL       = flag.String("frontier-url", "", "for hermes: gateway URL; for anthropic: BaseURL (empty = api.anthropic.com)")
+		frontierModel     = flag.String("frontier-model", adapterAnth.DefaultFrontierModel, "model id for the frontier baseline")
+
+		graderSubstrate = flag.String("grader-substrate", "anthropic", "substrate for the LLM-as-judge grader: anthropic recommended")
+		graderURL       = flag.String("grader-url", "", "for anthropic: BaseURL (empty = api.anthropic.com)")
+		graderModel     = flag.String("grader-model", grader.DefaultModel, "model id for the grader")
+
+		// Pricing override knob — for local Hermes where token cost
+		// approaches zero. Format: "model-id=inputUSD/Mtok:outputUSD/Mtok",
+		// repeatable. Defaults bake in Haiku / Sonnet / Opus.
+		priceOverrides = flag.String("prices", "", `optional pricing overrides, comma-separated, e.g. "local-gemma-4b=0.10:0.10,my-haiku=0.80:4.00"`)
 	)
 	flag.Parse()
-
-	apiKey := os.Getenv("ANTHROPIC_API_KEY")
-	if apiKey == "" {
-		return fmt.Errorf("ANTHROPIC_API_KEY must be set")
-	}
 
 	// Load cases.
 	data, err := os.ReadFile(*casesFlag)
@@ -122,42 +140,57 @@ func run() error {
 		return fmt.Errorf("no cases to run")
 	}
 
-	// Cost tracker — frontier baseline matters for cost-ratio math.
-	tracker := cost.New(defaultPricing[*frontierModel])
-	for name, p := range defaultPricing {
+	// Pricing — frontier baseline drives the cost-ratio comparison.
+	pricing := make(map[string]cost.Pricing, len(defaultPricing))
+	for k, v := range defaultPricing {
+		pricing[k] = v
+	}
+	if err := applyPriceOverrides(pricing, *priceOverrides); err != nil {
+		return fmt.Errorf("--prices: %w", err)
+	}
+	frontierPricing := pricing[*frontierModel]
+	tracker := cost.New(frontierPricing)
+	for name, p := range pricing {
 		tracker.Register(name, p)
 	}
 
-	// Anthropic adapters.
-	orchestratorAdapter, err := adapterAnth.New(adapterAnth.Config{
-		APIKey: apiKey, Model: *orchModel,
-	})
+	// Build adapters per role. Substrate selection is per-role —
+	// orchestrator can be local Hermes while frontier + grader stay
+	// on Anthropic, which is the default Phase 1 measurement shape.
+	orchestratorAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel)
 	if err != nil {
-		return fmt.Errorf("orchestrator adapter: %w", err)
+		return err
 	}
-	frontierAdapter, err := adapterAnth.New(adapterAnth.Config{
-		APIKey: apiKey, Model: *frontierModel,
-	})
+	frontierAdapter, err := buildAdapter("frontier", *frontierSubstrate, *frontierURL, *frontierModel)
 	if err != nil {
-		return fmt.Errorf("frontier adapter: %w", err)
+		return err
 	}
 
-	// Synthesizer for ensembling — same model as orchestrator so we
+	// Synthesizer uses the SAME substrate as the orchestrator so we
 	// don't smuggle frontier capability into the cheap path.
-	synthesizer, err := recomposer.NewAnthropic(recomposer.AnthropicConfig{
-		APIKey: apiKey, Model: *orchModel,
-	})
-	if err != nil {
-		return fmt.Errorf("synthesizer: %w", err)
-	}
+	synthesizer := recomposer.AdapterSynth{Adapter: orchestratorAdapter}
 
-	// Grader.
+	// Grader is provider-agnostic in spec but for measurement
+	// integrity we want a frontier judge. Only Anthropic supported
+	// today; reject other substrate values explicitly rather than
+	// silently routing through the orchestrator path.
+	if *graderSubstrate != "anthropic" {
+		return fmt.Errorf("--grader-substrate=%q not supported; only 'anthropic' is wired today", *graderSubstrate)
+	}
 	g, err := grader.NewAnthropic(grader.AnthropicConfig{
-		APIKey: apiKey, Model: *graderModel,
+		APIKey:  os.Getenv("ANTHROPIC_API_KEY"),
+		BaseURL: *graderURL,
+		Model:   *graderModel,
 	})
 	if err != nil {
 		return fmt.Errorf("grader: %w", err)
 	}
+
+	// Print the wiring so operators can see what they're actually measuring.
+	fmt.Fprintf(os.Stderr, "phase1 wiring:\n")
+	fmt.Fprintf(os.Stderr, "  orchestrator: %s @ %s (model=%q)\n", *orchSubstrate, displayURL(*orchSubstrate, *orchURL), *orchModel)
+	fmt.Fprintf(os.Stderr, "  frontier:     %s @ %s (model=%q)\n", *frontierSubstrate, displayURL(*frontierSubstrate, *frontierURL), *frontierModel)
+	fmt.Fprintf(os.Stderr, "  grader:       %s @ %s (model=%q)\n", *graderSubstrate, displayURL(*graderSubstrate, *graderURL), *graderModel)
 
 	results := make([]caseResult, 0, len(cf.Cases))
 	for _, c := range cf.Cases {
@@ -190,12 +223,101 @@ func run() error {
 	return nil
 }
 
+// buildAdapter constructs an adapter.Adapter for the given role using
+// the operator-supplied substrate / url / model. Roles are conceptual
+// ("orchestrator", "frontier") — the role name is used only in error
+// messages.
+func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
+	switch substrate {
+	case "hermes":
+		if url == "" {
+			url = "http://127.0.0.1:8642"
+		}
+		cfg := hermes.SingleEndpoint(url, model)
+		a, err := hermes.New(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("%s adapter (hermes %s): %w", role, url, err)
+		}
+		return a, nil
+	case "anthropic":
+		key := os.Getenv("ANTHROPIC_API_KEY")
+		if key == "" {
+			return nil, fmt.Errorf("%s adapter (anthropic): ANTHROPIC_API_KEY must be set", role)
+		}
+		mod := model
+		if mod == "" {
+			// Pick a sensible default based on role hint.
+			if role == "frontier" {
+				mod = adapterAnth.DefaultFrontierModel
+			} else {
+				mod = adapterAnth.DefaultOrchestratorModel
+			}
+		}
+		cfg := adapterAnth.Config{APIKey: key, Model: mod, BaseURL: url}
+		a, err := adapterAnth.New(cfg)
+		if err != nil {
+			return nil, fmt.Errorf("%s adapter (anthropic %s): %w", role, mod, err)
+		}
+		return a, nil
+	default:
+		return nil, fmt.Errorf("%s adapter: unknown substrate %q (want 'hermes' or 'anthropic')", role, substrate)
+	}
+}
+
+// applyPriceOverrides parses a comma-separated list of
+// "model-id=inputUSD/Mtok:outputUSD/Mtok" entries into the pricing
+// map. Useful for registering local-model pricing (typically near
+// zero — electricity cost) or correcting drift in the defaults.
+func applyPriceOverrides(pricing map[string]cost.Pricing, spec string) error {
+	if strings.TrimSpace(spec) == "" {
+		return nil
+	}
+	for _, entry := range strings.Split(spec, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		eq := strings.IndexByte(entry, '=')
+		if eq <= 0 {
+			return fmt.Errorf("entry %q: want 'model=in:out'", entry)
+		}
+		model := strings.TrimSpace(entry[:eq])
+		nums := strings.TrimSpace(entry[eq+1:])
+		colon := strings.IndexByte(nums, ':')
+		if colon <= 0 {
+			return fmt.Errorf("entry %q: want 'model=in:out'", entry)
+		}
+		in, err := strconv.ParseFloat(strings.TrimSpace(nums[:colon]), 64)
+		if err != nil {
+			return fmt.Errorf("entry %q: parse input USD/Mtok: %w", entry, err)
+		}
+		out, err := strconv.ParseFloat(strings.TrimSpace(nums[colon+1:]), 64)
+		if err != nil {
+			return fmt.Errorf("entry %q: parse output USD/Mtok: %w", entry, err)
+		}
+		pricing[model] = cost.Pricing{InputUSDPerMTok: in, OutputUSDPerMTok: out}
+	}
+	return nil
+}
+
+// displayURL renders a substrate+url combination for the wiring banner.
+// Empty url for anthropic defaults to api.anthropic.com.
+func displayURL(substrate, url string) string {
+	if url != "" {
+		return url
+	}
+	if substrate == "anthropic" {
+		return "api.anthropic.com"
+	}
+	return "<unset>"
+}
+
 // runCase executes both paths for one case and grades both candidates.
 func runCase(
 	ctx context.Context,
 	c caseSpec,
-	orchestrator, frontier *adapterAnth.Adapter,
-	synthesizer *recomposer.AnthropicSynthesizer,
+	orchestrator, frontier adapter.Adapter,
+	synthesizer recomposer.Synthesizer,
 	g grader.Grader,
 	draftsPerCase int,
 	verbose bool,
@@ -277,8 +399,8 @@ func buildTaskInput(c caseSpec) string {
 func runOrchestrator(
 	ctx context.Context,
 	task string,
-	a *adapterAnth.Adapter,
-	syn *recomposer.AnthropicSynthesizer,
+	a adapter.Adapter,
+	syn recomposer.Synthesizer,
 	draftsPerCaseOverride int,
 	verbose bool,
 ) (string, int, error) {
@@ -374,7 +496,7 @@ func runOrchestrator(
 // plan call (used by --drafts-per-case for diagnostic runs).
 func planDraftCount(
 	ctx context.Context,
-	a *adapterAnth.Adapter,
+	a adapter.Adapter,
 	task string,
 	override int,
 	verbose bool,
@@ -417,7 +539,7 @@ func planDraftCount(
 // downstream revise step (case-002, case-003 in the v2 measurement).
 func critiqueDraft(
 	ctx context.Context,
-	a *adapterAnth.Adapter,
+	a adapter.Adapter,
 	task, draft string,
 ) (session.Verdict, string, int, error) {
 	input := "Review this draft response. Decide if a human would want a revision before sending — not whether they would tweak a word here or there.\n\n" +
@@ -454,7 +576,7 @@ func critiqueDraft(
 // critique notes. Returns the new draft as a ReturnResultPayload.
 func reviseDraft(
 	ctx context.Context,
-	a *adapterAnth.Adapter,
+	a adapter.Adapter,
 	task, prevDraft, critiqueNotes string,
 ) (session.ReturnResultPayload, int, error) {
 	input := "Revise this draft based on the critic's notes. Address the issues directly; produce a single revised draft. " +
@@ -494,7 +616,7 @@ func buildEnsembleDraftInput(task string, idx, total int) string {
 
 // runFrontier makes a single Anthropic Messages call directly.
 // Bypasses the runner — frontier baseline is intentionally a one-shot.
-func runFrontier(ctx context.Context, task string, a *adapterAnth.Adapter, verbose bool) (string, int, error) {
+func runFrontier(ctx context.Context, task string, a adapter.Adapter, verbose bool) (string, int, error) {
 	env := session.NewRoot("phase1-frontier", task, "{\"content\":\"<email>\",\"confidence\":<0..1>}",
 		classification.Internal, session.Budget{TokensRemaining: 16_000, DepthRemaining: 1})
 	env.Evaluate = &session.Evaluate{Playbook: session.PlaybookProcess, Confidence: 1.0}

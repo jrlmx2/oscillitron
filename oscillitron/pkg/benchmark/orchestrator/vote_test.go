@@ -13,6 +13,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 // captureTracer collects emitted events for test assertions.
@@ -27,10 +28,15 @@ type capturedEvent struct {
 	attrs map[string]any
 }
 
-func (c *captureTracer) Event(_ context.Context, level slog.Level, name string, attrs ...slog.Attr) {
+func (c *captureTracer) Event(ctx context.Context, level slog.Level, name string, attrs ...slog.Attr) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	m := make(map[string]any, len(attrs))
+	// Include correlation attrs so tests can assert on case +
+	// orchestrator + attempt_idx regardless of which layer set them.
+	for _, p := range trace.CorrelationFrom(ctx) {
+		m[p.Key] = p.Value
+	}
 	for _, a := range attrs {
 		m[a.Key] = a.Value.Any()
 	}
@@ -230,20 +236,21 @@ func TestVote_EmitsPerAttemptEvents(t *testing.T) {
 	if len(dones) != 3 {
 		t.Errorf("vote.attempt_done count = %d, want 3", len(dones))
 	}
-	// Each done event should carry the extracted answer + duration + tokens.
+	// Each done event should carry the extracted answer + duration +
+	// tokens. case/orchestrator are correlation-stamped by
+	// benchmark.Run (not by Vote directly); they appear in unit
+	// tests only when the test explicitly stamps the ctx.
 	for i, e := range dones {
-		if e.attrs["case"] != "c-001" {
-			t.Errorf("done[%d] case = %v, want c-001", i, e.attrs["case"])
-		}
-		if e.attrs["orchestrator"] != "vote-3-test" {
-			t.Errorf("done[%d] orchestrator = %v", i, e.attrs["orchestrator"])
-		}
 		extracted, ok := e.attrs["extracted"].(string)
 		if !ok || (extracted != "A" && extracted != "B") {
 			t.Errorf("done[%d] extracted = %v, want A or B", i, e.attrs["extracted"])
 		}
 		if tokens, _ := e.attrs["tokens"].(int64); tokens != 10 {
 			t.Errorf("done[%d] tokens = %v, want 10", i, e.attrs["tokens"])
+		}
+		// Vote stamps attempt_idx itself.
+		if e.attrs["attempt_idx"] == nil {
+			t.Errorf("done[%d] missing attempt_idx correlation", i)
 		}
 	}
 }

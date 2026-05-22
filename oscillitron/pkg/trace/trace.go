@@ -35,13 +35,27 @@ type Slog struct {
 	Logger *slog.Logger
 }
 
-// Event implements Tracer.
+// Event implements Tracer. Correlation pairs from ctx
+// (WithCorrelation) are prepended to attrs so every emit downstream
+// of a stamped scope carries its identifiers automatically — caller
+// at each layer doesn't have to know about the originating bench
+// case ID.
 func (s Slog) Event(ctx context.Context, level slog.Level, name string, attrs ...slog.Attr) {
 	logger := s.Logger
 	if logger == nil {
 		logger = slog.Default()
 	}
-	logger.LogAttrs(ctx, level, name, attrs...)
+	pairs := CorrelationFrom(ctx)
+	if len(pairs) == 0 {
+		logger.LogAttrs(ctx, level, name, attrs...)
+		return
+	}
+	merged := make([]slog.Attr, 0, len(pairs)+len(attrs))
+	for _, p := range pairs {
+		merged = append(merged, slog.String(p.Key, p.Value))
+	}
+	merged = append(merged, attrs...)
+	logger.LogAttrs(ctx, level, name, merged...)
 }
 
 // Discard drops every event. Useful in tests and benchmarks.

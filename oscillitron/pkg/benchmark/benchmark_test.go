@@ -5,7 +5,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"sync"
 	"testing"
+
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 // stubOrchestrator returns a pre-recorded Extracted per case ID. If
@@ -268,6 +272,68 @@ func TestRun_SlidingWindow_FewerCasesThanWindow_NoSnapshots(t *testing.T) {
 	// But the aggregate is still computed.
 	if report.Aggregates[0].PassRate != 1.0 {
 		t.Errorf("PassRate = %f, want 1.0", report.Aggregates[0].PassRate)
+	}
+}
+
+// captureTracer collects events + correlation for assertion.
+type captureTracer struct {
+	mu     sync.Mutex
+	events []capturedEvent
+}
+
+type capturedEvent struct {
+	name  string
+	attrs map[string]any
+}
+
+func (c *captureTracer) Event(ctx context.Context, _ slog.Level, name string, attrs ...slog.Attr) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	m := make(map[string]any)
+	for _, p := range trace.CorrelationFrom(ctx) {
+		m[p.Key] = p.Value
+	}
+	for _, a := range attrs {
+		m[a.Key] = a.Value.Any()
+	}
+	c.events = append(c.events, capturedEvent{name: name, attrs: m})
+}
+
+func TestRun_StampsCorrelation_CaseAndOrchestrator(t *testing.T) {
+	// Verifies that per-case events emitted from within Run carry
+	// case + orchestrator correlation, so downstream observers can
+	// stitch every emit back to its originating bench case.
+	cases := makeCases(2)
+	answers := map[string]string{"c00": "A", "c01": "A"}
+	tracer := &captureTracer{}
+	_, err := Run(context.Background(), RunnerConfig{
+		Loader:        stubLoader{name: "test", cases: cases},
+		Orchestrators: []Orchestrator{&stubOrchestrator{name: "orch", answers: answers}},
+		Grader:        stubGrader{},
+		Tracer:        tracer,
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Find the case_graded events.
+	var graded []capturedEvent
+	for _, e := range tracer.events {
+		if e.name == "benchmark.case_graded" {
+			graded = append(graded, e)
+		}
+	}
+	if len(graded) != 2 {
+		t.Fatalf("case_graded count = %d, want 2", len(graded))
+	}
+	// Each should carry case + orchestrator from correlation.
+	for i, e := range graded {
+		caseID := cases[i].ID
+		if e.attrs["case"] != caseID {
+			t.Errorf("graded[%d].case = %v, want %s", i, e.attrs["case"], caseID)
+		}
+		if e.attrs["orchestrator"] != "orch" {
+			t.Errorf("graded[%d].orchestrator = %v, want orch", i, e.attrs["orchestrator"])
+		}
 	}
 }
 

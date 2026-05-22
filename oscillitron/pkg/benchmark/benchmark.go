@@ -192,6 +192,19 @@ type RunnerConfig struct {
 	SlidingWindowSize int
 	// Tracer emits structured per-case events. Defaults to trace.Discard.
 	Tracer trace.Tracer
+	// OnCase, if set, is invoked synchronously after each CaseResult
+	// completes (i.e., every orchestrator + grader returned for the
+	// case). Fires AFTER the window snapshot for that case so the
+	// callback sees the final state.
+	//
+	// Typical uses: append the case to a JSONL stream for crash
+	// safety on long runs (see AppendCaseJSONL); render a live
+	// progress line; drive a plotting/dashboard sidecar.
+	//
+	// If OnCase returns an error, the runner records a
+	// `benchmark.on_case_callback_error` trace event and continues —
+	// callback failures don't kill the run. A panic propagates.
+	OnCase func(CaseResult) error
 }
 
 // Run loads cases, runs each through every orchestrator + grader,
@@ -291,6 +304,18 @@ func Run(ctx context.Context, cfg RunnerConfig) (Report, error) {
 		if cfg.SlidingWindowSize > 0 && len(report.Cases) >= cfg.SlidingWindowSize {
 			report.Windows = append(report.Windows,
 				computeWindow(report.Cases, cfg.Orchestrators, cfg.SlidingWindowSize, caseIdx))
+		}
+
+		// Per-case callback. Fires after the window snapshot so the
+		// caller sees the final case state. Errors are non-fatal —
+		// recorded as a trace event and the run continues.
+		if cfg.OnCase != nil {
+			if err := cfg.OnCase(cr); err != nil {
+				trace.Error(tracer, ctx, "benchmark.on_case_callback_error",
+					slog.String("case", c.ID),
+					slog.String("err", err.Error()),
+				)
+			}
 		}
 	}
 

@@ -451,18 +451,27 @@ func report(results []caseResult, orchModel, frontierModel, graderModel string, 
 }
 
 func verdict(q, c, pq, kq, pc, kc float64) string {
-	switch {
-	case q >= pq && c <= pc:
-		return "PROCEED (both quality and cost in proceed zone)"
-	case q < kq:
+	// Quality is the floor — if it's below kill, nothing else matters.
+	if q < kq {
 		return "KILL (quality below floor)"
+	}
+	// Quality in proceed zone: verdict depends on cost zone, but
+	// quality is the meaningful signal at this stage and gets primacy.
+	if q >= pq {
+		switch {
+		case c <= pc:
+			return "PROCEED (both quality and cost in proceed zone)"
+		case c <= kc:
+			return "PROCEED ON QUALITY — cost mid-zone; expected with hosted cheap proxy"
+		default:
+			return "PROCEED ON QUALITY — cost above kill zone (expected with hosted cheap proxy; re-measure against a local cheap substrate for the §2.5 cost-wedge claim)"
+		}
+	}
+	// Quality in middle zone (kq ≤ q < pq).
+	switch {
 	case c > kc:
-		return "DIAGNOSE (cost above kill threshold; orchestration overhead may be eating the wedge)"
-	case q >= pq:
-		return "PROCEED ON QUALITY — cost mid-zone; expected with hosted cheap proxy"
-	case q >= kq:
-		return "DIAGNOSE (quality in middle zone; review per-case detail before deciding)"
+		return "DIAGNOSE (quality middle, cost above kill — orchestration overhead may be eating the wedge)"
 	default:
-		return "INCONCLUSIVE"
+		return "DIAGNOSE (quality in middle zone; review per-case detail before deciding)"
 	}
 }

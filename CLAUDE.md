@@ -180,6 +180,40 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 - **No edits to `inputs/`** — ever.
 - **Open decisions** stay in this file (the list below) until they're locked, at which point they migrate into the relevant section (Architecture, Stack, etc.) with a `LOCKED YYYY-MM-DD` tag.
 
+## Versioning & release tagging (LOCKED 2026-05-22)
+
+Semantic versioning on annotated git tags + GitHub releases. **Claude manages tagging proactively** — when a release point is reached, create the annotated tag, push it, and `gh release create` with notes describing what landed.
+
+| Tag shape | When |
+|---|---|
+| `vMAJOR.0.0` | A new architectural layer or substrate component lands (e.g., v1.0.0 = bench-ready foundation; v2.0.0 = curation/self-improvement loop). |
+| `vMAJOR.MINOR.0` | Additive feature within the same architectural layer (new orchestrator, new grader, new benchmark loader). |
+| `vMAJOR.MINOR.PATCH` | Bugfix or non-functional change on a released major. |
+
+Between major-version development cycles, **no intermediate tags** — work accumulates in main until the next major is feature-complete, then tag once. Don't tag work-in-progress.
+
+Tag the merge commit on `main`, not feature branches. Annotated tags only (`git tag -a`, never lightweight). Always push tags with `git push origin <tag>`. Always pair with a GitHub release (`gh release create`) for visibility.
+
+Current state: **v1.0.0** at `main@d52edeb` (2026-05-22). v2.0.0 in development.
+
+## PR workflow (LOCKED 2026-05-22)
+
+**Branch from `main`, one PR at a time. Wait for merge between PRs.** Don't stack.
+
+Stacked PRs caused real pain on the v1.0.0 cycle: each PR only merges into its *immediate base*, so 6 stacked PRs left main behind even after all were "merged." Recovery required opening a separate "land it all" PR.
+
+Going forward, the loop is:
+
+1. Branch from `origin/main` (fresh fetch first).
+2. Build the change. Test. Commit. Push.
+3. Open PR against `main`. Report URL to the user.
+4. **Stop.** Wait for the user to merge (or to direct continuation).
+5. After merge confirmation, fetch `origin/main`, branch again, start the next step.
+
+If a follow-up step is *blocked* on the prior PR (e.g., uses types defined there), say so explicitly and wait. Don't preemptively stack to "save time" — the time saved is eaten by the recovery PR.
+
+If the user explicitly asks to stack (e.g., for a tight series of related changes), honor that — but the default is one PR at a time off main.
+
 ## Open questions / decisions to make
 
 ### Recently locked

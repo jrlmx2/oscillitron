@@ -134,6 +134,7 @@ func run() error {
 			N:         *voteN,
 			Extractor: extractor,
 			Governor:  governor,
+			Tracer:    tracer,
 		},
 	}
 

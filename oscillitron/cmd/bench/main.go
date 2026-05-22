@@ -48,14 +48,17 @@ func main() {
 }
 
 func run() error {
+	var priceFlag stringSliceFlag
+	flag.Var(&priceFlag, "price", "blended USD-per-million-tokens for one orchestrator, format NAME=RATE (e.g., 'orchestrator-vote-3-default=0.01' or 'frontier-google/gemma-4-e4b=4.50'). Repeatable.")
 	var (
-		benchName = flag.String("benchmark", "gpqa", "benchmark name (gpqa)")
-		casesPath = flag.String("cases", "cmd/bench/cases/gpqa_diamond.json", "JSON snapshot path (operator-downloaded; see cmd/bench/cases/README.md)")
-		limit     = flag.Int("limit", 0, "cap the number of cases (0 = all)")
-		voteN     = flag.Int("vote-n", 5, "N attempts for the vote orchestrator")
-		windowN   = flag.Int("sliding-window", 25, "sliding-window size in cases (0 = disable window stats)")
-		reportOut = flag.String("report-out", "", "optional: dump the full Report as indented JSON to this path after the run completes")
-		streamOut = flag.String("stream-out", "", "optional: append each CaseResult as one JSON line to this path as the run progresses (crash-safety on long runs; tail -f for live progress)")
+		benchName     = flag.String("benchmark", "gpqa", "benchmark name (gpqa)")
+		casesPath     = flag.String("cases", "cmd/bench/cases/gpqa_diamond.json", "JSON snapshot path (operator-downloaded; see cmd/bench/cases/README.md)")
+		limit         = flag.Int("limit", 0, "cap the number of cases (0 = all)")
+		voteN         = flag.Int("vote-n", 5, "N attempts for the vote orchestrator")
+		windowN       = flag.Int("sliding-window", 25, "sliding-window size in cases (0 = disable window stats)")
+		reportOut     = flag.String("report-out", "", "optional: dump the full Report as indented JSON to this path after the run completes")
+		streamOut     = flag.String("stream-out", "", "optional: append each CaseResult as one JSON line to this path as the run progresses (crash-safety on long runs; tail -f for live progress)")
+		frontierPrice = flag.Float64("frontier-price", 0, "blended USD-per-million-tokens for the counterfactual frontier baseline (e.g., 4.50 for Sonnet 4.6). When set, each orchestrator's total tokens get re-priced through this for the savings column.")
 
 		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "orchestrator substrate (hermes|anthropic)")
 		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "hermes gateway URL or anthropic BaseURL")
@@ -154,6 +157,15 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "bench: streaming per-case JSONL to %s\n", *streamOut)
 	}
 
+	pricing, err := buildPricingMap(priceFlag)
+	if err != nil {
+		return err
+	}
+	if pricing != nil {
+		fmt.Fprintf(os.Stderr, "bench: pricing configured for %d orchestrators (frontier baseline = $%.4f/Mtok)\n",
+			len(pricing), *frontierPrice)
+	}
+
 	report, err := benchmark.Run(context.Background(), benchmark.RunnerConfig{
 		Loader:            loader,
 		Orchestrators:     orchestrators,
@@ -161,6 +173,8 @@ func run() error {
 		SlidingWindowSize: *windowN,
 		Tracer:            tracer,
 		OnCase:            onCase,
+		Pricing:           pricing,
+		FrontierPricing:   benchmark.Pricing{USDPerMTok: *frontierPrice},
 	})
 	if err != nil {
 		return err
@@ -273,6 +287,31 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
+// stringSliceFlag collects repeatable --price NAME=RATE flag values.
+type stringSliceFlag []string
+
+func (s *stringSliceFlag) String() string  { return strings.Join(*s, ",") }
+func (s *stringSliceFlag) Set(v string) error {
+	*s = append(*s, v)
+	return nil
+}
+
+// buildPricingMap parses the --price flag values into a PricingMap.
+func buildPricingMap(entries []string) (benchmark.PricingMap, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	m := make(benchmark.PricingMap, len(entries))
+	for _, e := range entries {
+		name, p, err := benchmark.ParsePricingFlag(e)
+		if err != nil {
+			return nil, err
+		}
+		m[name] = p
+	}
+	return m, nil
+}
+
 // parseBytes accepts "1024", "8KB", "16MB", "8GB", "1TB".
 func parseBytes(s string) (uint64, error) {
 	s = strings.TrimSpace(strings.ToUpper(s))
@@ -311,8 +350,13 @@ func printReport(w *os.File, r benchmark.Report) {
 
 	fmt.Fprintf(w, "--- Aggregate ---\n")
 	for _, a := range r.Aggregates {
-		fmt.Fprintf(w, "  %-50s  pass=%d  fail=%d  err=%d  pass_rate=%.3f  avg_score=%.3f  calls=%d  tokens=%d\n",
+		fmt.Fprintf(w, "  %-50s  pass=%d  fail=%d  err=%d  pass_rate=%.3f  avg_score=%.3f  calls=%d  tokens=%d",
 			a.OrchestratorName, a.Successes, a.Failures, a.Errors, a.PassRate, a.AvgScore, a.TotalCalls, a.TotalTokens)
+		if a.TotalActualUSD > 0 || a.TotalFrontierUSD > 0 {
+			fmt.Fprintf(w, "  actual=$%.4f  frontier=$%.4f  savings=%.1f%%",
+				a.TotalActualUSD, a.TotalFrontierUSD, a.SavingsRatio*100)
+		}
+		fmt.Fprintln(w)
 	}
 
 	if len(r.Windows) > 0 {

@@ -143,6 +143,18 @@ type AggregateStats struct {
 	TotalCalls        int
 	TotalTokens       int
 	TotalGraderTokens int
+	// TotalActualUSD is this orchestrator's own tokens × its own
+	// price. Zero when no pricing is configured for the orchestrator.
+	TotalActualUSD float64
+	// TotalFrontierUSD is this orchestrator's own tokens re-priced
+	// through RunnerConfig.FrontierPricing — the counterfactual
+	// "what would this same volume have cost via the frontier
+	// model?" column. Zero when no frontier pricing is configured.
+	TotalFrontierUSD float64
+	// SavingsRatio is (TotalFrontierUSD − TotalActualUSD) /
+	// TotalFrontierUSD. Zero when frontier total is zero.
+	// Positive when actual is cheaper than frontier.
+	SavingsRatio float64
 }
 
 // WindowOrchestratorStats is one orchestrator's snapshot in one
@@ -205,6 +217,16 @@ type RunnerConfig struct {
 	// `benchmark.on_case_callback_error` trace event and continues —
 	// callback failures don't kill the run. A panic propagates.
 	OnCase func(CaseResult) error
+	// Pricing optionally tracks per-orchestrator USD cost. Maps
+	// Orchestrator.Name() → blended USD-per-million-tokens for that
+	// orchestrator's model. Empty/nil = no cost tracking; aggregate
+	// stats' cost fields stay zero.
+	Pricing PricingMap
+	// FrontierPricing is the counterfactual baseline rate. Every
+	// orchestrator's total tokens get re-priced through this for
+	// the "what would the frontier model have cost?" column.
+	// Zero value = no counterfactual.
+	FrontierPricing Pricing
 }
 
 // Run loads cases, runs each through every orchestrator + grader,
@@ -320,7 +342,7 @@ func Run(ctx context.Context, cfg RunnerConfig) (Report, error) {
 	}
 
 	report.EndedAt = time.Now()
-	report.Aggregates = computeAggregates(report.Cases, cfg.Orchestrators)
+	report.Aggregates = computeAggregates(report.Cases, cfg.Orchestrators, cfg.Pricing, cfg.FrontierPricing)
 
 	trace.Info(tracer, ctx, "benchmark.done",
 		slog.String("benchmark", cfg.Loader.Name()),
@@ -360,7 +382,8 @@ func computeWindow(allCases []CaseResult, orchs []Orchestrator, size int, endCas
 }
 
 // computeAggregates produces one AggregateStats per orchestrator.
-func computeAggregates(cases []CaseResult, orchs []Orchestrator) []AggregateStats {
+// Cost fields stay zero when pricing is empty/zero.
+func computeAggregates(cases []CaseResult, orchs []Orchestrator, pricing PricingMap, frontier Pricing) []AggregateStats {
 	aggs := make([]AggregateStats, len(orchs))
 	for oIdx, o := range orchs {
 		aggs[oIdx].OrchestratorName = o.Name()
@@ -387,6 +410,18 @@ func computeAggregates(cases []CaseResult, orchs []Orchestrator) []AggregateStat
 		if graded > 0 {
 			aggs[oIdx].PassRate = float64(aggs[oIdx].Successes) / float64(graded)
 			aggs[oIdx].AvgScore = scoreSum / float64(graded)
+		}
+		// Cost columns. Tokens × this orchestrator's rate; tokens ×
+		// frontier rate for counterfactual.
+		if pricing != nil {
+			aggs[oIdx].TotalActualUSD = pricing.Cost(o.Name(), aggs[oIdx].TotalTokens)
+		}
+		if frontier.USDPerMTok > 0 {
+			aggs[oIdx].TotalFrontierUSD = frontier.Cost(aggs[oIdx].TotalTokens)
+			if aggs[oIdx].TotalFrontierUSD > 0 {
+				aggs[oIdx].SavingsRatio =
+					(aggs[oIdx].TotalFrontierUSD - aggs[oIdx].TotalActualUSD) / aggs[oIdx].TotalFrontierUSD
+			}
 		}
 	}
 	return aggs

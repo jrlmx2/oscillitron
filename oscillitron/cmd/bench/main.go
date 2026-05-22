@@ -36,7 +36,9 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/orchestrator"
+	"github.com/jrlmx2/oscillitron/pkg/config"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
+	"github.com/jrlmx2/oscillitron/pkg/trace/otel"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
@@ -80,13 +82,130 @@ func run() error {
 		governorRes   = flag.Float64("governor-reserve-fraction", 0, "VRAM safety margin as fraction of available (0 = 5%)")
 		vramBudget    = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 16GB); pins what the governor's probe reports")
 
-		verbose = flag.Bool("v", false, "verbose tracer (slog Info events)")
+		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
+		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
+		otelService = flag.String("otel-service-name", "oscillitron-bench", "value sent as the OTLP resource attribute service.name; props: trace.otel.service_name")
+		configFlag  = flag.String("config", "", "optional .properties config path; props fill in any flag the user did not pass on the CLI (CLI always wins)")
 	)
 	flag.Parse()
 
+	// Properties file: fills in unset CLI flags. CLI wins. Keys:
+	//
+	//   bench.benchmark             (default for --benchmark)
+	//   bench.cases                 (--cases)
+	//   bench.limit                 (--limit)
+	//   bench.vote_n                (--vote-n)
+	//   bench.sliding_window        (--sliding-window)
+	//   bench.report_out            (--report-out)
+	//   bench.stream_out            (--stream-out)
+	//   bench.frontier_price        (--frontier-price)
+	//   bench.orchestrator.substrate / url / model
+	//   bench.frontier.substrate / url / model
+	//   trace.verbose               (--v)
+	//   trace.otel.enabled          (--otel)
+	//   trace.otel.service_name     (--otel-service-name)
+	props := config.Properties{}
+	if *configFlag != "" {
+		p, err := config.Load(*configFlag)
+		if err != nil {
+			return fmt.Errorf("load %s: %w", *configFlag, err)
+		}
+		props = p
+		// Trace settings.
+		if !flagPassed("v") {
+			*verbose = props.Bool("trace.verbose", false)
+		}
+		if !flagPassed("otel") {
+			*otelEnable = props.Bool("trace.otel.enabled", false)
+		}
+		if !flagPassed("otel-service-name") {
+			*otelService = props.String("trace.otel.service_name", "oscillitron-bench")
+		}
+		// Bench settings.
+		if !flagPassed("benchmark") {
+			*benchName = props.String("bench.benchmark", *benchName)
+		}
+		if !flagPassed("cases") {
+			*casesPath = props.String("bench.cases", *casesPath)
+		}
+		if !flagPassed("limit") {
+			*limit = props.Int("bench.limit", *limit)
+		}
+		if !flagPassed("vote-n") {
+			*voteN = props.Int("bench.vote_n", *voteN)
+		}
+		if !flagPassed("sliding-window") {
+			*windowN = props.Int("bench.sliding_window", *windowN)
+		}
+		if !flagPassed("report-out") {
+			*reportOut = props.String("bench.report_out", "")
+		}
+		if !flagPassed("stream-out") {
+			*streamOut = props.String("bench.stream_out", "")
+		}
+		if !flagPassed("frontier-price") {
+			if s := props.String("bench.frontier_price", ""); s != "" {
+				if v, perr := strconv.ParseFloat(s, 64); perr == nil {
+					*frontierPrice = v
+				}
+			}
+		}
+		// Pricing entries from props: bench.price.<name> = rate.
+		for _, key := range props.PrefixedKeys("bench.price.") {
+			name := strings.TrimPrefix(key, "bench.price.")
+			priceFlag = append(priceFlag, name+"="+props.String(key, "0"))
+		}
+		// Substrate routing.
+		if !flagPassed("orchestrator-substrate") {
+			*orchSubstrate = props.String("bench.orchestrator.substrate", *orchSubstrate)
+		}
+		if !flagPassed("orchestrator-url") {
+			*orchURL = props.String("bench.orchestrator.url", *orchURL)
+		}
+		if !flagPassed("orchestrator-model") {
+			*orchModel = props.String("bench.orchestrator.model", *orchModel)
+		}
+		if !flagPassed("frontier-substrate") {
+			*frontSubstrate = props.String("bench.frontier.substrate", *frontSubstrate)
+		}
+		if !flagPassed("frontier-url") {
+			*frontURL = props.String("bench.frontier.url", *frontURL)
+		}
+		if !flagPassed("frontier-model") {
+			*frontModel = props.String("bench.frontier.model", *frontModel)
+		}
+	}
+	_ = props // future expansion
+
 	var tracer trace.Tracer = trace.Discard{}
+	var tracers trace.Multi
 	if *verbose {
-		tracer = trace.Slog{Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+		tracers = append(tracers, trace.Slog{
+			Logger: slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		})
+	}
+	if *otelEnable {
+		provider, err := otel.New(context.Background(), *otelService)
+		if err != nil {
+			return fmt.Errorf("--otel: %w", err)
+		}
+		defer func() {
+			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := provider.Shutdown(shutdownCtx); err != nil {
+				fmt.Fprintf(os.Stderr, "bench: OTel shutdown: %v\n", err)
+			}
+		}()
+		tracers = append(tracers, trace.Slog{Logger: provider.Logger})
+		fmt.Fprintf(os.Stderr, "bench: shipping trace events to OTel (service.name=%s; configure endpoint via OTEL_EXPORTER_OTLP_ENDPOINT)\n", *otelService)
+	}
+	switch len(tracers) {
+	case 0:
+		// keep Discard
+	case 1:
+		tracer = tracers[0]
+	default:
+		tracer = tracers
 	}
 
 	// Build the governor first — orchestrators and graders all share it.
@@ -286,6 +405,19 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// flagPassed reports whether the given flag was set explicitly on
+// the CLI. Used to decide whether a properties value should override
+// (it shouldn't — CLI wins).
+func flagPassed(name string) bool {
+	passed := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			passed = true
+		}
+	})
+	return passed
 }
 
 // stringSliceFlag collects repeatable --price NAME=RATE flag values.

@@ -1,0 +1,43 @@
+# CLAUDE GENERATED
+#
+# Example properties file for cmd/bench. Copy to bench.properties and
+# pass via `--config bench.properties`. CLI flags always override.
+#
+# Trace / observability
+#----------------------
+trace.verbose=true
+# OpenTelemetry export. Configure the OTLP endpoint + auth via env
+# vars (OTEL_EXPORTER_OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_HEADERS).
+# Datadog/Splunk operators run an OTel collector that ingests OTLP
+# and routes to their backend.
+trace.otel.enabled=false
+trace.otel.service_name=oscillitron-bench
+
+# Bench output
+#-------------
+bench.report_out=/tmp/bench-report.json
+bench.stream_out=/tmp/bench-stream.jsonl
+
+# Benchmark + corpus
+#-------------------
+bench.benchmark=gpqa
+bench.cases=cmd/bench/cases/gpqa_diamond.json
+bench.limit=0
+bench.vote_n=3
+bench.sliding_window=25
+
+# Substrate routing
+#------------------
+bench.orchestrator.substrate=hermes
+bench.orchestrator.url=http://127.0.0.1:8642
+bench.orchestrator.model=
+
+bench.frontier.substrate=hermes
+bench.frontier.url=http://127.0.0.1:8642
+bench.frontier.model=
+
+# Pricing — per-orchestrator blended USD-per-million-tokens.
+# Key shape: bench.price.<orchestrator-name>=<rate>. Repeatable.
+# bench.price.frontier-default=4.50
+# bench.price.orchestrator-vote-3-default=0.01
+bench.frontier_price=0

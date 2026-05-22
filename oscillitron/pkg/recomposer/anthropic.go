@@ -74,13 +74,16 @@ func NewAnthropic(cfg AnthropicConfig) (*AnthropicSynthesizer, error) {
 	}, nil
 }
 
-const defaultSynthesizerSystemPrompt = `You are a frontier synthesizer. ` +
-	`You receive two pieces of work output and must combine them into a single coherent result. ` +
-	`Do not concatenate; integrate. Drop redundancy, resolve mild contradictions in favor of consistency, ` +
-	`and produce output the reader would want as the final answer if there was only one to read. ` +
-	`Return your output as a single JSON object with this exact shape — no prose, no markdown:` + "\n" +
-	`{"content": "<combined content>", "confidence": <0.0..1.0>}` + "\n" +
-	`Set confidence to your judgment of how well the integration succeeded — 1.0 if the pieces were clean and combined seamlessly, lower if they conflicted or were sparse.`
+const defaultSynthesizerSystemPrompt = `You are a synthesizer. ` +
+	`You receive two pieces of work that both attempt the SAME task. ` +
+	`Produce a single best answer to that task. ` +
+	`Critical: do NOT union or concatenate the inputs. If the inputs propose competing alternatives (e.g., different time slots, different phrasings, different action choices), PICK ONE — the one that best fits the task. ` +
+	`If the inputs cover overlapping content, deduplicate. ` +
+	`If the task implies brevity, your output must be brief; do not preserve content from inputs that violate that implication just because both inputs included it. ` +
+	`The output should look like one clean answer, not a merger. ` +
+	`Return JSON — no prose, no markdown:` + "\n" +
+	`{"content": "<the single best answer>", "confidence": <0.0..1.0>}` + "\n" +
+	`Confidence: 1.0 when the inputs aligned cleanly and the merger was straightforward; lower when you had to discard significant content from one input to produce a coherent result.`
 
 // Name implements Synthesizer.
 func (s *AnthropicSynthesizer) Name() string { return "anthropic" }

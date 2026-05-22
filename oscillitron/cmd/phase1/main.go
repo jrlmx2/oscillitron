@@ -94,7 +94,7 @@ func run() error {
 		orchModel         = flag.String("orchestrator-model", adapterAnth.DefaultOrchestratorModel, "cheap-proxy model for the orchestrator path")
 		frontierModel     = flag.String("frontier-model", adapterAnth.DefaultFrontierModel, "frontier model for the single-call baseline")
 		graderModel       = flag.String("grader-model", grader.DefaultModel, "model used by the LLM-as-judge grader")
-		draftsPerCase     = flag.Int("drafts-per-case", 3, "how many orchestrator drafts to ensemble; 1 disables ensembling")
+		draftsPerCase     = flag.Int("drafts-per-case", 0, "operator override for ensemble width; 0 = plan playbook decides (intent-conditioned), 1 = no ensembling, N>1 = static")
 		limit             = flag.Int("limit", 0, "if >0, only run the first N cases")
 		verbose           = flag.Bool("v", false, "print per-case detail to stderr")
 		out               = flag.String("out", "", "if set, write per-case results as JSON to this path")
@@ -250,61 +250,54 @@ func buildTaskInput(c caseSpec) string {
 		"\n\nWrite the draft directly. No commentary. Treat the body of the email as plain text you'll send."
 }
 
-// runOrchestrator drives the call tree: plan emits N process children
-// → each Haiku generates a draft → AnthropicSynthesizer merges them.
-// Critique fires per the verifier policy in bootstrap (the runner's
-// default), so quality signals accumulate in RunState even if we
-// don't act on them in v0.
+// runOrchestrator drives the orchestration pipeline for one case:
+//
+//  1. Plan step — the plan playbook reads the task and decides how
+//     many drafts to emit. Terse-shaped tasks ("2 lines max", CEO-
+//     style, single-action) emit N=1; nuanced tasks emit N=2-3.
+//
+//  2. Draft step — N independent Haiku calls produce candidate drafts.
+//     N=1 skips ensembling entirely.
+//
+//  3. Synthesis — if N>1, AnthropicSynthesizer (with Haiku) merges the
+//     drafts into one. The synthesizer's tightened prompt picks ONE
+//     alternative when inputs conflict rather than concatenating.
+//
+//  4. Critique — the critique playbook scores the (synthesized or
+//     single) draft. Returns verdict + issues.
+//
+//  5. Revise — if the critique's verdict is "issues" or "fail", one
+//     revise pass (process call) takes the current draft + the
+//     critique notes as additional context and produces a revised
+//     version. Replaces the draft.
+//
+// The flow gives cheap models room to iterate without exploding cost:
+// 1 plan + N drafts + (N-1) syntheses + 1 critique + 0-1 revise =
+// 3-6 Haiku calls per case depending on shape.
 func runOrchestrator(
 	ctx context.Context,
 	task string,
 	a *adapterAnth.Adapter,
 	syn *recomposer.AnthropicSynthesizer,
-	draftsPerCase int,
+	draftsPerCaseOverride int,
 	verbose bool,
 ) (string, int, error) {
-	if draftsPerCase < 1 {
-		draftsPerCase = 1
-	}
-
-	// Build a plan envelope by hand — Phase 1 §2.3 item 6 explicitly
-	// calls for manual decomposition. The plan emits N process children,
-	// each asked to produce a draft.
-	root := session.NewRoot("phase1-root", task, "{draft}", classification.Internal,
-		session.Budget{TokensRemaining: 32_000, DepthRemaining: 3})
-	// Plan playbook is what we want the root to be; but the runner
-	// expects evaluate to pick. We pre-pin it via Evaluate so we
-	// don't pay for an extra evaluate call when we already know the
-	// decomposition.
-	root.Evaluate = &session.Evaluate{Playbook: session.PlaybookPlan, Confidence: 1.0}
-	seeds := make([]session.SubAPSeed, draftsPerCase)
-	for i := 0; i < draftsPerCase; i++ {
-		seeds[i] = session.SubAPSeed{
-			Input:          session.Payload{Kind: "task", Content: task},
-			OutputSchema:   "{\"content\": \"<the draft email body>\", \"confidence\": <0..1>}",
-			Classification: classification.Internal,
-		}
-	}
-	root.Execute = &session.Execute{
-		Category: session.CategoryEmitSubtree,
-		EmitSubtree: &session.EmitSubtreePayload{
-			SubAPs:    seeds,
-			Recompose: session.RecomposeSequential,
-		},
-	}
-	root.ExitReason = session.ExitDone
-
-	// Drive the orchestration manually: the runner is built for
-	// recursive call trees where evaluate picks playbook. For Phase 1
-	// we manually run each child (process) via the adapter and use
-	// the synthesizer to merge. Going through runner.Run with a
-	// pre-populated root.Execute would require the runner to handle
-	// "plan was already executed" — easier to do the dispatch by hand
-	// here.
-	drafts := make([]session.ReturnResultPayload, 0, draftsPerCase)
 	totalTokens := 0
-	for i := 0; i < draftsPerCase; i++ {
-		childInput := buildEnsembleDraftInput(task, i, draftsPerCase)
+
+	// --- 1. Plan: decide N ---
+	n, planTokens, err := planDraftCount(ctx, a, task, draftsPerCaseOverride, verbose)
+	if err != nil {
+		return "", totalTokens, fmt.Errorf("plan: %w", err)
+	}
+	totalTokens += planTokens
+	if verbose {
+		fmt.Fprintf(os.Stderr, "  plan: N=%d (plan tokens=%d)\n", n, planTokens)
+	}
+
+	// --- 2. Generate N drafts ---
+	drafts := make([]session.ReturnResultPayload, 0, n)
+	for i := 0; i < n; i++ {
+		childInput := buildEnsembleDraftInput(task, i, n)
 		childEnv := session.NewRoot(
 			session.ID(fmt.Sprintf("phase1-draft-%d", i)),
 			childInput, "{draft}", classification.Internal,
@@ -321,31 +314,156 @@ func runOrchestrator(
 		drafts = append(drafts, *out.Execute.ReturnResult)
 		totalTokens += out.Execute.TokensUsed
 		if verbose {
-			fmt.Fprintf(os.Stderr, "  draft %d/%d: %d tokens\n", i+1, draftsPerCase, out.Execute.TokensUsed)
+			fmt.Fprintf(os.Stderr, "  draft %d/%d: %d tokens\n", i+1, n, out.Execute.TokensUsed)
 		}
 	}
 
-	// Single-draft path: skip synthesis, return the only draft.
-	if draftsPerCase == 1 {
-		return drafts[0].Result.Content, totalTokens, nil
+	// --- 3. Synthesize (or pass through) ---
+	var current session.ReturnResultPayload
+	if n == 1 {
+		current = drafts[0]
+	} else {
+		rec := recomposer.Synth{Synthesizer: syn}
+		composed, err := rec.Recompose(ctx, session.RecomposeSequential, drafts)
+		if err != nil {
+			return "", totalTokens, fmt.Errorf("synthesizer: %w", err)
+		}
+		current = composed
+		// Approximate synthesizer cost: (n-1) reductions × ~350 tokens
+		totalTokens += (n - 1) * 350
+		if verbose {
+			fmt.Fprintf(os.Stderr, "  synthesizer: %d reductions\n", n-1)
+		}
 	}
 
-	// Ensemble: fold via Synth (sequential, AnthropicSynthesizer-backed).
-	rec := recomposer.Synth{Synthesizer: syn}
-	composed, err := rec.Recompose(ctx, session.RecomposeSequential, drafts)
+	// --- 4. Critique ---
+	verdict, issuesText, critTokens, err := critiqueDraft(ctx, a, task, current.Result.Content)
 	if err != nil {
-		return "", totalTokens, fmt.Errorf("synthesizer: %w", err)
-	}
-	// The synthesizer's TokensUsed isn't surfaced through the
-	// recomposer interface. Approximate at ~350 tokens per merge step
-	// (~150 in, ~200 out) for cost accounting purposes:
-	//   (draftsPerCase - 1) reductions × 350 tokens
-	// A future PR can plumb per-step token counts through the
-	// recomposer if precise accounting matters. For Phase 1's
-	// kill-or-proceed signal, the order of magnitude is what counts.
-	totalTokens += (draftsPerCase - 1) * 350
+		// Critique failure is non-fatal — we already have a draft.
+		if verbose {
+			fmt.Fprintf(os.Stderr, "  critique skipped (error: %v)\n", err)
+		}
+	} else {
+		totalTokens += critTokens
+		if verbose {
+			fmt.Fprintf(os.Stderr, "  critique: verdict=%s (tokens=%d)\n", verdict, critTokens)
+		}
 
-	return composed.Result.Content, totalTokens, nil
+		// --- 5. Revise on issues/fail ---
+		if verdict == session.VerdictIssues || verdict == session.VerdictFail {
+			revised, revTokens, err := reviseDraft(ctx, a, task, current.Result.Content, issuesText)
+			if err != nil {
+				if verbose {
+					fmt.Fprintf(os.Stderr, "  revise skipped (error: %v)\n", err)
+				}
+			} else {
+				current = revised
+				totalTokens += revTokens
+				if verbose {
+					fmt.Fprintf(os.Stderr, "  revise: tokens=%d\n", revTokens)
+				}
+			}
+		}
+	}
+
+	return current.Result.Content, totalTokens, nil
+}
+
+// planDraftCount asks the plan playbook how many drafts to emit. If
+// override is set (>0), respects the operator override and skips the
+// plan call (used by --drafts-per-case for diagnostic runs).
+func planDraftCount(
+	ctx context.Context,
+	a *adapterAnth.Adapter,
+	task string,
+	override int,
+	verbose bool,
+) (int, int, error) {
+	if override > 0 {
+		return override, 0, nil
+	}
+	planInput := "You will decide how many independent draft attempts another worker should produce for this task.\n\n" +
+		"Rules:\n" +
+		"- If the task implies brevity (e.g., 'two lines max', 'be brief', 'CEO style', 'don't over-explain', single-action), emit 1 sub-AP with a single draft instruction.\n" +
+		"- If the task has nuance (tone constraints, redirect, push-back, multiple required elements), emit 3 sub-APs each asking for an independent draft attempt.\n" +
+		"- Default to 2 if uncertain.\n\n" +
+		"Task to plan for:\n" + task
+	env := session.NewRoot("phase1-plan", planInput, "", classification.Internal,
+		session.Budget{TokensRemaining: 8_000, DepthRemaining: 2})
+	env.Evaluate = &session.Evaluate{Playbook: session.PlaybookPlan, Confidence: 1.0}
+	out, err := a.Execute(ctx, env)
+	if err != nil {
+		// Plan failure → conservative default of 1 (matches Haiku-solo
+		// which performed best on the original measurement).
+		return 1, 0, nil
+	}
+	if out.Execute == nil || out.Execute.EmitSubtree == nil {
+		return 1, out.Execute.TokensUsed, nil
+	}
+	n := len(out.Execute.EmitSubtree.SubAPs)
+	if n < 1 {
+		n = 1
+	} else if n > 5 {
+		n = 5 // safety cap
+	}
+	return n, out.Execute.TokensUsed, nil
+}
+
+// critiqueDraft runs one critique playbook call against the current
+// draft. Returns the verdict, joined issue-notes (for use in revise),
+// and token count.
+func critiqueDraft(
+	ctx context.Context,
+	a *adapterAnth.Adapter,
+	task, draft string,
+) (session.Verdict, string, int, error) {
+	input := "Review this draft response against the user's intent. Be strict but fair.\n\n" +
+		"--- TASK ---\n" + task +
+		"\n\n--- DRAFT ---\n" + draft +
+		"\n\nReturn JSON {verdict, issues[]}. Use 'issues' verdict for any real problem worth a revision; 'pass' if the draft is solid."
+	env := session.NewRoot("phase1-critique", input, "", classification.Internal,
+		session.Budget{TokensRemaining: 8_000, DepthRemaining: 1})
+	env.Evaluate = &session.Evaluate{Playbook: session.PlaybookCritique, Confidence: 1.0}
+	out, err := a.Execute(ctx, env)
+	if err != nil {
+		return session.VerdictPass, "", 0, err
+	}
+	if out.Execute == nil || out.Execute.VerifierSignal == nil {
+		return session.VerdictPass, "", out.Execute.TokensUsed, nil
+	}
+	verdict := out.Execute.VerifierSignal.Verdict
+	var notes []string
+	for _, is := range out.Execute.VerifierSignal.Issues {
+		notes = append(notes, fmt.Sprintf("[%s] %s", is.Severity, is.What))
+	}
+	issuesText := strings.Join(notes, "\n")
+	return verdict, issuesText, out.Execute.TokensUsed, nil
+}
+
+// reviseDraft runs one process call to revise the draft given the
+// critique notes. Returns the new draft as a ReturnResultPayload.
+func reviseDraft(
+	ctx context.Context,
+	a *adapterAnth.Adapter,
+	task, prevDraft, critiqueNotes string,
+) (session.ReturnResultPayload, int, error) {
+	input := "Revise this draft based on the critic's notes. Address the issues directly; produce a single revised draft. " +
+		"Do not include the original draft in your output — just the revised version.\n\n" +
+		"--- TASK ---\n" + task +
+		"\n\n--- CURRENT DRAFT ---\n" + prevDraft +
+		"\n\n--- CRITIC'S NOTES ---\n" + critiqueNotes +
+		"\n\nReturn JSON: {\"content\": \"<revised draft>\", \"confidence\": <0..1>}."
+	env := session.NewRoot("phase1-revise", input, "", classification.Internal,
+		session.Budget{TokensRemaining: 16_000, DepthRemaining: 1})
+	env.Evaluate = &session.Evaluate{Playbook: session.PlaybookProcess, Confidence: 1.0}
+	out, err := a.Execute(ctx, env)
+	if err != nil {
+		return session.ReturnResultPayload{}, 0, err
+	}
+	if out.Execute == nil || out.Execute.ReturnResult == nil {
+		return session.ReturnResultPayload{}, out.Execute.TokensUsed, fmt.Errorf("no return result")
+	}
+	return *out.Execute.ReturnResult, out.Execute.TokensUsed, nil
 }
 
 // buildEnsembleDraftInput varies the input slightly across drafts so

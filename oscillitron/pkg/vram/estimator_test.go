@@ -3,6 +3,14 @@ package vram
 
 import "testing"
 
+func TestSlidingWindowEstimator_ReturnsZeroOnUnsetBytesPerToken(t *testing.T) {
+	est := SlidingWindowEstimator{} // unset → zero
+	got := est.Estimate(SessionEstimate{PrefixTokens: 100, ContextSize: 4096})
+	if got != 0 {
+		t.Errorf("Estimate with zero BytesPerToken = %d, want 0 (signals misconfiguration)", got)
+	}
+}
+
 func TestSlidingWindowEstimator_GrowsThenCapsAtContext(t *testing.T) {
 	est := SlidingWindowEstimator{BytesPerToken: 80_000, ModelResidentBytes: 0}
 	// Below context: linear growth.
@@ -71,15 +79,70 @@ func TestSlidingWindowEstimator_NegativeTokensClamped(t *testing.T) {
 	}
 }
 
-func TestDefaultSlidingWindowEstimator_Values(t *testing.T) {
-	e := DefaultSlidingWindowEstimator()
-	if e.BytesPerToken != 80_000 {
-		t.Errorf("BytesPerToken = %d, want 80000 (4B fp16)", e.BytesPerToken)
+func TestEstimatorForModel_KnownArchitectures(t *testing.T) {
+	cases := []struct {
+		name         string
+		layers       int
+		kvHiddenDim  int
+		dtypeBytes   int
+		wantBytesPer uint64
+	}{
+		// Gemma 2B: 18 layers, num_kv_heads=1, head_dim=256
+		{"gemma-2b-fp16", 18, 256, 2, 2 * 18 * 256 * 2},
+		// Llama 3 8B: 32 layers, num_kv_heads=8, head_dim=128 → KVHidden=1024
+		{"llama3-8b-fp16", 32, 1024, 2, 2 * 32 * 1024 * 2},
+		// fp8 KV cache halves the per-token cost
+		{"llama3-8b-fp8", 32, 1024, 1, 2 * 32 * 1024 * 1},
 	}
-	if e.ModelResidentBytes != 64*1024*1024 {
-		t.Errorf("ModelResidentBytes = %d, want 64 MiB", e.ModelResidentBytes)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			est := EstimatorForModel(c.layers, c.kvHiddenDim, c.dtypeBytes)
+			if est.BytesPerToken != c.wantBytesPer {
+				t.Errorf("BytesPerToken = %d, want %d", est.BytesPerToken, c.wantBytesPer)
+			}
+		})
 	}
-	if e.PrefixCacheGlobal {
-		t.Errorf("default should be conservative: PrefixCacheGlobal = true")
+}
+
+func TestEstimatorForModel_ZeroesOnBadInput(t *testing.T) {
+	// No magic-number fallback. Zero or negative inputs produce a
+	// zero-BytesPerToken estimator, which Estimate then returns 0
+	// for — the Governor catches that at NewGovernor and refuses
+	// to start, surfacing misconfiguration as a config-time error
+	// rather than fabricated runtime numbers.
+	for _, tc := range []struct {
+		name        string
+		layers      int
+		kvHiddenDim int
+		dtypeBytes  int
+	}{
+		{"zero layers", 0, 256, 2},
+		{"zero kv hidden", 32, 0, 2},
+		{"zero dtype", 32, 1024, 0},
+		{"negative dtype", 32, 1024, -1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			est := EstimatorForModel(tc.layers, tc.kvHiddenDim, tc.dtypeBytes)
+			if est.BytesPerToken != 0 {
+				t.Errorf("BytesPerToken = %d, want 0 (no magic fallback)", est.BytesPerToken)
+			}
+		})
+	}
+}
+
+func TestEstimatorForModel_PluggableIntoEstimate(t *testing.T) {
+	est := EstimatorForModel(32, 1024, 2)
+	bytes := est.Estimate(SessionEstimate{
+		PrefixTokens:   2000,
+		ObservedTokens: 500,
+		ContextSize:    8192,
+	})
+	if bytes == 0 {
+		t.Fatal("Estimate returned 0 bytes")
+	}
+	// 2500 active tokens × (2 × 32 × 1024 × 2) bytes = 327.7 MiB
+	want := uint64(2500 * 2 * 32 * 1024 * 2)
+	if bytes != want {
+		t.Errorf("Estimate = %d, want %d", bytes, want)
 	}
 }

@@ -445,6 +445,12 @@ func TestRun_RandomizedDispatchVariesAcrossSeeds(t *testing.T) {
 		root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
 		_, err := Run(context.Background(), Config{
 			Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: rand.New(rand.NewPCG(seed1, seed2)),
+			// Strict serial: this test asserts that the randomized
+			// *dispatch order* differs across seeds, which is a
+			// property of serial execution. Under auto-managed
+			// concurrency, completion order is non-deterministic for
+			// reasons unrelated to the seed.
+			MaxConcurrency: 1,
 		}, root)
 		if err != nil {
 			t.Fatalf("Run: %v", err)
@@ -978,6 +984,144 @@ func (g *groundedProcessAdapter) Name() string { return g.inner.Name() }
 func (g *groundedProcessAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	return g.inner.Evaluate(ctx, env)
 }
+// --- Auto-managed defaults (MaxConcurrency=0 + nil probe/estimator) ---
+
+func TestRun_AutoManaged_NoConfigGetsAutoVRAM(t *testing.T) {
+	// Zero Config (no VRAMProbe, no VRAMEstimator, MaxConcurrency=0)
+	// should still produce a working run — the runner auto-constructs
+	// the probe stack. With no real GPU available in CI, the probe
+	// falls back to /proc/meminfo (Linux) or unified memory (darwin)
+	// or returns ErrNoSource; either way the runner falls back to
+	// serial dispatch.
+	a, _ := planAdapterWithChildren(3, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	_, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: seededRand(),
+		// No MaxConcurrency, no VRAMProbe, no VRAMEstimator — pure default.
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(rec.lastChildren) != 3 {
+		t.Errorf("recomposer saw %d children, want 3", len(rec.lastChildren))
+	}
+}
+
+func TestRun_AutoManaged_VRAMProbeFailureFallsBackToSerial(t *testing.T) {
+	// Auto path with a probe that always errors — runner should fall
+	// back to serial (safe) rather than spawning unbounded goroutines.
+	probe := &fakeVRAMProbe{err: errors.New("probe blew up")}
+	estimator := vram.SlidingWindowEstimator{BytesPerToken: 80_000}
+
+	a, _ := planAdapterWithChildren(4, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		MaxConcurrency: MaxConcurrencyAuto,
+		VRAMProbe:      probe,
+		VRAMEstimator:  estimator,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.ConcurrentDispatches != 0 {
+		t.Errorf("expected serial fallback under auto + probe failure; ConcurrentDispatches=%d", res.State.ConcurrentDispatches)
+	}
+	if len(rec.lastChildren) != 4 {
+		t.Errorf("all 4 children should still resolve serially; got %d", len(rec.lastChildren))
+	}
+}
+
+func TestRun_AutoManaged_CeilingCapsHugeVRAM(t *testing.T) {
+	// Probe reports 1 TiB free; estimator says ~1 MiB per session.
+	// Naive math = 1M concurrent — clearly nuts. The safety ceiling
+	// (default 8) clamps it.
+	probe := &fakeVRAMProbe{report: vram.Report{
+		Source: "fake", AvailableBytes: 1024 * 1024 * 1024 * 1024,
+	}}
+	estimator := vram.SlidingWindowEstimator{
+		BytesPerToken:      1, // tiny per-token cost
+		ModelResidentBytes: 1024 * 1024,
+	}
+
+	a, _ := planAdapterWithChildren(20, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		MaxConcurrency: MaxConcurrencyAuto,
+		VRAMProbe:      probe,
+		VRAMEstimator:  estimator,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	// Concurrent dispatch happened (good) but capped at the ceiling.
+	// We can't observe the cap directly, but we can verify the run
+	// completed (sanity) and no goroutine explosion occurred.
+	if res.State.ConcurrentDispatches == 0 {
+		t.Errorf("auto-managed with abundant VRAM should dispatch concurrently")
+	}
+	if len(rec.lastChildren) != 20 {
+		t.Errorf("all 20 children should resolve; got %d", len(rec.lastChildren))
+	}
+}
+
+func TestRun_AutoManaged_OperatorCeilingOverride(t *testing.T) {
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 1024 * 1024 * 1024}}
+	estimator := vram.SlidingWindowEstimator{BytesPerToken: 1, ModelResidentBytes: 0}
+
+	a, _ := planAdapterWithChildren(10, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		MaxConcurrency:        MaxConcurrencyAuto,
+		MaxConcurrencyCeiling: 2, // tight operator ceiling
+		VRAMProbe:             probe,
+		VRAMEstimator:         estimator,
+		Tracer:                trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.ConcurrentDispatches == 0 {
+		t.Errorf("expected concurrent dispatch")
+	}
+	if len(rec.lastChildren) != 10 {
+		t.Errorf("all 10 children should resolve; got %d", len(rec.lastChildren))
+	}
+}
+
+func TestRun_StrictSerial_HonoredEvenWithVRAM(t *testing.T) {
+	// MaxConcurrency=1 must always mean strict serial, regardless of
+	// VRAM availability. Operators choose this for deterministic tests
+	// and debugging.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 100 * 1024 * 1024 * 1024}}
+	estimator := vram.SlidingWindowEstimator{BytesPerToken: 1}
+
+	a, _ := planAdapterWithChildren(6, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	res, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec,
+		MaxConcurrency: 1, // strict serial
+		VRAMProbe:      probe,
+		VRAMEstimator:  estimator,
+		Tracer:         trace.Discard{}, Rand: seededRand(),
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.State.ConcurrentDispatches != 0 {
+		t.Errorf("MaxConcurrency=1 should never dispatch concurrently; got %d waves", res.State.ConcurrentDispatches)
+	}
+}
+
 func (g *groundedProcessAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	env, err := g.inner.Execute(ctx, env)
 	if err != nil {
@@ -986,7 +1130,12 @@ func (g *groundedProcessAdapter) Execute(ctx context.Context, env session.Envelo
 	if env.Execute != nil && env.Execute.Category == session.CategoryReturnResult &&
 		env.Execute.ReturnResult != nil &&
 		env.Evaluate != nil && env.Evaluate.Playbook == session.PlaybookProcess {
-		env.Execute.ReturnResult.Signals.GroundedPass = g.groundedPass
+		// Clone before mutating — the stub adapter returns a pointer
+		// to a shared ReturnResult, so writing to it from concurrent
+		// goroutines races. The clone is local to this Execute call.
+		clone := *env.Execute.ReturnResult
+		clone.Signals.GroundedPass = g.groundedPass
+		env.Execute.ReturnResult = &clone
 	}
 	return env, nil
 }

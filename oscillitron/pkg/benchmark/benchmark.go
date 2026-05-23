@@ -84,6 +84,16 @@ type Answer struct {
 	Calls int
 	// TokensUsed sums input + output tokens across all calls.
 	TokensUsed int
+	// Confidence is the v3.3 effective confidence for this answer
+	// (0.0–1.0). Source:
+	//   - Single orchestrator: env.Execute.ReturnResult.Confidence
+	//     from the one underlying call.
+	//   - Vote orchestrator: mean of successful attempts'
+	//     confidences. Zero if no attempt reported one.
+	// Already adjusted by v3.2 response-side signals when the
+	// adapter ran InspectResponse + EffectiveConfidence. Zero =
+	// "no confidence reported" (not "zero confidence").
+	Confidence float64
 }
 
 // Orchestrator turns a Case into an Answer. Implementations pick the

@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/cost"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/semanticpool"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -121,6 +122,14 @@ type Config struct {
 	// RawExecuteInstructions overrides the adapter's default execute
 	// preamble per playbook. Most callers should leave this empty.
 	RawExecuteInstructions map[session.Playbook]string
+
+	// Inspector enables v3.1 prompt-side notice inspection on every
+	// call. Optional — nil disables. When set, the adapter runs
+	// Inspector.Inspect(systemPrompt, userContent) just before
+	// posting and emits an `ollama.notice_assessment` trace event
+	// when any detector fires. See pkg/notice for the signal
+	// catalog (input overflows context, persona-heavy, etc.).
+	Inspector *notice.Inspector
 }
 
 // Adapter is an adapter.Adapter targeting one Ollama instance per
@@ -358,6 +367,13 @@ type chatResponse struct {
 // content_filter|tool_calls). The finish_reason is also written to
 // the trace so categorize can read it.
 func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string) (string, tokenUsage, string, error) {
+	// v3.1: pre-call notice inspection. When the operator wired an
+	// Inspector, run the prompt-side detectors and emit a trace
+	// event if any fired. The call itself is unchanged — notice is
+	// observability, not enforcement (the act layer in v3.4 reads
+	// these signals to drive coping decisions).
+	a.inspectPreCall(ctx, env, instructions, phase)
+
 	body := chatRequest{
 		Model: ep.Model,
 		Messages: []chatMessage{
@@ -450,4 +466,51 @@ func (a *Adapter) withPoolPreamble(ctx context.Context, instructions string) str
 		return instructions
 	}
 	return preamble + "\n" + instructions
+}
+
+// inspectPreCall runs the v3.1 notice layer (when Inspector is
+// wired) and emits an `ollama.notice_assessment` trace event if any
+// detector fired. No-op when no Inspector or no detections. Never
+// alters the call — notice is observability, not enforcement; the
+// act layer (v3.4) reads these signals to drive coping decisions.
+func (a *Adapter) inspectPreCall(ctx context.Context, env session.Envelope, instructions, phase string) {
+	if a.cfg.Inspector == nil {
+		return
+	}
+	assess := a.cfg.Inspector.Inspect(instructions, env.Input.Content)
+	if len(assess.Detections) == 0 {
+		return
+	}
+	// Aggregate detections into a compact log line — operators want
+	// "what fired, how bad" at a glance, not the full list per call.
+	signals := make([]string, 0, len(assess.Detections))
+	topSeverity := notice.Info
+	for _, d := range assess.Detections {
+		signals = append(signals, string(d.Signal))
+		if severityRank(d.Severity) > severityRank(topSeverity) {
+			topSeverity = d.Severity
+		}
+	}
+	trace.Info(a.cfg.Tracer, ctx, "ollama.notice_assessment",
+		slog.String("ap_id", string(env.ID)),
+		slog.String("phase", phase),
+		slog.Float64("score", assess.Score),
+		slog.Int("detection_count", len(assess.Detections)),
+		slog.String("top_severity", string(topSeverity)),
+		slog.String("signals", strings.Join(signals, ",")),
+	)
+}
+
+// severityRank gives a comparable ordering: Info < Warning < Error.
+func severityRank(s notice.Severity) int {
+	switch s {
+	case notice.Error:
+		return 3
+	case notice.Warning:
+		return 2
+	case notice.Info:
+		return 1
+	default:
+		return 0
+	}
 }

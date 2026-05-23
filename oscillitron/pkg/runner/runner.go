@@ -151,9 +151,15 @@ type Config struct {
 	// MaxConcurrency caps the number of sibling goroutines in flight
 	// during emit_subtree dispatch.
 	//
-	//   - 0: no per-wave goroutine cap (governor's per-call Acquire
-	//     still serializes inflight calls per its budget).
-	//   - 1: strict serial dispatch.
+	//   - 0: library-managed (the zero value, per the 2026-05-21 lock).
+	//     The runner constructs a vram.AutoGovernor (DefaultVRAMModel +
+	//     MaxConcurrencyCeiling=8) at Run start when Governor is also
+	//     nil; per-wave concurrency is then bounded by the governor's
+	//     ceiling and refined by its VRAM accounting. Probe failure
+	//     under this path downshifts the wave cap to 1 (serial) — the
+	//     safe choice when we can't measure. Operators opt out via
+	//     MaxConcurrency=1 (strict serial) or N>1 (static cap).
+	//   - 1: strict serial dispatch. Auto-governor is NOT constructed.
 	//   - N>1: cap at N siblings concurrent. If a Governor is also
 	//     wired, the effective cap is min(N, governor.Ceiling).
 	//
@@ -269,6 +275,15 @@ func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error)
 		subtree: map[session.ID][]session.Envelope{},
 	}
 
+	// Library-managed concurrency (LOCKED 2026-05-21): if the caller
+	// took the zero-value path (MaxConcurrency=0, Governor=nil), wire
+	// a conservative auto-governor before any AP dispatches, then
+	// sample the probe once to decide whether VRAM measurement is even
+	// possible. Probe failure flips autoSerialFallback so the dispatch
+	// wave cap collapses to 1 regardless of governor.Ceiling.
+	r.ensureAutoGovernor(ctx)
+	r.probeHealthyOnce(ctx)
+
 	resolved, payload, err := r.resolve(ctx, root, nil, nil)
 	if cfg.Cost != nil {
 		r.state.CostSummary = cfg.Cost.Summary()
@@ -288,6 +303,13 @@ type runner struct {
 	cfg     Config
 	state   *RunState
 	subtree map[session.ID][]session.Envelope
+	// autoSerialFallback is set to true by probeHealthyOnce when the
+	// auto-wired Governor's underlying probe returns an error. Under
+	// the library-managed lock (2026-05-21), probe failure means we
+	// can't measure VRAM — fall back to serial dispatch rather than
+	// risk OOM under an unmeasured budget. Set once at Run start, read
+	// every dispatch wave via computeConcurrency.
+	autoSerialFallback bool
 	// mu protects state, subtree, and cfg.Rand for concurrent access
 	// when MaxConcurrency > 1. All shared mutations go through helpers
 	// (lockedStateInc, lockedSubtreeSet, lockedRandPerm) so the locking
@@ -756,11 +778,67 @@ func decisionString(d inhibitor.Decision) string {
 	}
 }
 
+// ensureAutoGovernor wires a library-managed *vram.Governor when the
+// caller took the zero-value path (MaxConcurrency=0, Governor=nil).
+// Per the 2026-05-21 lock, the zero value means "let the library
+// figure it out" — DefaultVRAMModel (Llama-7B-class conservative
+// architecture + 3 GB resident) under MaxConcurrencyCeiling=8 with the
+// auto-detected platform probe. Operators opt out via MaxConcurrency=1
+// (strict serial) or by passing N>1 plus their own Governor.
+//
+// Called once at Run start, before any AP dispatches. No-op when the
+// operator has already wired a Governor or has explicitly set
+// MaxConcurrency=1 (strict serial — auto-governor would just add
+// overhead with no concurrency to manage).
+func (r *runner) ensureAutoGovernor(ctx context.Context) {
+	if r.cfg.Governor != nil {
+		return // operator-wired governor wins
+	}
+	if r.cfg.MaxConcurrency != 0 {
+		return // operator made a deliberate choice (1=serial, N>1=static cap)
+	}
+	r.cfg.Governor = vram.AutoGovernor(r.cfg.Tracer)
+	trace.Info(r.cfg.Tracer, ctx, "runner.auto_governor_wired",
+		slog.String("model", r.cfg.Governor.Model().Name),
+		slog.Int("ceiling", r.cfg.Governor.Ceiling()),
+	)
+}
+
+// probeHealthyOnce samples the auto-wired governor's probe one time at
+// Run start. On error, sets autoSerialFallback so the dispatch wave cap
+// collapses to 1 regardless of governor.Ceiling — the safe choice when
+// we can't measure VRAM is to run sequentially. Operator-supplied
+// governors aren't probed here (the operator opted in deliberately and
+// owns probe-failure semantics through their own Governor config).
+func (r *runner) probeHealthyOnce(ctx context.Context) {
+	if r.cfg.Governor == nil {
+		return
+	}
+	// Only consult the probe for auto-wired governors — operator-
+	// supplied ones may legitimately run in ceiling-only mode and we
+	// shouldn't downgrade them.
+	if r.cfg.MaxConcurrency != 0 {
+		return
+	}
+	snap := r.cfg.Governor.Snapshot(ctx)
+	if snap.AvailableBytes == 0 {
+		// Snapshot's measure() returns AvailableBytes=0 when the
+		// underlying probe errored (governor.go ~L399). Treat that as
+		// "no VRAM measurement possible" and downshift to serial.
+		r.autoSerialFallback = true
+		trace.Error(r.cfg.Tracer, ctx, "runner.probe_failed_serial_fallback",
+			slog.String("hint", "auto-wired vram.Governor probe returned 0 available bytes; "+
+				"falling back to serial dispatch. Operator can set MaxConcurrency=N>1 "+
+				"and pass an explicit Governor (or vram.SetOverride) to bypass."),
+		)
+	}
+}
+
 // computeConcurrency derives the per-wave goroutine cap.
 //
+//   - autoSerialFallback (probe failure on library-managed path) → 1.
 //   - MaxConcurrency=1 → 1 (strict serial).
-//   - MaxConcurrency=0 → siblings (no per-wave goroutine cap; the
-//     governor's per-call Acquire is the throttle).
+//   - MaxConcurrency=0 → siblings (per-wave cap from governor.Ceiling).
 //   - MaxConcurrency=N>1 → min(N, siblings).
 //   - With a Governor wired, further tightened by governor.Ceiling.
 //
@@ -770,6 +848,9 @@ func decisionString(d inhibitor.Decision) string {
 // regardless).
 func (r *runner) computeConcurrency(ctx context.Context, siblings int) int {
 	if siblings <= 1 {
+		return 1
+	}
+	if r.autoSerialFallback {
 		return 1
 	}
 	if r.cfg.MaxConcurrency == 1 {

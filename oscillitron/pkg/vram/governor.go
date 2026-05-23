@@ -95,6 +95,15 @@ type ModelSpec struct {
 	// estimate (conservative — estimator under-counts, governor
 	// runs slightly tighter than it needs to).
 	PrefixTokens int
+	// ModelResidentBytes is a fixed per-session overhead the model
+	// imposes outside the KV cache (loaded weights, intermediate
+	// activations the engine keeps per session, etc.). Optional —
+	// when 0 the estimator assumes the substrate de-duplicates the
+	// weights across sessions. The library-managed (auto) governor
+	// path sets a conservative 3 GB default via DefaultVRAMModel so
+	// the small-model OOM scenario (N concurrent 3 GB-resident calls
+	// blowing through unified memory) gets caught before launch.
+	ModelResidentBytes uint64
 }
 
 // Validate returns an error if any required ModelSpec field is unset
@@ -180,6 +189,11 @@ func NewGovernor(cfg GovernorConfig) (*Governor, error) {
 		// here than produce a no-op governor.
 		return nil, errors.New("vram.NewGovernor: estimator produced zero BytesPerToken")
 	}
+	// Propagate the spec's per-session resident overhead into the
+	// estimator so per-call estimates include weights / activations the
+	// engine doesn't deduplicate across sessions. This is what catches
+	// the N×3 GB OOM under the auto path (DefaultVRAMModel sets it).
+	estimator.ModelResidentBytes = cfg.Model.ModelResidentBytes
 
 	return &Governor{
 		probe:       probe,
@@ -474,6 +488,10 @@ func (m ModelSpec) String() string {
 	name := m.Name
 	if name == "" {
 		name = "unnamed"
+	}
+	if m.ModelResidentBytes > 0 {
+		return fmt.Sprintf("%s(layers=%d,kv=%d,dtype=%d,ctx=%d,prefix=%d,resident=%dB)",
+			name, m.Layers, m.KVHiddenDim, m.KVDtypeBytes, m.ContextSize, m.PrefixTokens, m.ModelResidentBytes)
 	}
 	return fmt.Sprintf("%s(layers=%d,kv=%d,dtype=%d,ctx=%d,prefix=%d)",
 		name, m.Layers, m.KVHiddenDim, m.KVDtypeBytes, m.ContextSize, m.PrefixTokens)

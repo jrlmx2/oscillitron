@@ -426,6 +426,14 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 		slog.Int("tokens_out", usage.output),
 		slog.Duration("elapsed", time.Since(start)),
 	)
+
+	// v3.2: response-side notice inspection. Runs after the
+	// substrate returns; complements the pre-call inspection that
+	// fired before posting. Extracts self-reported confidence,
+	// applies signal-driven adjustments, and emits a trace event
+	// when anything fires.
+	a.inspectPostCall(ctx, env, choice.Message.Content, phase)
+
 	return choice.Message.Content, usage, choice.FinishReason, nil
 }
 
@@ -499,6 +507,59 @@ func (a *Adapter) inspectPreCall(ctx context.Context, env session.Envelope, inst
 		slog.String("top_severity", string(topSeverity)),
 		slog.String("signals", strings.Join(signals, ",")),
 	)
+}
+
+// inspectPostCall runs the v3.2 response-side notice layer. Extracts
+// self-reported confidence (when present in the raw text per the
+// minimal-output convention) and emits `ollama.notice_response_assessment`
+// when any detector fires OR when an extracted-confidence value is
+// available (operators want to see the per-call confidence even on
+// clean calls). The event includes both raw and effective confidence
+// so downstream can correlate signal-driven downgrades.
+//
+// No-op when Inspector is nil. Never alters the call — observability
+// only.
+func (a *Adapter) inspectPostCall(ctx context.Context, env session.Envelope, response, phase string) {
+	if a.cfg.Inspector == nil {
+		return
+	}
+	assess := a.cfg.Inspector.InspectResponse(response)
+	rawConf, hasConf := notice.ExtractConfidence(response)
+
+	// Don't emit if there's nothing useful to say.
+	if len(assess.Detections) == 0 && !hasConf {
+		return
+	}
+
+	effConf := rawConf
+	if hasConf {
+		effConf = notice.EffectiveConfidence(rawConf, assess)
+	}
+
+	signals := make([]string, 0, len(assess.Detections))
+	topSeverity := notice.Info
+	for _, d := range assess.Detections {
+		signals = append(signals, string(d.Signal))
+		if severityRank(d.Severity) > severityRank(topSeverity) {
+			topSeverity = d.Severity
+		}
+	}
+
+	attrs := []slog.Attr{
+		slog.String("ap_id", string(env.ID)),
+		slog.String("phase", phase),
+		slog.Float64("score", assess.Score),
+		slog.Int("detection_count", len(assess.Detections)),
+		slog.String("top_severity", string(topSeverity)),
+		slog.String("signals", strings.Join(signals, ",")),
+	}
+	if hasConf {
+		attrs = append(attrs,
+			slog.Float64("raw_confidence", rawConf),
+			slog.Float64("effective_confidence", effConf),
+		)
+	}
+	trace.Info(a.cfg.Tracer, ctx, "ollama.notice_response_assessment", attrs...)
 }
 
 // severityRank gives a comparable ordering: Info < Warning < Error.

@@ -523,6 +523,98 @@ func TestNoticeAssessment_QuietOnCleanCall(t *testing.T) {
 	}
 }
 
+func TestNoticeResponseAssessment_FiresOnRefusal(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      "I cannot reliably answer this question.",
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Tracer = tracer
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
+	env := session.Envelope{
+		ID:       "ap-refuse",
+		Input:    session.Payload{Kind: "task", Content: "what is the answer?"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	ev := tracer.findEvent("ollama.notice_response_assessment")
+	if ev == nil {
+		t.Fatalf("expected ollama.notice_response_assessment event")
+	}
+	if signals, _ := ev.attrs["signals"].(string); !strings.Contains(signals, "refusal_language") {
+		t.Errorf("signals = %q, want to contain refusal_language", signals)
+	}
+}
+
+func TestNoticeResponseAssessment_ExtractsConfidence(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      "The answer is A.\nconfidence: 0.7",
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Tracer = tracer
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
+	env := session.Envelope{
+		ID:       "ap-conf",
+		Input:    session.Payload{Kind: "task", Content: "what is 2+2?"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	ev := tracer.findEvent("ollama.notice_response_assessment")
+	if ev == nil {
+		t.Fatalf("expected event even on clean calls when confidence is present")
+	}
+	raw, _ := ev.attrs["raw_confidence"].(float64)
+	eff, _ := ev.attrs["effective_confidence"].(float64)
+	if raw < 0.69 || raw > 0.71 {
+		t.Errorf("raw_confidence = %v, want 0.7", raw)
+	}
+	if eff < 0.69 || eff > 0.71 {
+		// No detections fired, so effective should equal raw.
+		t.Errorf("effective_confidence = %v, want ~0.7 (no detections)", eff)
+	}
+}
+
+func TestNoticeResponseAssessment_QuietWhenNothingToReport(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      "A",
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Tracer = tracer
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
+	env := session.Envelope{
+		ID:       "ap-clean",
+		Input:    session.Payload{Kind: "task", Content: "what is 2+2?"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if ev := tracer.findEvent("ollama.notice_response_assessment"); ev != nil {
+		t.Errorf("expected no response_assessment event on clean answer with no confidence; got %+v", ev)
+	}
+}
+
 func TestNoticeAssessment_NilInspectorIsNoOp(t *testing.T) {
 	f := newFakeOllama()
 	defer f.close()

@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
@@ -418,5 +420,131 @@ func TestEvaluate_PropagatesTransportError(t *testing.T) {
 	_, err := a.Evaluate(context.Background(), session.Envelope{ID: "ap-1"})
 	if err == nil || !strings.Contains(err.Error(), "network down") {
 		t.Fatalf("expected transport error to propagate, got %v", err)
+	}
+}
+
+// --- v3.1 notice layer ---
+
+// recordingTracer captures every Event for assertions.
+type recordingTracer struct {
+	mu     sync.Mutex
+	events []recordedEvent
+}
+
+type recordedEvent struct {
+	name  string
+	attrs map[string]any
+}
+
+func (r *recordingTracer) Event(_ context.Context, _ slog.Level, name string, attrs ...slog.Attr) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	m := make(map[string]any, len(attrs))
+	for _, a := range attrs {
+		m[a.Key] = a.Value.Any()
+	}
+	r.events = append(r.events, recordedEvent{name: name, attrs: m})
+}
+
+func (r *recordingTracer) findEvent(name string) *recordedEvent {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := range r.events {
+		if r.events[i].name == name {
+			return &r.events[i]
+		}
+	}
+	return nil
+}
+
+func TestNoticeAssessment_FiresOnPersonaHeavyCall(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      `{"content":"A","confidence":1.0}`,
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Tracer = tracer
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
+	env := session.Envelope{
+		ID:       "ap-notice",
+		Input:    session.Payload{Kind: "task", Content: strings.Repeat("x", 500)},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	// Use RawExecuteInstructions to force a heavy persona regardless
+	// of what the default prompt looks like — we want to test the
+	// detector, not assert on instruction content.
+	a.cfg.RawExecuteInstructions = map[session.Playbook]string{
+		session.PlaybookProcess: strings.Repeat("y", 20000), // 5000 tok vs 125 tok user = 40×
+	}
+	_, err := a.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	ev := tracer.findEvent("ollama.notice_assessment")
+	if ev == nil {
+		t.Fatalf("expected ollama.notice_assessment event; got events: %v", tracer.events)
+	}
+	if got, _ := ev.attrs["top_severity"].(string); got != string(notice.Error) {
+		t.Errorf("top_severity = %q, want %q (Hermes-scale ratio should be Error)", got, notice.Error)
+	}
+	if got, _ := ev.attrs["signals"].(string); !strings.Contains(got, string(notice.PersonaHeavy)) {
+		t.Errorf("signals = %q, want to contain %q", got, notice.PersonaHeavy)
+	}
+}
+
+func TestNoticeAssessment_QuietOnCleanCall(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      `{"content":"A","confidence":1.0}`,
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Tracer = tracer
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
+	env := session.Envelope{
+		ID:       "ap-clean",
+		Input:    session.Payload{Kind: "task", Content: "what is 2 + 2?"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if ev := tracer.findEvent("ollama.notice_assessment"); ev != nil {
+		t.Errorf("expected NO ollama.notice_assessment on clean call; got %+v", ev)
+	}
+}
+
+func TestNoticeAssessment_NilInspectorIsNoOp(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      `{"content":"A"}`,
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Tracer = tracer
+		c.Inspector = nil // explicit
+	})
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if ev := tracer.findEvent("ollama.notice_assessment"); ev != nil {
+		t.Errorf("nil Inspector should not emit notice events; got %+v", ev)
 	}
 }

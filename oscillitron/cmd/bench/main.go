@@ -37,6 +37,8 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/orchestrator"
 	"github.com/jrlmx2/oscillitron/pkg/config"
+	"github.com/jrlmx2/oscillitron/pkg/curation"
+	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/trace/otel"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
@@ -61,6 +63,15 @@ func run() error {
 		reportOut     = flag.String("report-out", "", "optional: dump the full Report as indented JSON to this path after the run completes")
 		streamOut     = flag.String("stream-out", "", "optional: append each CaseResult as one JSON line to this path as the run progresses (crash-safety on long runs; tail -f for live progress)")
 		frontierPrice = flag.Float64("frontier-price", 0, "blended USD-per-million-tokens for the counterfactual frontier baseline (e.g., 4.50 for Sonnet 4.6). When set, each orchestrator's total tokens get re-priced through this for the savings column.")
+
+		// Curation post-hook: when --curate-store-dir is set, run
+		// pkg/curation against --stream-out after the bench completes,
+		// writing exemplars to the store dir. Closes the self-improvement
+		// loop in a single command.
+		curateStoreDir  = flag.String("curate-store-dir", "", "optional: after the bench completes, run pkg/curation on --stream-out and write exemplars to this directory; requires --stream-out")
+		curateAction    = flag.String("curate-action", "process", "exemplar.Action key for post-hook curation; props: bench.curate.action")
+		curateBatchSize = flag.Int("curate-batch-size", 20, "cold-path batch size for post-hook curation")
+		curateMinScore  = flag.Float64("curate-min-score", 0, "post-hook curation candidate quality floor")
 
 		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "orchestrator substrate (hermes|anthropic)")
 		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "hermes gateway URL or anthropic BaseURL")
@@ -154,6 +165,23 @@ func run() error {
 		for _, key := range props.PrefixedKeys("bench.price.") {
 			name := strings.TrimPrefix(key, "bench.price.")
 			priceFlag = append(priceFlag, name+"="+props.String(key, "0"))
+		}
+		// Curation post-hook.
+		if !flagPassed("curate-store-dir") {
+			*curateStoreDir = props.String("bench.curate.store_dir", "")
+		}
+		if !flagPassed("curate-action") {
+			*curateAction = props.String("bench.curate.action", *curateAction)
+		}
+		if !flagPassed("curate-batch-size") {
+			*curateBatchSize = props.Int("bench.curate.batch_size", *curateBatchSize)
+		}
+		if !flagPassed("curate-min-score") {
+			if s := props.String("bench.curate.min_score", ""); s != "" {
+				if v, perr := strconv.ParseFloat(s, 64); perr == nil {
+					*curateMinScore = v
+				}
+			}
 		}
 		// Substrate routing.
 		if !flagPassed("orchestrator-substrate") {
@@ -307,6 +335,40 @@ func run() error {
 			return fmt.Errorf("--report-out: %w", err)
 		}
 		fmt.Fprintf(os.Stderr, "bench: wrote JSON report to %s\n", *reportOut)
+	}
+
+	// Post-hook curation. Reuses the orchestrator adapter as the
+	// cold-path session (operators who want a different cold-path
+	// substrate should run cmd/curate separately). Requires
+	// --stream-out so there's a JSONL file to read from.
+	if *curateStoreDir != "" {
+		if *streamOut == "" {
+			return fmt.Errorf("--curate-store-dir requires --stream-out (curation reads the JSONL stream)")
+		}
+		if err := os.MkdirAll(*curateStoreDir, 0o755); err != nil {
+			return fmt.Errorf("--curate-store-dir %s: %w", *curateStoreDir, err)
+		}
+		store := &exemplar.FileStore{Dir: *curateStoreDir}
+		fmt.Fprintf(os.Stderr, "bench: post-hook curating %s → %s (action=%s)\n",
+			*streamOut, *curateStoreDir, *curateAction)
+		curResult, cerr := curation.Run(context.Background(), curation.Config{
+			Adapter:    orchAdapter,
+			Store:      store,
+			StreamPath: *streamOut,
+			Action:     *curateAction,
+			BatchSize:  *curateBatchSize,
+			MinScore:   *curateMinScore,
+			Tracer:     tracer,
+		})
+		if cerr != nil {
+			return fmt.Errorf("post-hook curation: %w", cerr)
+		}
+		fmt.Fprintf(os.Stderr,
+			"bench: curation done: candidates=%d batches=%d/%d exemplars=%d tokens=%d elapsed=%s\n",
+			curResult.CandidatesFiltered,
+			curResult.BatchesProcessed, curResult.BatchesProcessed+curResult.BatchesFailed,
+			curResult.ExemplarsAdded, curResult.AdapterTokens,
+			curResult.Elapsed.Round(time.Second))
 	}
 	return nil
 }

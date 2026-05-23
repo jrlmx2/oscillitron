@@ -44,6 +44,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/orchestrator"
 	"github.com/jrlmx2/oscillitron/pkg/config"
+	"github.com/jrlmx2/oscillitron/pkg/cope"
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
@@ -119,6 +120,10 @@ func run() error {
 
 		notice_       = flag.Bool("notice", true, "v3.1: enable prompt-side notice inspection on ollama-direct calls. Detects input overflow, persona-heavy prompts, etc.; emits `ollama.notice_assessment` trace events when signals fire. Cheap, observability-only (does not alter calls). Disabled with --notice=false. See scratch/v3-design.md §3.1 + §7.1.")
 		noticeCtxSize = flag.Int("notice-context-size", 0, "v3.1: substrate context window in tokens, used by the notice layer's overflow detectors. 0 = unset (overflow checks skip, persona-heavy still runs). Default matches whatever the operator passed via --model-context-size for the governor; if both are unset, pass this explicitly per substrate (phi4-mini=131072, llama-70b=128000, etc.).")
+
+		copeEnable = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
+		copeHigh   = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
+		copeLow    = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -351,21 +356,44 @@ func run() error {
 	extractor := orchestrator.ExtractorFunc(func(raw string) string {
 		return grader.ExtractLetter(raw, grader.MultichoiceLetters)
 	})
+	frontierOrch := orchestrator.Single{
+		NameStr:   "frontier-" + adapterModel(*frontSubstrate, *frontModel),
+		Adapter:   frontAdapter,
+		Extractor: extractor,
+		Governor:  governor, // shares the same budget — risky if frontier and orch are same substrate, but the governor handles it
+	}
+	voteOrch := orchestrator.Vote{
+		NameStr:   fmt.Sprintf("orchestrator-vote-%d-%s", *voteN, adapterModel(*orchSubstrate, *orchModel)),
+		Adapter:   orchAdapter,
+		N:         *voteN,
+		Extractor: extractor,
+		Governor:  governor,
+		Tracer:    tracer,
+	}
+
+	// v3.4: when --cope is set, wrap the Vote orchestrator in a
+	// Coping dispatcher that escalates high-stakes low-confidence
+	// cases to the frontier orchestrator. Tracking and reporting
+	// see this as a single orchestrator line; the cope action is
+	// stamped per-case on Answer.CopeAction.
+	var orchAsBenchmarkOrch benchmark.Orchestrator = voteOrch
+	if *copeEnable {
+		orchAsBenchmarkOrch = orchestrator.Coping{
+			NameStr:  "cope-" + voteOrch.NameStr,
+			Inner:    voteOrch,
+			Frontier: frontierOrch,
+			Rules: cope.RuleTable{
+				HighConfidence:  *copeHigh,
+				LowConfidence:   *copeLow,
+				EscalateAllowed: true, // gated by Frontier != nil at runtime
+			},
+			Tracer: tracer,
+		}
+	}
+
 	orchestrators := []benchmark.Orchestrator{
-		orchestrator.Single{
-			NameStr:   "frontier-" + adapterModel(*frontSubstrate, *frontModel),
-			Adapter:   frontAdapter,
-			Extractor: extractor,
-			Governor:  governor, // shares the same budget — risky if frontier and orch are same substrate, but the governor handles it
-		},
-		orchestrator.Vote{
-			NameStr:   fmt.Sprintf("orchestrator-vote-%d-%s", *voteN, adapterModel(*orchSubstrate, *orchModel)),
-			Adapter:   orchAdapter,
-			N:         *voteN,
-			Extractor: extractor,
-			Governor:  governor,
-			Tracer:    tracer,
-		},
+		frontierOrch,
+		orchAsBenchmarkOrch,
 	}
 
 	// Grader: Multichoice as Primary; dual scaffolding is in place but

@@ -175,6 +175,7 @@ type answerJSON struct {
 	Calls      int     `json:"calls"`
 	TokensUsed int     `json:"tokens_used"`
 	Confidence float64 `json:"confidence,omitempty"`
+	CopeAction string  `json:"cope_action,omitempty"`
 }
 
 type verdictJSON struct {

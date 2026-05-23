@@ -94,6 +94,11 @@ type Answer struct {
 	// adapter ran InspectResponse + EffectiveConfidence. Zero =
 	// "no confidence reported" (not "zero confidence").
 	Confidence float64
+	// CopeAction is the v3.4 coping decision that produced this
+	// Answer. Set by the orchestrator.Coping wrapper when wired;
+	// empty when the orchestrator didn't go through cope. Values:
+	// "ship", "ship_with_caveat", "escalate", "refuse".
+	CopeAction string
 }
 
 // Orchestrator turns a Case into an Answer. Implementations pick the

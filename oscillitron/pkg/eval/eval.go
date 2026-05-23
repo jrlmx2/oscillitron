@@ -49,10 +49,10 @@ type Runner func(ctx context.Context, task Task) (string, error)
 
 // Result is one task's full record.
 type Result struct {
-	Task    Task
-	Output  string
-	Score   Score
-	Err     error // non-nil if Runner or Grader errored; Score may be zero
+	Task   Task
+	Output string
+	Score  Score
+	Err    error // non-nil if Runner or Grader errored; Score may be zero
 }
 
 // Report aggregates results.

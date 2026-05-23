@@ -52,8 +52,8 @@ type returnResultPayloadJSON struct {
 // verifierSignalPayloadJSON is the execute-step JSON for
 // PlaybookCritique and PlaybookVerifyGrounded.
 type verifierSignalPayloadJSON struct {
-	Verdict string          `json:"verdict"`
-	Issues  []issueJSON     `json:"issues,omitempty"`
+	Verdict string      `json:"verdict"`
+	Issues  []issueJSON `json:"issues,omitempty"`
 }
 
 type issueJSON struct {

@@ -14,24 +14,24 @@
 //
 // What the probe does:
 //
-//   trial 1 (cold):       session-A, input I1 — primes the prefix in cache.
-//   trial 2 (same-session): session-A, input I2 — confirms the cache
-//                          works AT ALL within a session.
-//   trial 3 (cross-session): session-B (different session_id, identical
-//                          prompt prefix), input I3 — the actual test.
+//	trial 1 (cold):       session-A, input I1 — primes the prefix in cache.
+//	trial 2 (same-session): session-A, input I2 — confirms the cache
+//	                       works AT ALL within a session.
+//	trial 3 (cross-session): session-B (different session_id, identical
+//	                       prompt prefix), input I3 — the actual test.
 //
 // Decision rule:
 //   - trial-3 ≈ trial-2  ⇒ prefix-cache is global → safe to revert #19
 //   - trial-3 ≈ trial-1  ⇒ prefix-cache is session-scoped → keep #19,
-//                          or fall back to persona-guided isolation
+//     or fall back to persona-guided isolation
 //
 // Three trials per condition by default (configurable) to smooth out
 // jitter; report min, median, and max wall-clock for each.
 //
 // Usage:
 //
-//   go run ./cmd/probe-prefix-cache --hermes http://127.0.0.1:8642
-//   go run ./cmd/probe-prefix-cache --hermes http://127.0.0.1:8642 --hermes-model openrouter:openai/gpt-4o-mini
+//	go run ./cmd/probe-prefix-cache --hermes http://127.0.0.1:8642
+//	go run ./cmd/probe-prefix-cache --hermes http://127.0.0.1:8642 --hermes-model openrouter:openai/gpt-4o-mini
 package main
 
 import (

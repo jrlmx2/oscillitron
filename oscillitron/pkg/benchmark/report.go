@@ -111,13 +111,13 @@ func toCaseResultJSON(cr CaseResult) caseResultJSON {
 // in-process Go types if a future schema-versioning concern hits.
 
 type reportJSON struct {
-	BenchmarkName string                `json:"benchmark_name"`
-	StartedAt     time.Time             `json:"started_at"`
-	EndedAt       time.Time             `json:"ended_at"`
-	ElapsedMS     int64                 `json:"elapsed_ms"`
-	Aggregates    []aggregateStatsJSON  `json:"aggregates"`
-	Windows       []windowStatsJSON     `json:"windows,omitempty"`
-	Cases         []caseResultJSON      `json:"cases"`
+	BenchmarkName string               `json:"benchmark_name"`
+	StartedAt     time.Time            `json:"started_at"`
+	EndedAt       time.Time            `json:"ended_at"`
+	ElapsedMS     int64                `json:"elapsed_ms"`
+	Aggregates    []aggregateStatsJSON `json:"aggregates"`
+	Windows       []windowStatsJSON    `json:"windows,omitempty"`
+	Cases         []caseResultJSON     `json:"cases"`
 }
 
 type aggregateStatsJSON struct {
@@ -137,9 +137,9 @@ type aggregateStatsJSON struct {
 }
 
 type windowStatsJSON struct {
-	EndCase         int                       `json:"end_case"`
-	Size            int                       `json:"size"`
-	PerOrchestrator []windowOrchStatsJSON     `json:"per_orchestrator"`
+	EndCase         int                   `json:"end_case"`
+	Size            int                   `json:"size"`
+	PerOrchestrator []windowOrchStatsJSON `json:"per_orchestrator"`
 }
 
 type windowOrchStatsJSON struct {
@@ -149,9 +149,9 @@ type windowOrchStatsJSON struct {
 }
 
 type caseResultJSON struct {
-	CaseID   string                  `json:"case_id"`
-	Case     caseJSON                `json:"case"`
-	Results  []orchestratorResultJSON `json:"results"`
+	CaseID  string                   `json:"case_id"`
+	Case    caseJSON                 `json:"case"`
+	Results []orchestratorResultJSON `json:"results"`
 }
 
 type caseJSON struct {

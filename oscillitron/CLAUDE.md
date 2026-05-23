@@ -87,6 +87,24 @@ go run ./cmd/oscillitron
 
 Requires Go 1.26+ (current toolchain on dev machine; bumped from 1.21 on 2026-05-18).
 
+### Pre-commit hooks
+
+Tracked hooks live in `scripts/git-hooks/`. Git fires hooks from
+`.git/hooks/` by default; one command per clone redirects it to the
+tracked dir:
+
+```
+./scripts/install-hooks.sh   # sets core.hooksPath = scripts/git-hooks/
+```
+
+Idempotent — safe to re-run. The `pre-commit` hook runs `gofmt -l`
+on staged Go files and `go vet ./...` on the module. No external
+tooling required beyond the Go toolchain already needed to build.
+
+CI (`.github/workflows/check.yml`) runs the same checks on every PR
+as a backstop. **Don't skip the install** — the CI check fires after
+you've already pushed.
+
 ### Smoke-testing the Hermes adapter against a real local Hermes
 
 ```

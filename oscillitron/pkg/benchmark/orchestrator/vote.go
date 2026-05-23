@@ -94,9 +94,10 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	effectiveStakes := stakes.Effective(c.Stakes)
 
 	type result struct {
-		raw    string
-		tokens int
-		err    error
+		raw        string
+		tokens     int
+		confidence float64
+		err        error
 	}
 	results := make([]result, effectiveN)
 	var wg sync.WaitGroup
@@ -149,10 +150,12 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			}
 			results[i].raw = out.Execute.ReturnResult.Result.Content
 			results[i].tokens = out.Execute.TokensUsed
+			results[i].confidence = out.Execute.ReturnResult.Confidence
 			extracted := v.Extractor.Extract(results[i].raw)
 			trace.Info(tracer, aCtx, "vote.attempt_done",
 				slog.String("extracted", extracted),
 				slog.Int("tokens", results[i].tokens),
+				slog.Float64("confidence", results[i].confidence),
 				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 			)
 		}()
@@ -164,6 +167,11 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	var rawParts []string
 	totalTokens := 0
 	successes := 0
+	// v3.3: aggregate per-attempt confidence into the returned
+	// Answer. Mean across successful attempts that reported one.
+	// Zero attempts reporting confidence ⇒ Answer.Confidence stays 0.
+	var confidenceSum float64
+	confidenceCount := 0
 	var firstErr error
 	for _, r := range results {
 		if r.err != nil {
@@ -171,6 +179,10 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 				firstErr = r.err
 			}
 			continue
+		}
+		if r.confidence > 0 {
+			confidenceSum += r.confidence
+			confidenceCount++
 		}
 		extracted := v.Extractor.Extract(r.raw)
 		rawParts = append(rawParts, r.raw)
@@ -203,6 +215,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			Extracted:  "",
 			Calls:      successes,
 			TokensUsed: totalTokens,
+			Confidence: meanConfidence(confidenceSum, confidenceCount),
 		}, nil
 	}
 
@@ -236,7 +249,16 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		Extracted:  bestKey,
 		Calls:      successes,
 		TokensUsed: totalTokens,
+		Confidence: meanConfidence(confidenceSum, confidenceCount),
 	}, nil
+}
+
+// meanConfidence returns sum/count or 0 when count==0.
+func meanConfidence(sum float64, count int) float64 {
+	if count == 0 {
+		return 0
+	}
+	return sum / float64(count)
 }
 
 // formatVoteDistribution renders the vote map as a stable

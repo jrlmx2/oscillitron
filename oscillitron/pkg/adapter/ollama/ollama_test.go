@@ -589,6 +589,38 @@ func TestNoticeResponseAssessment_ExtractsConfidence(t *testing.T) {
 	}
 }
 
+// v3.3 effective-confidence STAMPING behavior is tested
+// adapter-agnostically in pkg/notice (TestEffectiveConfidenceFromRaw_*
+// + TestApplyEffectiveConfidence_*). The ollama-side test below is a
+// thin integration: confirms the stamping actually reaches
+// ReturnResult.Confidence via Execute's wiring.
+
+func TestExecute_StampsEffectiveConfidence_FromMinimalOutput(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      "The answer is A.\nconfidence: 0.7",
+		finishReason: "stop",
+	})
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
+	env := session.Envelope{
+		ID:       "ap-min",
+		Input:    session.Payload{Kind: "task", Content: "Q?"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	out, err := a.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	got := out.Execute.ReturnResult.Confidence
+	if got < 0.69 || got > 0.71 {
+		t.Errorf("integration: ReturnResult.Confidence = %v, want 0.7 (stamped via applyEffectiveConfidence wiring)", got)
+	}
+}
+
 func TestNoticeResponseAssessment_QuietWhenNothingToReport(t *testing.T) {
 	f := newFakeOllama()
 	defer f.close()

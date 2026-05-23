@@ -106,6 +106,7 @@ func (s Single) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer,
 		Extracted:  extracted,
 		Calls:      1,
 		TokensUsed: out.Execute.TokensUsed,
+		Confidence: out.Execute.ReturnResult.Confidence,
 	}, nil
 }
 

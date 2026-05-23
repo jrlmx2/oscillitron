@@ -311,9 +311,41 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 		return env, err
 	}
 	execute.TokensUsed = usage.input + usage.output
+	// v3.3: stamp effective confidence onto the return_result so the
+	// orchestrator surfaces it in benchmark.Answer. For
+	// minimal-output responses where the JSON envelope is absent,
+	// parseExecuteResponse's unstructuredFallback sets Confidence to
+	// the 0.1 stub. Recover the real number from the raw text via
+	// notice.ExtractConfidence, then apply the v3.2 signal
+	// adjustments.
+	applyEffectiveConfidence(execute, raw, a.cfg.Inspector)
 	env.Execute = execute
 	env.ExitReason = session.ExitDone
 	return env, nil
+}
+
+// applyEffectiveConfidence recovers + adjusts confidence when the
+// minimal-output path produced an unstructured-fallback Execute.
+// JSON-parsed confidences (Confidence > 0.15, i.e. NOT the fallback
+// stub) are left alone — those are already the model's self-report.
+// The unstructured path is special-cased because parseExecuteResponse
+// can't see the raw text or apply response-side signals.
+//
+// Pure stamping logic lives in notice.EffectiveConfidenceFromRaw
+// (adapter-agnostic, tested there). This function is the
+// adapter-specific gate that decides WHEN to stamp.
+func applyEffectiveConfidence(exec *session.Execute, raw string, inspector *notice.Inspector) {
+	if exec == nil || exec.ReturnResult == nil {
+		return
+	}
+	// JSON-parsed confidence is authoritative; only touch the
+	// unstructured-fallback stub.
+	if exec.ReturnResult.Confidence > 0.15 {
+		return
+	}
+	if conf, ok := notice.EffectiveConfidenceFromRaw(raw, inspector); ok {
+		exec.ReturnResult.Confidence = conf
+	}
 }
 
 // boundContext applies the configured RunTimeout if the caller's

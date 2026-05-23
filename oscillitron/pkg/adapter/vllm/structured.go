@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/classification"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
@@ -43,8 +44,12 @@ type verifySpecRaw struct {
 	Spec string `json:"spec"`
 }
 
+// returnResultPayloadJSON — see pkg/adapter/ollama/structured.go
+// for the full rationale. Accepts both legacy `content` and v3.5
+// `answer` fields; parseReturnResultJSON picks Answer when present.
 type returnResultPayloadJSON struct {
-	Content        string   `json:"content"`
+	Content        string   `json:"content,omitempty"`
+	Answer         string   `json:"answer,omitempty"`
 	Confidence     float64  `json:"confidence"`
 	GroundedPass   *bool    `json:"grounded_pass,omitempty"`
 	Contradictions []string `json:"contradictions,omitempty"`
@@ -205,11 +210,18 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 	if err := json.Unmarshal([]byte(obj), &p); err != nil {
 		return nil, fmt.Errorf("vllm: parse return_result JSON: %w", err)
 	}
+	// v3.5: Answer (structured-output) takes precedence over Content.
+	content := p.Answer
+	if content == "" {
+		content = p.Content
+	}
 	return &session.Execute{
 		Category: session.CategoryReturnResult,
 		ReturnResult: &session.ReturnResultPayload{
-			Result:     session.Payload{Kind: "result", Content: p.Content},
-			Confidence: p.Confidence,
+			Result: session.Payload{Kind: "result", Content: content},
+			// v3.5: percent-normalize. See pkg/adapter/ollama for
+			// rationale.
+			Confidence: notice.NormalizeConfidence(p.Confidence),
 			Signals: session.Signals{
 				GroundedPass:   p.GroundedPass,
 				Contradictions: p.Contradictions,

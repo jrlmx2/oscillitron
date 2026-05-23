@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/classification"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
@@ -242,8 +243,11 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 	return &session.Execute{
 		Category: session.CategoryReturnResult,
 		ReturnResult: &session.ReturnResultPayload{
-			Result:     session.Payload{Kind: "result", Content: p.Content},
-			Confidence: p.Confidence,
+			Result: session.Payload{Kind: "result", Content: p.Content},
+			// v3.5: percent-normalize at JSON entry point so a
+			// substrate that emits "confidence: 95" (the percent
+			// pattern qwen2.5:7b uses) ends up at 0.95, not 95.
+			Confidence: notice.NormalizeConfidence(p.Confidence),
 			Signals: session.Signals{
 				GroundedPass:   p.GroundedPass,
 				Contradictions: p.Contradictions,

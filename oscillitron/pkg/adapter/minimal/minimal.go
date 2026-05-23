@@ -42,17 +42,86 @@
 package minimal
 
 // ProcessInstructions is the bare instruction template for the
-// `process` playbook against an MCQ-shaped benchmark. Roughly 40
+// `process` playbook against an MCQ-shaped benchmark. Roughly 60
 // tokens vs. the default ~250.
 //
 // Design notes:
-//   - "End your response with the single letter" is the load-bearing
-//     line — small models will reason out loud and forget to commit
-//     a final letter without it. The bench's Multichoice grader runs
-//     last-match-wins regex over [A-D], so the closing letter wins
-//     even if earlier letters appear in the reasoning.
-//   - No mention of "{answer}" output schema — bench sets it to a
-//     placeholder string that's useless to the model.
-//   - No JSON envelope — the adapter's unstructuredFallback handles
-//     bare text and wraps it into ReturnResultPayload.
-const ProcessInstructions = `Answer the following multiple-choice question. Read it carefully, then choose the best answer. End your response with the single letter (A, B, C, or D) of your final answer.`
+//   - The "report your confidence" line is load-bearing for the
+//     v3 chain: ExtractConfidence (pkg/notice) parses the model's
+//     self-reported confidence to feed EffectiveConfidence ->
+//     cope.Decide. Without it, v3.2-v3.4 degenerates to
+//     ShipWithCaveat on every call (because cope reads 0 as
+//     "not reported" and refuses to escalate).
+//   - When paired with ProcessSchema (response_format enforcement
+//     at the OpenAI API level), the instruction is belt-and-
+//     suspenders — the schema constrains the engine to emit both
+//     fields. The text instruction stays useful for fallback when
+//     a server doesn't honor response_format.
+//   - The bench's Multichoice grader runs last-match-wins regex
+//     over [A-D]; the schema-enforced `answer` field is what we
+//     actually consume.
+const ProcessInstructions = `Answer the following multiple-choice question. Choose the best option and report your confidence as a number between 0.0 and 1.0. Reply with the single letter (A, B, C, or D) as your answer.`
+
+// ProcessSchema returns the JSON Schema constraining the model's
+// response to {answer: string, confidence: number 0-1}. Used with
+// the OpenAI `response_format` parameter: Ollama, vLLM, and LM
+// Studio all support grammar-constrained sampling against this
+// shape, eliminating format compliance as a failure mode.
+//
+// Returns a fresh map per call (Go can't have map constants); the
+// allocation is negligible vs. the marshal-to-JSON cost the
+// chat-completions request already pays.
+//
+// Schema choices:
+//   - `answer` is `type: string` not enum[A,B,C,D] because some
+//     benchmarks aren't MCQ. The bench's grader does the letter
+//     extraction; we don't pre-constrain the substrate to a fixed
+//     letter set at the schema layer.
+//   - `confidence` is bounded [0, 1] explicitly so the engine
+//     refuses to emit values outside that range.
+//   - `additionalProperties: false` so the model can't sneak in
+//     reasoning fields that break our parser.
+func ProcessSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"answer": map[string]any{
+				"type":        "string",
+				"description": "The single letter answer (A, B, C, or D).",
+			},
+			"confidence": map[string]any{
+				"type":    "number",
+				"minimum": 0,
+				"maximum": 1,
+				// description is load-bearing: Ollama's strict mode
+				// enforces type + shape but NOT numeric bounds, so
+				// the model can emit 95 thinking percent. The
+				// description steers it to the decimal scale.
+				// notice.ExtractConfidence percent-normalizes as a
+				// safety net for when this hint is ignored.
+				"description": "Decimal between 0.0 and 1.0 indicating confidence in the answer. NOT a percentage — 0.5 means 50 percent confident, NOT 0.5 percent.",
+			},
+		},
+		"required":             []string{"answer", "confidence"},
+		"additionalProperties": false,
+	}
+}
+
+// AsResponseFormat wraps a JSON schema in the OpenAI-standard
+// `response_format` envelope:
+//
+//	body["response_format"] = AsResponseFormat("process_answer",
+//	                                            ProcessSchema())
+//
+// `strict: true` tells the engine to enforce the schema rigorously.
+// Ollama honors this; vLLM honors via outlines / lm-format-enforcer.
+func AsResponseFormat(name string, schema map[string]any) map[string]any {
+	return map[string]any{
+		"type": "json_schema",
+		"json_schema": map[string]any{
+			"name":   name,
+			"schema": schema,
+			"strict": true,
+		},
+	}
+}

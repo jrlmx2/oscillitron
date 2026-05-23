@@ -111,6 +111,7 @@ func TestExtractConfidence(t *testing.T) {
 		wantVal float64
 		wantOK  bool
 	}{
+		// Decimal scale (the canonical case)
 		{"confidence: 0.8", 0.8, true},
 		{"Confidence: 0.95", 0.95, true},
 		{"CONFIDENCE = 1.0", 1.0, true},
@@ -118,15 +119,23 @@ func TestExtractConfidence(t *testing.T) {
 		{"The answer is A.\nconfidence: 0.7", 0.7, true},
 		// Last match wins (model walked through then committed)
 		{"I'd estimate confidence: 0.6 initially, then refined to confidence: 0.9", 0.9, true},
-		// Clamping
-		{"confidence: 1.5", 1.0, true},
 		// Missing → not found
 		{"The answer is A. Done.", 0, false},
 		{"", 0, false},
-		// Integer
+		// Integer 1 — kept at 1.0 (1 means "fully confident" on decimal scale)
 		{"confidence: 1", 1.0, true},
 		// Leading dot
 		{"confidence: .5", 0.5, true},
+
+		// v3.5: percent-scale normalization. Catches the "qwen2.5:7b
+		// emits 95 instead of 0.95" pattern when the schema's numeric
+		// bounds aren't engine-enforced.
+		{"confidence: 95", 0.95, true},
+		{"confidence: 100", 1.0, true},
+		{"confidence: 50", 0.5, true},
+		{"confidence: 1.5", 0.015, true}, // value in (1, 100] → percent
+		// Out-of-range above 100 → clamp.
+		{"confidence: 200", 1.0, true},
 	}
 	for _, tc := range cases {
 		val, ok := ExtractConfidence(tc.raw)
@@ -135,6 +144,38 @@ func TestExtractConfidence(t *testing.T) {
 		}
 		if ok && (val < tc.wantVal-0.001 || val > tc.wantVal+0.001) {
 			t.Errorf("ExtractConfidence(%q) = %v, want ~%v", tc.raw, val, tc.wantVal)
+		}
+	}
+}
+
+// --- NormalizeConfidence ---
+
+func TestNormalizeConfidence(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want float64
+	}{
+		// Decimal scale (the expected case).
+		{0.0, 0.0},
+		{0.5, 0.5},
+		{0.95, 0.95},
+		{1.0, 1.0},
+		// Percent scale (the "qwen2.5:7b emits 95" case).
+		{50, 0.5},
+		{95, 0.95},
+		{100, 1.0},
+		{1.5, 0.015},
+		// Out of range above 100 — clamp.
+		{200, 1.0},
+		{1000, 1.0},
+		// Negative — clamp to 0.
+		{-0.5, 0.0},
+		{-100, 0.0},
+	}
+	for _, tc := range cases {
+		got := NormalizeConfidence(tc.in)
+		if got < tc.want-0.001 || got > tc.want+0.001 {
+			t.Errorf("NormalizeConfidence(%v) = %v, want %v", tc.in, got, tc.want)
 		}
 	}
 }

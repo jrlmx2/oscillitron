@@ -170,7 +170,7 @@ var confidenceRE = regexp.MustCompile(`(?i)confidence\s*[:=]\s*([0-9]*\.?[0-9]+)
 // response text. Case-insensitive, last match wins (in case the
 // model wrote about confidence in reasoning then committed a final
 // value at the end). Returns (value, true) on hit; (0, false) on
-// miss. Value clamped to [0.0, 1.0].
+// miss. Value normalized to [0.0, 1.0] via NormalizeConfidence.
 //
 // Designed for the minimal-output prompt (pkg/adapter/minimal),
 // which asks for `confidence: X.X` on its own line. Tolerates the
@@ -184,14 +184,34 @@ func ExtractConfidence(raw string) (float64, bool) {
 	if len(last) < 2 {
 		return 0, false
 	}
-	val := parseFloat(last[1])
+	return NormalizeConfidence(parseFloat(last[1])), true
+}
+
+// NormalizeConfidence maps a parsed-or-extracted confidence value to
+// [0, 1] with percent-scale handling:
+//
+//	val < 0              → 0 (clamp; should never happen but defensive)
+//	val ≤ 1              → val as-is (already a decimal)
+//	1 < val ≤ 100        → val / 100 (treat as percent; the
+//	                        "confidence: 95" pattern qwen2.5:7b emits)
+//	val > 100            → 1 (clamp; out of range either way)
+//
+// Used by ExtractConfidence for text-parsed values AND by adapter
+// parseReturnResultJSON for JSON-envelope values. Schema-enforced
+// JSON confidence still needs this because Ollama's strict mode
+// enforces type but NOT numeric bounds — see scratch/v3-design.md
+// addendum about response_format limits.
+func NormalizeConfidence(val float64) float64 {
 	if val < 0 {
-		val = 0
+		return 0
+	}
+	if val > 1 && val <= 100 {
+		return val / 100
 	}
 	if val > 1 {
-		val = 1
+		return 1
 	}
-	return val, true
+	return val
 }
 
 // parseFloat is a tiny stdlib-free float parser for [0, 1] range.

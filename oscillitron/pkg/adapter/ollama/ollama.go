@@ -130,6 +130,21 @@ type Config struct {
 	// when any detector fires. See pkg/notice for the signal
 	// catalog (input overflows context, persona-heavy, etc.).
 	Inspector *notice.Inspector
+
+	// ResponseFormat is the OpenAI-compat `response_format`
+	// parameter — when set, the chat-completions engine constrains
+	// the model to emit JSON matching this schema. Used to force
+	// format compliance without the legacy 4k-token envelope (see
+	// pkg/adapter/minimal.AsResponseFormat for the standard wrap).
+	//
+	// Optional. nil = no constraint; model emits free-form text
+	// and the adapter's unstructuredFallback parses what it can.
+	//
+	// Ollama, vLLM, and LM Studio honor this parameter via their
+	// OpenAI-compat surface. Hermes does not (it speaks /v1/runs,
+	// not /v1/chat/completions) — for Hermes, format enforcement
+	// would happen via soul.md, which we deliberately exited.
+	ResponseFormat map[string]any
 }
 
 // Adapter is an adapter.Adapter targeting one Ollama instance per
@@ -374,10 +389,11 @@ type tokenUsage struct {
 // We send stream=false because we want one shot per call; the bench's
 // observability layer reads completions, not streamed deltas.
 type chatRequest struct {
-	Model    string         `json:"model"`
-	Messages []chatMessage  `json:"messages"`
-	Stream   bool           `json:"stream"`
-	Options  map[string]any `json:"options,omitempty"`
+	Model          string         `json:"model"`
+	Messages       []chatMessage  `json:"messages"`
+	Stream         bool           `json:"stream"`
+	Options        map[string]any `json:"options,omitempty"`
+	ResponseFormat map[string]any `json:"response_format,omitempty"`
 }
 
 type chatMessage struct {
@@ -418,8 +434,9 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 			{Role: "system", Content: instructions},
 			{Role: "user", Content: env.Input.Content},
 		},
-		Stream:  false,
-		Options: ep.Options,
+		Stream:         false,
+		Options:        ep.Options,
+		ResponseFormat: a.cfg.ResponseFormat,
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {

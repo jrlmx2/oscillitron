@@ -10,11 +10,25 @@ func TestProcessInstructions_MentionsLetters(t *testing.T) {
 	// Smoke test: the minimal template must steer the model toward a
 	// single closing letter. Without that, last-match-wins extraction
 	// has nothing to match.
-	want := []string{"single letter", "A, B, C, or D", "end your response"}
+	want := []string{"single letter", "A, B, C, or D"}
 	got := strings.ToLower(ProcessInstructions)
 	for _, w := range want {
 		if !strings.Contains(got, strings.ToLower(w)) {
 			t.Errorf("ProcessInstructions missing %q; got:\n%s", w, ProcessInstructions)
+		}
+	}
+}
+
+func TestProcessInstructions_AsksForConfidence(t *testing.T) {
+	// v3.x: the chain depends on the model self-reporting confidence.
+	// If this assertion fails because the prompt evolved, double-check
+	// that confidence still flows to ExtractConfidence somehow (or via
+	// ProcessSchema enforcement).
+	want := []string{"confidence", "0.0", "1.0"}
+	got := strings.ToLower(ProcessInstructions)
+	for _, w := range want {
+		if !strings.Contains(got, w) {
+			t.Errorf("ProcessInstructions missing %q (confidence is v3-chain-load-bearing); got:\n%s", w, ProcessInstructions)
 		}
 	}
 }
@@ -31,18 +45,59 @@ func TestProcessInstructions_IsActuallyMinimal(t *testing.T) {
 }
 
 func TestProcessInstructions_NoJSONEnvelope(t *testing.T) {
-	// The whole point of this package is to drop the JSON envelope.
-	// Belt and suspenders: assert no JSON shape keywords leak in.
+	// The whole point of this package is to drop the legacy JSON
+	// envelope (content/grounded_pass/contradictions/...). Belt-
+	// and-suspenders: assert no envelope-shape keywords leak in.
+	// Note: structured-output enforcement at the API level (via
+	// ProcessSchema + AsResponseFormat) is a separate concern;
+	// the schema lives outside the instruction text.
 	banned := []string{
 		"JSON",
 		"json object",
 		`"content"`,
-		`"confidence"`,
 		`"grounded_pass"`,
 	}
 	for _, b := range banned {
 		if strings.Contains(ProcessInstructions, b) {
-			t.Errorf("ProcessInstructions contains %q; minimal should not mention JSON shape", b)
+			t.Errorf("ProcessInstructions contains %q; minimal should not mention legacy envelope", b)
 		}
+	}
+}
+
+func TestProcessSchema_Shape(t *testing.T) {
+	s := ProcessSchema()
+	if got, _ := s["type"].(string); got != "object" {
+		t.Errorf("schema type = %q, want object", got)
+	}
+	props, _ := s["properties"].(map[string]any)
+	if _, ok := props["answer"]; !ok {
+		t.Errorf("schema missing properties.answer")
+	}
+	if _, ok := props["confidence"]; !ok {
+		t.Errorf("schema missing properties.confidence")
+	}
+	required, _ := s["required"].([]string)
+	if len(required) != 2 {
+		t.Errorf("schema required has %d fields, want 2", len(required))
+	}
+	if addl, _ := s["additionalProperties"].(bool); addl {
+		t.Errorf("additionalProperties should be false (closed schema)")
+	}
+}
+
+func TestAsResponseFormat_WrapsSchema(t *testing.T) {
+	rf := AsResponseFormat("test_name", ProcessSchema())
+	if got, _ := rf["type"].(string); got != "json_schema" {
+		t.Errorf("response_format.type = %q, want json_schema", got)
+	}
+	js, _ := rf["json_schema"].(map[string]any)
+	if got, _ := js["name"].(string); got != "test_name" {
+		t.Errorf("json_schema.name = %q, want test_name", got)
+	}
+	if got, _ := js["strict"].(bool); !got {
+		t.Errorf("json_schema.strict should be true")
+	}
+	if _, ok := js["schema"].(map[string]any); !ok {
+		t.Errorf("json_schema.schema not embedded as map")
 	}
 }

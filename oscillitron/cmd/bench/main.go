@@ -31,6 +31,7 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	adapterAnth "github.com/jrlmx2/oscillitron/pkg/adapter/anthropic"
+	"github.com/jrlmx2/oscillitron/pkg/adapter/curated"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
@@ -72,6 +73,16 @@ func run() error {
 		curateAction    = flag.String("curate-action", "process", "exemplar.Action key for post-hook curation; props: bench.curate.action")
 		curateBatchSize = flag.Int("curate-batch-size", 20, "cold-path batch size for post-hook curation")
 		curateMinScore  = flag.Float64("curate-min-score", 0, "post-hook curation candidate quality floor")
+
+		// Warm-path curation: wrap orchestrator adapters with
+		// pkg/adapter/curated so retrieved exemplars get prepended to
+		// each call's prompt. The other half of the self-improvement
+		// loop — read what --curate-store-dir wrote (this run or a
+		// prior one).
+		useStoreDir       = flag.String("use-store", "", "optional: wrap orchestrator adapters with pkg/adapter/curated using this exemplar.FileStore directory; retrieved exemplars prepended to each warm-path call's prompt")
+		useStoreAction    = flag.String("use-store-action", "process", "exemplar.Action key the warm-path retrieval reads from (must match what curation wrote)")
+		useStoreTopK      = flag.Int("use-store-topk", 3, "max exemplars retrieved per call when --use-store is set")
+		useStoreMaxTokens = flag.Int("use-store-max-tokens", 0, "token-budget cap on retrieved exemplar block (0 = no cap; TopK still bounds)")
 
 		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "orchestrator substrate (hermes|anthropic)")
 		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "hermes gateway URL or anthropic BaseURL")
@@ -183,6 +194,19 @@ func run() error {
 				}
 			}
 		}
+		// Warm-path retrieval (--use-store).
+		if !flagPassed("use-store") {
+			*useStoreDir = props.String("bench.use_store.dir", "")
+		}
+		if !flagPassed("use-store-action") {
+			*useStoreAction = props.String("bench.use_store.action", *useStoreAction)
+		}
+		if !flagPassed("use-store-topk") {
+			*useStoreTopK = props.Int("bench.use_store.topk", *useStoreTopK)
+		}
+		if !flagPassed("use-store-max-tokens") {
+			*useStoreMaxTokens = props.Int("bench.use_store.max_tokens", *useStoreMaxTokens)
+		}
 		// Substrate routing.
 		if !flagPassed("orchestrator-substrate") {
 			*orchSubstrate = props.String("bench.orchestrator.substrate", *orchSubstrate)
@@ -256,6 +280,33 @@ func run() error {
 	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel)
 	if err != nil {
 		return err
+	}
+
+	// Warm-path retrieval: when --use-store is set, wrap both
+	// orchestrator adapters with pkg/adapter/curated so each call's
+	// prompt gets prepended with the top-K relevant exemplars from
+	// the per-action FileStore. Same wrapper on both arms keeps the
+	// frontier vs vote comparison apples-to-apples.
+	if *useStoreDir != "" {
+		if err := os.MkdirAll(*useStoreDir, 0o755); err != nil {
+			return fmt.Errorf("--use-store: ensure dir %s: %w", *useStoreDir, err)
+		}
+		store := &exemplar.FileStore{Dir: *useStoreDir}
+		wrap := func(name string, inner adapter.Adapter) adapter.Adapter {
+			return &curated.Adapter{
+				Inner:             inner,
+				Store:             store,
+				TopK:              *useStoreTopK,
+				MaxExemplarTokens: *useStoreMaxTokens,
+				ActionOverride:    *useStoreAction,
+				Tracer:            tracer,
+			}
+		}
+		orchAdapter = wrap("orchestrator", orchAdapter)
+		frontAdapter = wrap("frontier", frontAdapter)
+		fmt.Fprintf(os.Stderr,
+			"bench: warm-path retrieval enabled (store=%s, action=%s, topk=%d, max_tokens=%d)\n",
+			*useStoreDir, *useStoreAction, *useStoreTopK, *useStoreMaxTokens)
 	}
 
 	// Build loader (gpqa for now; extensible).

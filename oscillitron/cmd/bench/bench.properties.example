@@ -53,3 +53,15 @@ bench.frontier_price=0
 bench.curate.action=process
 bench.curate.batch_size=20
 bench.curate.min_score=0
+
+# Warm-path retrieval
+#--------------------
+# When bench.use_store.dir is set, both orchestrator adapters get
+# wrapped with pkg/adapter/curated. Each call retrieves the top-K
+# relevant exemplars from this dir and prepends them as few-shot
+# examples. Closes the self-improvement loop: bench runs that use
+# the store benefit from exemplars curated by prior runs.
+# bench.use_store.dir=/tmp/oscillitron-exemplars
+bench.use_store.action=process
+bench.use_store.topk=3
+bench.use_store.max_tokens=0

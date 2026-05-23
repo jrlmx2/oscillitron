@@ -41,3 +41,15 @@ bench.frontier.model=
 # bench.price.frontier-default=4.50
 # bench.price.orchestrator-vote-3-default=0.01
 bench.frontier_price=0
+
+# Curation post-hook
+#-------------------
+# When bench.curate.store_dir is set, after the bench completes
+# pkg/curation reads bench.stream_out and writes selected exemplars
+# to this dir using the orchestrator adapter as the cold-path
+# session. Requires bench.stream_out. For a different cold-path
+# substrate, leave this empty and run cmd/curate separately.
+# bench.curate.store_dir=/tmp/oscillitron-exemplars
+bench.curate.action=process
+bench.curate.batch_size=20
+bench.curate.min_score=0

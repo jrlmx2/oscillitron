@@ -33,6 +33,7 @@ import (
 	adapterAnth "github.com/jrlmx2/oscillitron/pkg/adapter/anthropic"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/curated"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
+	"github.com/jrlmx2/oscillitron/pkg/adapter/lmstudio"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/ollama"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/vllm"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
@@ -87,12 +88,12 @@ func run() error {
 		useStoreTopK      = flag.Int("use-store-topk", 3, "max exemplars retrieved per call when --use-store is set")
 		useStoreMaxTokens = flag.Int("use-store-max-tokens", 0, "token-budget cap on retrieved exemplar block (0 = no cap; TopK still bounds)")
 
-		orchSubstrate = flag.String("orchestrator-substrate", "auto", "orchestrator substrate: auto | hermes | ollama | vllm | anthropic. 'auto' inspects --orchestrator-model and picks ollama for small models (phi*, llama3.2:3b, llama3.2:1b, gemma:7b, qwen2.5:7b/3b) — see references/substrate-routing.md — and hermes for everything else. vllm is explicit-only (auto never picks it).")
-		orchURL       = flag.String("orchestrator-url", "", "substrate base URL (default: hermes=http://127.0.0.1:8642, ollama=http://127.0.0.1:11434, vllm=http://127.0.0.1:8000, anthropic=cloud API)")
+		orchSubstrate = flag.String("orchestrator-substrate", "auto", "orchestrator substrate: auto | hermes | ollama | lmstudio | vllm | anthropic. 'auto' inspects --orchestrator-model and picks ollama for small models (phi*, llama3.2:3b, llama3.2:1b, gemma:7b, qwen2.5:7b/3b) — see references/substrate-routing.md — and hermes for everything else. lmstudio and vllm are explicit-only (auto never picks them).")
+		orchURL       = flag.String("orchestrator-url", "", "substrate base URL (default: hermes=http://127.0.0.1:8642, ollama=http://127.0.0.1:11434, lmstudio=http://127.0.0.1:1234, vllm=http://127.0.0.1:8000, anthropic=cloud API)")
 		orchModel     = flag.String("orchestrator-model", "", "model id for orchestrator")
 
-		frontSubstrate = flag.String("frontier-substrate", "anthropic", "frontier substrate (hermes|ollama|vllm|anthropic — 'auto' is not used for the frontier baseline)")
-		frontURL       = flag.String("frontier-url", "", "substrate base URL for frontier (default: hermes=http://127.0.0.1:8642, ollama=http://127.0.0.1:11434, vllm=http://127.0.0.1:8000, anthropic=cloud API)")
+		frontSubstrate = flag.String("frontier-substrate", "anthropic", "frontier substrate (hermes|ollama|lmstudio|vllm|anthropic — 'auto' is not used for the frontier baseline)")
+		frontURL       = flag.String("frontier-url", "", "substrate base URL for frontier (default: hermes=http://127.0.0.1:8642, ollama=http://127.0.0.1:11434, lmstudio=http://127.0.0.1:1234, vllm=http://127.0.0.1:8000, anthropic=cloud API)")
 		frontModel     = flag.String("frontier-model", "", "model id for frontier baseline")
 
 		// ModelSpec for the governor (drives VRAM budgeting). Required
@@ -488,6 +489,18 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)
 		}
 		return a, nil
+	case "lmstudio":
+		if url == "" {
+			url = lmstudio.DefaultBaseURL
+		}
+		if model == "" {
+			return nil, fmt.Errorf("%s adapter (lmstudio): --%s-model is required (lmstudio has no server-side default)", role, role)
+		}
+		a, err := lmstudio.New(lmstudio.SingleEndpoint(url, model))
+		if err != nil {
+			return nil, fmt.Errorf("%s adapter (lmstudio %s): %w", role, url, err)
+		}
+		return a, nil
 	case "vllm":
 		if url == "" {
 			url = vllm.DefaultBaseURL
@@ -519,7 +532,7 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		}
 		return a, nil
 	default:
-		return nil, fmt.Errorf("%s adapter: unknown substrate %q (want 'auto', 'hermes', 'ollama', 'vllm', or 'anthropic')", role, substrate)
+		return nil, fmt.Errorf("%s adapter: unknown substrate %q (want 'auto', 'hermes', 'ollama', 'lmstudio', 'vllm', or 'anthropic')", role, substrate)
 	}
 }
 

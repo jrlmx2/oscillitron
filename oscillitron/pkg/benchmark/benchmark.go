@@ -34,6 +34,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
@@ -49,6 +50,13 @@ type Case struct {
 	// Grader compares against (letter for MCQ, number string for math,
 	// free text for HLE).
 	Expected string
+	// Stakes is the v3.0 effort-routing annotation. The Vote
+	// orchestrator scales its attempt count by stakes (see
+	// stakes.AttemptScale). Zero value is treated as Medium — so
+	// loaders that don't set Stakes get the same behavior as before
+	// v3.0 landed. The bench driver assigns per-case stakes via
+	// --stakes (uniform or rotate).
+	Stakes stakes.Level
 	// Metadata carries benchmark-specific tags (difficulty, subject,
 	// source IDs). Optional; never required by the Runner.
 	Metadata map[string]string

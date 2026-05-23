@@ -14,6 +14,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
@@ -84,14 +85,22 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		tracer = trace.Discard{}
 	}
 
+	// v3.0: scale attempt count by case stakes.
+	//   Low    → 1 attempt   (cheap path; voting is overkill)
+	//   Medium → v.N         (configured default)
+	//   High   → 2 × v.N     (double effort on high-stakes)
+	// Zero stakes (unset) reads as Medium via stakes.Effective().
+	effectiveN := stakes.AttemptScale(c.Stakes, v.N)
+	effectiveStakes := stakes.Effective(c.Stakes)
+
 	type result struct {
 		raw    string
 		tokens int
 		err    error
 	}
-	results := make([]result, v.N)
+	results := make([]result, effectiveN)
 	var wg sync.WaitGroup
-	for i := 0; i < v.N; i++ {
+	for i := 0; i < effectiveN; i++ {
 		i := i
 		wg.Add(1)
 		go func() {
@@ -118,6 +127,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 				classification.Internal,
 				session.Budget{TokensRemaining: 32_000, DepthRemaining: 1},
 			)
+			env.Stakes = effectiveStakes
 			env.Evaluate = &session.Evaluate{
 				Playbook:   session.PlaybookProcess,
 				Confidence: 1.0,
@@ -173,16 +183,17 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		votes[extracted]++
 	}
 	if successes == 0 {
-		return benchmark.Answer{}, fmt.Errorf("vote: all %d attempts failed (first err: %w)", v.N, firstErr)
+		return benchmark.Answer{}, fmt.Errorf("vote: all %d attempts failed (first err: %w)", effectiveN, firstErr)
 	}
 	if len(votes) == 0 {
 		// Every attempt produced text but extraction failed on all.
 		// Surface the answers verbatim so the grader can record the
 		// failure mode rather than silently passing an empty.
 		trace.Info(tracer, ctx, "vote.tally",
-			slog.Int("attempts", v.N),
+			slog.Int("attempts", effectiveN),
 			slog.Int("successes", successes),
-			slog.Int("errors", v.N-successes),
+			slog.Int("errors", effectiveN-successes),
+			slog.String("stakes", string(effectiveStakes)),
 			slog.String("winning_answer", ""),
 			slog.Int("winning_votes", 0),
 			slog.String("distribution", "all-extractions-empty"),
@@ -209,11 +220,12 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		}
 	}
 
-	errCount := v.N - successes
+	errCount := effectiveN - successes
 	trace.Info(tracer, ctx, "vote.tally",
-		slog.Int("attempts", v.N),
+		slog.Int("attempts", effectiveN),
 		slog.Int("successes", successes),
 		slog.Int("errors", errCount),
+		slog.String("stakes", string(effectiveStakes)),
 		slog.String("winning_answer", bestKey),
 		slog.Int("winning_votes", bestCount),
 		slog.String("distribution", formatVoteDistribution(votes)),

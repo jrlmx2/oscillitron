@@ -13,6 +13,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
@@ -338,5 +339,68 @@ func TestVote_NoTracer_StillWorks(t *testing.T) {
 	v := Vote{NameStr: "vote", Adapter: a, N: 2, Extractor: ext} // no Tracer
 	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x"}); err != nil {
 		t.Fatalf("Answer with nil Tracer: %v", err)
+	}
+}
+
+// --- v3.0 stakes-driven attempt scaling ---
+
+func TestVote_StakesLow_RunsSingleAttempt(t *testing.T) {
+	a := &scriptAdapter{answers: []string{"A", "A", "A", "A", "A"}}
+	ext := ExtractorFunc(func(raw string) string { return raw })
+	// Base N=5, but stakes=Low should cap effective attempts at 1.
+	v := Vote{NameStr: "vote", Adapter: a, N: 5, Extractor: ext}
+	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.Low})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if ans.Calls != 1 {
+		t.Errorf("Calls = %d, want 1 (stakes=Low caps at single call)", ans.Calls)
+	}
+	if a.calls.Load() != 1 {
+		t.Errorf("adapter call count = %d, want 1 (stakes=Low caps at single call)", a.calls.Load())
+	}
+}
+
+func TestVote_StakesMedium_UsesBaseN(t *testing.T) {
+	a := &scriptAdapter{answers: []string{"A", "A", "A"}}
+	ext := ExtractorFunc(func(raw string) string { return raw })
+	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
+	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.Medium}); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if a.calls.Load() != 3 {
+		t.Errorf("adapter call count = %d, want 3 (stakes=Medium = base N)", a.calls.Load())
+	}
+}
+
+func TestVote_StakesHigh_DoublesAttempts(t *testing.T) {
+	answers := make([]string, 10) // need at least 2*N
+	for i := range answers {
+		answers[i] = "A"
+	}
+	a := &scriptAdapter{answers: answers}
+	ext := ExtractorFunc(func(raw string) string { return raw })
+	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
+	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.High}); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if a.calls.Load() != 6 {
+		t.Errorf("adapter call count = %d, want 6 (stakes=High = 2× base N=3)", a.calls.Load())
+	}
+}
+
+func TestVote_StakesZeroValue_DefaultsToMedium(t *testing.T) {
+	// Backwards-compat: a case with Stakes unset (zero value) must
+	// behave the same as pre-v3.0 (= base N attempts). This is the
+	// guarantee that lets us land v3.0 without re-baselining every
+	// existing benchmark.
+	a := &scriptAdapter{answers: []string{"A", "A", "A", "A", "A"}}
+	ext := ExtractorFunc(func(raw string) string { return raw })
+	v := Vote{NameStr: "vote", Adapter: a, N: 5, Extractor: ext}
+	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x"}); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if a.calls.Load() != 5 {
+		t.Errorf("adapter call count = %d, want 5 (zero stakes must read as Medium)", a.calls.Load())
 	}
 }

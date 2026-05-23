@@ -33,6 +33,7 @@ import (
 	adapterAnth "github.com/jrlmx2/oscillitron/pkg/adapter/anthropic"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/curated"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
+	"github.com/jrlmx2/oscillitron/pkg/adapter/ollama"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/categorize"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
@@ -85,12 +86,12 @@ func run() error {
 		useStoreTopK      = flag.Int("use-store-topk", 3, "max exemplars retrieved per call when --use-store is set")
 		useStoreMaxTokens = flag.Int("use-store-max-tokens", 0, "token-budget cap on retrieved exemplar block (0 = no cap; TopK still bounds)")
 
-		orchSubstrate = flag.String("orchestrator-substrate", "hermes", "orchestrator substrate (hermes|anthropic)")
-		orchURL       = flag.String("orchestrator-url", "http://127.0.0.1:8642", "hermes gateway URL or anthropic BaseURL")
+		orchSubstrate = flag.String("orchestrator-substrate", "auto", "orchestrator substrate: auto | hermes | ollama | anthropic. 'auto' inspects --orchestrator-model and picks ollama for small models (phi*, llama3.2:3b, llama3.2:1b, gemma:7b, qwen2.5:7b/3b) — see references/substrate-routing.md — and hermes for everything else.")
+		orchURL       = flag.String("orchestrator-url", "", "substrate base URL (default: hermes=http://127.0.0.1:8642, ollama=http://127.0.0.1:11434, anthropic=cloud API)")
 		orchModel     = flag.String("orchestrator-model", "", "model id for orchestrator")
 
-		frontSubstrate = flag.String("frontier-substrate", "anthropic", "frontier substrate (hermes|anthropic)")
-		frontURL       = flag.String("frontier-url", "", "hermes gateway URL or anthropic BaseURL")
+		frontSubstrate = flag.String("frontier-substrate", "anthropic", "frontier substrate (hermes|ollama|anthropic — 'auto' is not used for the frontier baseline)")
+		frontURL       = flag.String("frontier-url", "", "substrate base URL for frontier (default: hermes=http://127.0.0.1:8642, ollama=http://127.0.0.1:11434, anthropic=cloud API)")
 		frontModel     = flag.String("frontier-model", "", "model id for frontier baseline")
 
 		// ModelSpec for the governor (drives VRAM budgeting). Required
@@ -458,8 +459,12 @@ func maybeBuildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 
 // buildAdapter mirrors cmd/phase1's helper. Each role picks a
 // substrate; defaults are sensible for "local Hermes orchestrator,
-// hosted-frontier baseline".
+// hosted-frontier baseline". substrate="auto" defers to
+// resolveSubstrate which inspects the model name.
 func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
+	if substrate == "auto" {
+		substrate = resolveSubstrate(role, model)
+	}
 	switch substrate {
 	case "hermes":
 		if url == "" {
@@ -468,6 +473,18 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		a, err := hermes.New(hermes.SingleEndpoint(url, model))
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (hermes %s): %w", role, url, err)
+		}
+		return a, nil
+	case "ollama":
+		if url == "" {
+			url = ollama.DefaultBaseURL
+		}
+		if model == "" {
+			return nil, fmt.Errorf("%s adapter (ollama): --%s-model is required (ollama has no server-side default)", role, role)
+		}
+		a, err := ollama.New(ollama.SingleEndpoint(url, model))
+		if err != nil {
+			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)
 		}
 		return a, nil
 	case "anthropic":
@@ -489,8 +506,59 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		}
 		return a, nil
 	default:
-		return nil, fmt.Errorf("%s adapter: unknown substrate %q (want 'hermes' or 'anthropic')", role, substrate)
+		return nil, fmt.Errorf("%s adapter: unknown substrate %q (want 'auto', 'hermes', 'ollama', or 'anthropic')", role, substrate)
 	}
+}
+
+// resolveSubstrate is the auto-routing heuristic. Small open-weight
+// models (3B–7B class) get degraded by Hermes's agentic envelope —
+// Hermes's own docs recommend ≥30B for tool-call work. For those
+// substrates, route through pkg/adapter/ollama (direct, no
+// envelope). Everything else stays on Hermes.
+//
+// Frontier role bypasses ollama entirely — the frontier baseline is
+// always a hosted model where Hermes-or-Anthropic is the right call,
+// and an "auto" frontier without a hint should fail loud rather than
+// silently picking local Ollama.
+//
+// The heuristic is intentionally a list, not a parser: model size is
+// not always encoded in the tag (phi4-mini has no size in the name),
+// and false-positive misrouting is more painful than false-negative.
+// Extend the list as small models are added to the deployment.
+func resolveSubstrate(role, model string) string {
+	if role == "frontier" {
+		// Frontier auto = hermes (which can pick anthropic via its
+		// own config); never silently downgrade the baseline.
+		return "hermes"
+	}
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "" {
+		return "hermes"
+	}
+	for _, sub := range smallModelSubstrings {
+		if strings.Contains(m, sub) {
+			return "ollama"
+		}
+	}
+	return "hermes"
+}
+
+// smallModelSubstrings is the small-substrate allowlist for auto
+// routing. Match is case-insensitive substring. Reviewed against
+// Hermes's own docs (~/hermes-agent/website/docs/guides/local-ollama-setup.md):
+// 3B–7B models are documented as unreliable with Hermes's tool-call
+// envelope.
+var smallModelSubstrings = []string{
+	"phi",            // phi4-mini, phi3, phi2 — all ≤4B
+	"llama3.2:3b",    // Hermes explicitly flags this as "no tool calling"
+	"llama3.2:1b",
+	"gemma:7b",
+	"gemma2:9b",
+	"gemma2:2b",
+	"qwen2.5:3b",
+	"qwen2.5:7b",
+	"qwen2.5-coder:3b",
+	"qwen2.5-coder:7b",
 }
 
 func buildLoader(name, path string, limit int) (benchmark.Loader, error) {

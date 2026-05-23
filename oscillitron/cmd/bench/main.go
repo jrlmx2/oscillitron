@@ -247,6 +247,36 @@ func run() error {
 		if !flagPassed("frontier-model") {
 			*frontModel = props.String("bench.frontier.model", *frontModel)
 		}
+		// v3 features.
+		if !flagPassed("minimal-output") {
+			*minimalOutput = props.Bool("bench.minimal_output", *minimalOutput)
+		}
+		if !flagPassed("stakes") {
+			*stakesMode = props.String("bench.stakes", *stakesMode)
+		}
+		if !flagPassed("notice") {
+			*notice_ = props.Bool("bench.notice", *notice_)
+		}
+		if !flagPassed("notice-context-size") {
+			*noticeCtxSize = props.Int("bench.notice.context_size", *noticeCtxSize)
+		}
+		if !flagPassed("cope") {
+			*copeEnable = props.Bool("bench.cope.enabled", *copeEnable)
+		}
+		if !flagPassed("cope-high-confidence") {
+			if s := props.String("bench.cope.high_confidence", ""); s != "" {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					*copeHigh = f
+				}
+			}
+		}
+		if !flagPassed("cope-low-confidence") {
+			if s := props.String("bench.cope.low_confidence", ""); s != "" {
+				if f, err := strconv.ParseFloat(s, 64); err == nil {
+					*copeLow = f
+				}
+			}
+		}
 	}
 	_ = props // future expansion
 

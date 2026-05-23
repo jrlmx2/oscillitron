@@ -325,22 +325,28 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 }
 
 // applyEffectiveConfidence recovers + adjusts confidence when the
-// minimal-output path produced an unstructured-fallback Execute.
-// JSON-parsed confidences (Confidence > 0.15, i.e. NOT the fallback
-// stub) are left alone — those are already the model's self-report.
-// The unstructured path is special-cased because parseExecuteResponse
-// can't see the raw text or apply response-side signals.
+// minimal-output path produced an unstructured-fallback Execute
+// (Confidence == 0 = "not reported"). JSON-parsed confidences
+// (Confidence > 0 from parseReturnResultJSON) are left alone —
+// those are already the model's self-report.
 //
 // Pure stamping logic lives in notice.EffectiveConfidenceFromRaw
 // (adapter-agnostic, tested there). This function is the
 // adapter-specific gate that decides WHEN to stamp.
+//
+// When the substrate didn't emit a `confidence: X.X` line AND the
+// JSON envelope was absent, Confidence stays 0 — which cope.Decide
+// reads as "ship_with_caveat" (NOT "escalate"). Escalating on
+// missing data is expensive and wrong; the safe default is to
+// flag uncertainty without paying for the frontier call.
 func applyEffectiveConfidence(exec *session.Execute, raw string, inspector *notice.Inspector) {
 	if exec == nil || exec.ReturnResult == nil {
 		return
 	}
 	// JSON-parsed confidence is authoritative; only touch the
-	// unstructured-fallback stub.
-	if exec.ReturnResult.Confidence > 0.15 {
+	// unstructured-fallback case (Confidence stays zero from
+	// structured.go's unstructuredFallback).
+	if exec.ReturnResult.Confidence > 0 {
 		return
 	}
 	if conf, ok := notice.EffectiveConfidenceFromRaw(raw, inspector); ok {

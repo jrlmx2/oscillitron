@@ -45,6 +45,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/config"
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -114,6 +115,9 @@ func run() error {
 		minimalOutput = flag.Bool("minimal-output", false, "strip the JSON envelope from process-playbook instructions (uses pkg/adapter/minimal); intended for small substrates that get crushed by the ~250-token formatting tax. Frontier (anthropic) is unaffected — only the OpenAI-compat substrates (hermes/ollama/lmstudio/vllm) support raw overrides. Pair with --orchestrator-substrate=ollama to test small-model lift from envelope removal; see references/substrate-routing.md for the empirical motivation (phi4-mini published 36.9% on GPQA Diamond vs. 21–26% in our prior runs).")
 
 		stakesMode = flag.String("stakes", "", "v3.0: assign per-case stakes that drive Vote orchestrator's effective N. Values: '' (default — every case = Medium = current behavior), 'low' (every case Low → vote-1 cheap path), 'medium' (every case Medium = base N), 'high' (every case High → 2× base N), 'rotate' (round-robin low/medium/high across cases — useful for measuring cost-profile differentiation in one run). See scratch/v3-design.md §7.0.")
+
+		notice_       = flag.Bool("notice", true, "v3.1: enable prompt-side notice inspection on ollama-direct calls. Detects input overflow, persona-heavy prompts, etc.; emits `ollama.notice_assessment` trace events when signals fire. Cheap, observability-only (does not alter calls). Disabled with --notice=false. See scratch/v3-design.md §3.1 + §7.1.")
+		noticeCtxSize = flag.Int("notice-context-size", 0, "v3.1: substrate context window in tokens, used by the notice layer's overflow detectors. 0 = unset (overflow checks skip, persona-heavy still runs). Default matches whatever the operator passed via --model-context-size for the governor; if both are unset, pass this explicitly per substrate (phi4-mini=131072, llama-70b=128000, etc.).")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -290,11 +294,11 @@ func run() error {
 	}
 
 	// Build adapters per role.
-	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput)
+	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext))
 	if err != nil {
 		return err
 	}
-	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput)
+	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext))
 	if err != nil {
 		return err
 	}
@@ -502,7 +506,7 @@ func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 // pkg/adapter/minimal; only applies to OpenAI-compat substrates that
 // expose RawExecuteInstructions (hermes/ollama/lmstudio/vllm). The
 // anthropic adapter is unaffected.
-func buildAdapter(role, substrate, url, model string, minimalOutput bool) (adapter.Adapter, error) {
+func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspector *notice.Inspector) (adapter.Adapter, error) {
 	if substrate == "auto" {
 		substrate = resolveSubstrate(role, model)
 	}
@@ -531,6 +535,10 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool) (adapt
 		if minimalOutput {
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
+		// v3.1: thread the notice Inspector if enabled. Only the
+		// ollama adapter consumes Inspector today; other substrates
+		// will gain parallel wiring in follow-up phases.
+		cfg.Inspector = inspector
 		a, err := ollama.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)
@@ -862,5 +870,29 @@ func wrapStakesAssignment(inner benchmark.Loader, mode string) (benchmark.Loader
 		return stakesLoader{inner: inner, mode: mode}, nil
 	default:
 		return nil, fmt.Errorf("--stakes: unknown mode %q (want 'low' | 'medium' | 'high' | 'rotate')", mode)
+	}
+}
+
+// benchInspector constructs the v3.1 notice Inspector when --notice
+// is enabled. Returns nil when disabled or when no context size is
+// available — both states are safe (the adapter's inspectPreCall
+// no-ops on nil Inspector).
+//
+// Context-size resolution order:
+//  1. explicit --notice-context-size, if > 0
+//  2. governor's --model-context-size (same number for the same model)
+//  3. 0 (notice still runs the persona-heavy detector, just skips overflow)
+func benchInspector(enabled bool, noticeCtxSize, governorCtxSize int) *notice.Inspector {
+	if !enabled {
+		return nil
+	}
+	ctx := noticeCtxSize
+	if ctx <= 0 {
+		ctx = governorCtxSize
+	}
+	return &notice.Inspector{
+		ContextSize: ctx,
+		// ApproxTokens left nil — DefaultApproxTokens (bytes/4) is
+		// fine for the "is this prompt huge" signals.
 	}
 }

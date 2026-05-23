@@ -37,7 +37,6 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/categorize"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
-	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/suffix"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/orchestrator"
 	"github.com/jrlmx2/oscillitron/pkg/config"
 	"github.com/jrlmx2/oscillitron/pkg/curation"
@@ -65,7 +64,6 @@ func run() error {
 		windowN       = flag.Int("sliding-window", 25, "sliding-window size in cases (0 = disable window stats)")
 		reportOut     = flag.String("report-out", "", "optional: dump the full Report as indented JSON to this path after the run completes")
 		streamOut     = flag.String("stream-out", "", "optional: append each CaseResult as one JSON line to this path as the run progresses (crash-safety on long runs; tail -f for live progress)")
-		promptSuffix  = flag.String("prompt-suffix", "", "optional: text appended to every Case.Prompt before dispatch to orchestrators. Use for format recipes (e.g., \"\\n\\nEnd your response with a single line: 'Answer: X' where X is A/B/C/D.\") that fix output-shape leakage without modifying the underlying dataset")
 		frontierPrice = flag.Float64("frontier-price", 0, "blended USD-per-million-tokens for the counterfactual frontier baseline (e.g., 4.50 for Sonnet 4.6). When set, each orchestrator's total tokens get re-priced through this for the savings column.")
 
 		// Curation post-hook: when --curate-store-dir is set, run
@@ -123,7 +121,6 @@ func run() error {
 	//   bench.sliding_window        (--sliding-window)
 	//   bench.report_out            (--report-out)
 	//   bench.stream_out            (--stream-out)
-	//   bench.prompt_suffix         (--prompt-suffix)
 	//   bench.frontier_price        (--frontier-price)
 	//   bench.orchestrator.substrate / url / model
 	//   bench.frontier.substrate / url / model
@@ -168,9 +165,6 @@ func run() error {
 		}
 		if !flagPassed("stream-out") {
 			*streamOut = props.String("bench.stream_out", "")
-		}
-		if !flagPassed("prompt-suffix") {
-			*promptSuffix = props.String("bench.prompt_suffix", "")
 		}
 		if !flagPassed("frontier-price") {
 			if s := props.String("bench.frontier_price", ""); s != "" {
@@ -320,14 +314,6 @@ func run() error {
 	loader, err := buildLoader(*benchName, *casesPath, *limit)
 	if err != nil {
 		return err
-	}
-	// Optional prompt-suffix decorator: appends operator-supplied
-	// text to every Case.Prompt before dispatch. Use for format
-	// recipes that fix output-shape leakage (e.g., extract-empty
-	// failures on small substrates).
-	if *promptSuffix != "" {
-		loader = suffix.Loader{Inner: loader, Suffix: *promptSuffix}
-		fmt.Fprintf(os.Stderr, "bench: prompt-suffix enabled (%d chars appended to every Case.Prompt)\n", len(*promptSuffix))
 	}
 
 	// Build orchestrators.

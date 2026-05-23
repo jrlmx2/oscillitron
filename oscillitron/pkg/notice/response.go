@@ -294,3 +294,27 @@ func (i *Inspector) InspectResponse(response string) Assessment {
 	}
 	return InspectResponse(ResponseInspection{Response: response})
 }
+
+// EffectiveConfidenceFromRaw is the one-call helper adapters use to
+// recover confidence from a raw response and apply v3.2 signal
+// adjustments. Returns (value, true) when a `confidence: X.X`
+// annotation was found in the response; (0, false) otherwise.
+//
+// When inspector is nil, the extracted value is returned unadjusted
+// — better than a stub but without v3.2 signal awareness.
+//
+// Adapter-agnostic by design: pkg/adapter/ollama (and any future
+// adapter that wants to recover confidence from unstructured
+// minimal-output responses) calls this without coupling to anything
+// adapter-specific.
+func EffectiveConfidenceFromRaw(raw string, inspector *Inspector) (float64, bool) {
+	extracted, ok := ExtractConfidence(raw)
+	if !ok {
+		return 0, false
+	}
+	if inspector == nil {
+		return extracted, true
+	}
+	assess := inspector.InspectResponse(raw)
+	return EffectiveConfidence(extracted, assess), true
+}

@@ -38,6 +38,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter/ollama"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/vllm"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
+	"github.com/jrlmx2/oscillitron/pkg/benchmark/calibration"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/categorize"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
@@ -768,6 +769,14 @@ func printReport(w *os.File, r benchmark.Report) {
 	// pass/fail (format vs reasoning vs refusal vs operational).
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "--- "+strings.TrimRight(categorize.FormatTable(categorize.Aggregate(r)), "\n"))
+
+	// v3.3 confidence calibration — pass-rate by confidence band.
+	// Empty (no orchestrator reported confidence) is rendered as a
+	// one-line "skip" message inside FormatTable; rendering is a
+	// no-op penalty if the bench wasn't set up to extract
+	// confidence (pre-v3.3 path).
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "--- "+strings.TrimRight(calibration.FormatTable(calibration.Compute(r, nil)), "\n"))
 
 	if len(r.Windows) > 0 {
 		fmt.Fprintf(w, "\n--- Sliding window (size=%d) ---\n", r.Windows[0].Size)

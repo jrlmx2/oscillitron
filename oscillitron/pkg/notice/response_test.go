@@ -196,6 +196,52 @@ func TestInspector_InspectResponse_NilSafe(t *testing.T) {
 	}
 }
 
+// --- v3.3 EffectiveConfidenceFromRaw (adapter-agnostic stamping) ---
+
+func TestEffectiveConfidenceFromRaw_NoConfidenceLine_ReturnsFalse(t *testing.T) {
+	got, ok := EffectiveConfidenceFromRaw("Just A.", nil)
+	if ok {
+		t.Errorf("expected ok=false when no confidence: line; got val=%v", got)
+	}
+}
+
+func TestEffectiveConfidenceFromRaw_NilInspector_ReturnsRaw(t *testing.T) {
+	// No Inspector → no signal adjustments. Returns the raw extracted
+	// value unchanged.
+	got, ok := EffectiveConfidenceFromRaw("A\nconfidence: 0.7", nil)
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	if got < 0.69 || got > 0.71 {
+		t.Errorf("got %v, want 0.7 (unadjusted)", got)
+	}
+}
+
+func TestEffectiveConfidenceFromRaw_WithInspector_AppliesSignalAdjustments(t *testing.T) {
+	// Response has a refusal phrase. With Inspector wired,
+	// EffectiveConfidence should multiply by 0.3.
+	insp := &Inspector{}
+	got, ok := EffectiveConfidenceFromRaw("I cannot reliably answer this.\nA\nconfidence: 0.9", insp)
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	// 0.9 × 0.3 = 0.27
+	if got < 0.26 || got > 0.28 {
+		t.Errorf("got %v, want ~0.27 (refusal × 0.3 downgrade)", got)
+	}
+}
+
+func TestEffectiveConfidenceFromRaw_CleanResponse_NoAdjustment(t *testing.T) {
+	insp := &Inspector{}
+	got, ok := EffectiveConfidenceFromRaw("The answer is A.\nconfidence: 0.85", insp)
+	if !ok {
+		t.Fatalf("expected ok=true")
+	}
+	if got < 0.84 || got > 0.86 {
+		t.Errorf("clean response should pass extracted value through; got %v", got)
+	}
+}
+
 // --- combined scenario ---
 
 func TestInspectResponse_RealisticBenchOutput(t *testing.T) {

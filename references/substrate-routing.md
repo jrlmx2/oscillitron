@@ -66,3 +66,7 @@ Don't try to parse the size out of the model name — phi4-mini, hermes-3, deeps
 - The bench's playbook *instructions* (in `pkg/adapter/{hermes,ollama}/instructions.go`) are still complex JSON-protocol prompts. Small models can sometimes fail the JSON envelope; the adapter falls back to a low-confidence return_result. If a small substrate is failing the envelope more than ~20% of the time, that's a prompt-engineering problem, not a substrate-routing problem.
 - Hermes itself can still be the right answer for ~30B+ models. The auto rule doesn't push everyone to Ollama-direct; it pushes *small* models there.
 - Anthropic remains the right call for hosted-frontier baselines. The rule ignores Anthropic.
+
+## Other substrates
+
+`vllm` and `lmstudio` are explicit-only substrates. Auto routing exists to solve one specific failure mode — small open-weight models being crushed by Hermes's tool-call envelope — and it only triggers `ollama` for matches on `smallModelSubstrings`. vLLM serves production-grade capable models on real GPU clusters and LM Studio is a local-laptop frontend for the operator's chosen model; neither is the right target for "small substrate gets crushed by Hermes" heuristic. Operators who want either pass `--orchestrator-substrate=vllm` or `--orchestrator-substrate=lmstudio` explicitly.

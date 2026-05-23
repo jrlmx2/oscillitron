@@ -333,9 +333,9 @@ func TestApproxTokensByChars(t *testing.T) {
 		want int
 	}{
 		{"", 0},
-		{"a", 1},          // 1/4 + 1 = 1
-		{"abcd", 2},       // 4/4 + 1 = 2
-		{"abcdefgh", 3},   // 8/4 + 1 = 3
+		{"a", 1},        // 1/4 + 1 = 1
+		{"abcd", 2},     // 4/4 + 1 = 2
+		{"abcdefgh", 3}, // 8/4 + 1 = 3
 	}
 	for _, c := range cases {
 		if got := ApproxTokensByChars(c.in); got != c.want {
@@ -358,7 +358,7 @@ func TestFileStore_ConcurrentAdd_NoCorruption(t *testing.T) {
 			defer wg.Done()
 			_ = s.Add(ctx, Exemplar{
 				Action: "process", Prompt: "p", Output: "o",
-				SourceCase: string(rune('a' + i%26)) + string(rune('a' + i/26)),
+				SourceCase: string(rune('a'+i%26)) + string(rune('a'+i/26)),
 				Score:      float64(i) / float64(N),
 			})
 		}()

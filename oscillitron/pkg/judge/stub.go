@@ -13,13 +13,13 @@ import (
 // default it agrees with the local critique on every call. Configure
 // with WithDisagreeWhen to override.
 type Stub struct {
-	name        string
-	disagreeOn  func(req Request) bool
-	verdict     session.Verdict
-	issues      []session.Issue
-	err         error
-	calls       atomic.Int64
-	tokensUsed  int
+	name       string
+	disagreeOn func(req Request) bool
+	verdict    session.Verdict
+	issues     []session.Issue
+	err        error
+	calls      atomic.Int64
+	tokensUsed int
 }
 
 // NewStub returns a stub judge that always agrees with the local

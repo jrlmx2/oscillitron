@@ -11,7 +11,7 @@ func TestEffective(t *testing.T) {
 		{Low, Low},
 		{Medium, Medium},
 		{High, High},
-		{"", Medium},      // zero value
+		{"", Medium},        // zero value
 		{"garbage", Medium}, // unknown defaults to safe (medium)
 	}
 	for _, tc := range cases {

@@ -50,11 +50,11 @@ type Summary struct {
 
 // Tracker records calls and computes summaries. Goroutine-safe.
 type Tracker struct {
-	frontier   Pricing
-	prices     map[string]Pricing
-	mu         sync.Mutex
-	entries    []Entry
-	totals     Summary // running totals (Entries is filled on Summary())
+	frontier Pricing
+	prices   map[string]Pricing
+	mu       sync.Mutex
+	entries  []Entry
+	totals   Summary // running totals (Entries is filled on Summary())
 }
 
 // New constructs a tracker. The frontier pricing is the baseline used

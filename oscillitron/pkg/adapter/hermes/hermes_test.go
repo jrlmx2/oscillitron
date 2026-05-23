@@ -28,7 +28,7 @@ type fakeHermes struct {
 	getEvts  atomic.Int32
 
 	mu           sync.Mutex
-	runStatus    int    // 0 → 202, otherwise the override
+	runStatus    int // 0 → 202, otherwise the override
 	runRespBody  string
 	eventsStatus int      // 0 → 200
 	events       []string // raw SSE payload lines (each becomes "data: <line>\n\n")

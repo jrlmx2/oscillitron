@@ -986,6 +986,7 @@ func (g *groundedProcessAdapter) Name() string { return g.inner.Name() }
 func (g *groundedProcessAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	return g.inner.Evaluate(ctx, env)
 }
+
 // Auto-managed-VRAM tests deleted with the runner refactor (2026-05-22)
 // — the runner no longer owns probe/estimator construction. VRAM
 // management lives in vram.Governor; see TestRun_Governor_* below and
@@ -1313,7 +1314,7 @@ func TestRun_Governor_RespectsExplicitMaxConcurrency(t *testing.T) {
 	rec := &fakeRecomposer{}
 	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
 	res, err := Run(context.Background(), Config{
-		Adapter:        a, Recomposer: rec,
+		Adapter: a, Recomposer: rec,
 		Governor:       g,
 		MaxConcurrency: 2,
 		Tracer:         trace.Discard{}, Rand: seededRand(),
@@ -1346,7 +1347,7 @@ func TestRun_Governor_StrictSerialHonored(t *testing.T) {
 	rec := &fakeRecomposer{}
 	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
 	res, err := Run(context.Background(), Config{
-		Adapter:        a, Recomposer: rec,
+		Adapter: a, Recomposer: rec,
 		Governor:       g,
 		MaxConcurrency: 1,
 		Tracer:         trace.Discard{}, Rand: seededRand(),

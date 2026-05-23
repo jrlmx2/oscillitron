@@ -14,17 +14,17 @@ func TestExtractLetter_VariousShapes(t *testing.T) {
 		letters string
 		want    string
 	}{
-		{"A", "ABCD", "A"},                  // exact letter
-		{"a", "ABCD", "A"},                  // lowercase
-		{"   B  ", "ABCD", "B"},             // whitespace
-		{"The answer is A.", "ABCD", "A"},   // sentence
-		{"(C)", "ABCD", "C"},                // parens
+		{"A", "ABCD", "A"},                // exact letter
+		{"a", "ABCD", "A"},                // lowercase
+		{"   B  ", "ABCD", "B"},           // whitespace
+		{"The answer is A.", "ABCD", "A"}, // sentence
+		{"(C)", "ABCD", "C"},              // parens
 		{"After analysis, B is correct because... so D", "ABCD", "D"}, // last match wins
 		{"Therefore the answer is **C**.", "ABCD", "C"},
 		{"I think the answer is option B", "ABCD", "B"},
 		{"The chemical reaction proceeds via mechanism A→B→C→D", "ABCD", "D"}, // last word-boundary
-		{"42", "ABCD", ""},                  // no letter
-		{"the cat sat", "ABCD", ""},         // letters inside words don't count (word-boundary)
+		{"42", "ABCD", ""},                     // no letter
+		{"the cat sat", "ABCD", ""},            // letters inside words don't count (word-boundary)
 		{"H is the answer", "ABCDEFGHIJ", "H"}, // extended letter set
 	}
 	for _, c := range cases {

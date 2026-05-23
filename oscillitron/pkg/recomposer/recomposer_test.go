@@ -151,11 +151,11 @@ func TestConcat_SignalsMerging(t *testing.T) {
 	falseV := false
 
 	cases := []struct {
-		name           string
-		children       []session.ReturnResultPayload
-		wantGrounded   *bool
-		wantContras    []string
-		wantOpenQs     []string
+		name         string
+		children     []session.ReturnResultPayload
+		wantGrounded *bool
+		wantContras  []string
+		wantOpenQs   []string
 	}{
 		{
 			name: "both grounded true → true",

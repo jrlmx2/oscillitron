@@ -142,8 +142,8 @@ func TestEnvelopePredicates(t *testing.T) {
 	verifierSignal := &Execute{Category: CategoryVerifierSignal, VerifierSignal: &VerifierSignalPayload{Verdict: VerdictPass}}
 
 	cases := []struct {
-		name                                 string
-		env                                  Envelope
+		name                      string
+		env                       Envelope
 		complete, leaf, inhibited bool
 	}{
 		{"in-flight (no exit reason)", Envelope{}, false, false, false},

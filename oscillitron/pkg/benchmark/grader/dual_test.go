@@ -110,9 +110,9 @@ func TestDual_RequiresPrimary(t *testing.T) {
 
 func TestAgreement(t *testing.T) {
 	cases := []struct {
-		name  string
-		v     benchmark.Verdict
-		want  float64
+		name string
+		v    benchmark.Verdict
+		want float64
 	}{
 		{"no secondaries", benchmark.Verdict{Pass: true}, -1},
 		{"all agree", benchmark.Verdict{

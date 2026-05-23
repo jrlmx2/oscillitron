@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"strings"
 	"sync"
@@ -1359,20 +1360,142 @@ func TestRun_Governor_StrictSerialHonored(t *testing.T) {
 	}
 }
 
-func TestRun_NoGovernor_RunsUnthrottled(t *testing.T) {
-	// Nil governor is allowed (operator's opt-out). The run should
-	// complete with no VRAM accounting and no surprise auto-management.
-	a, _ := planAdapterWithChildren(4, "x", 0.8)
+// recordingTracerEvents captures trace event names so tests can assert
+// what was emitted without inspecting stderr. Implements trace.Tracer.
+type recordingTracerEvents struct {
+	mu     sync.Mutex
+	events []recordedEvent
+}
+
+type recordedEvent struct {
+	level slog.Level
+	name  string
+}
+
+func (t *recordingTracerEvents) Event(_ context.Context, level slog.Level, name string, _ ...slog.Attr) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.events = append(t.events, recordedEvent{level, name})
+}
+
+func (t *recordingTracerEvents) has(name string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, e := range t.events {
+		if e.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRunner_AutoWiresGovernorOnZeroMaxConcurrency(t *testing.T) {
+	// Library auto-manages concurrency (LOCKED 2026-05-21): when
+	// MaxConcurrency=0 and Governor=nil, the runner constructs an
+	// auto-governor at Run start. We detect that via the
+	// runner.auto_governor_wired trace event.
+	a, _ := planAdapterWithChildren(3, "x", 0.8)
 	rec := &fakeRecomposer{}
 	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	tracer := &recordingTracerEvents{}
 	_, err := Run(context.Background(), Config{
-		Adapter: a, Recomposer: rec, Tracer: trace.Discard{}, Rand: seededRand(),
-		// No Governor, no MaxConcurrency — un-throttled
+		Adapter: a, Recomposer: rec, Tracer: tracer, Rand: seededRand(),
+		// No Governor, no MaxConcurrency — library-managed path.
 	}, root)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(rec.lastChildren) != 4 {
-		t.Errorf("got %d children, want 4", len(rec.lastChildren))
+	if !tracer.has("runner.auto_governor_wired") {
+		t.Errorf("expected runner.auto_governor_wired trace event under library-managed mode")
+	}
+	if len(rec.lastChildren) != 3 {
+		t.Errorf("got %d children, want 3", len(rec.lastChildren))
+	}
+}
+
+func TestRunner_MaxConcurrencyOneIsStrictSerial_NoAutoGovernor(t *testing.T) {
+	// Operator explicitly opts out of concurrency via MaxConcurrency=1.
+	// The runner must NOT auto-construct a governor in that mode — the
+	// auto-governor is only for the zero-value path.
+	a, _ := planAdapterWithChildren(3, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	tracer := &recordingTracerEvents{}
+	_, err := Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Tracer: tracer, Rand: seededRand(),
+		MaxConcurrency: 1,
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if tracer.has("runner.auto_governor_wired") {
+		t.Errorf("MaxConcurrency=1 must NOT auto-construct a governor")
+	}
+}
+
+func TestRunner_ExplicitGovernorNotOverridden(t *testing.T) {
+	// Operator-supplied Governor wins even under MaxConcurrency=0. The
+	// auto-governor must not replace it.
+	probe := &fakeVRAMProbe{report: vram.Report{Source: "fake", AvailableBytes: 64 * 1024 * 1024 * 1024}}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
+		Model:         testRunnerModelSpec(),
+		Ceiling:       4,
+		ProbeOverride: probe,
+	})
+	if err != nil {
+		t.Fatalf("NewGovernor: %v", err)
+	}
+	a, _ := planAdapterWithChildren(3, "x", 0.8)
+	rec := &fakeRecomposer{}
+	root := session.NewRoot("ap-root", "go", "{r}", "", session.Budget{DepthRemaining: 3})
+	tracer := &recordingTracerEvents{}
+	_, err = Run(context.Background(), Config{
+		Adapter: a, Recomposer: rec, Tracer: tracer, Rand: seededRand(),
+		Governor: g, // explicit governor, MaxConcurrency=0
+	}, root)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if tracer.has("runner.auto_governor_wired") {
+		t.Errorf("explicit Governor must not be replaced by AutoGovernor")
+	}
+	// And we should not have probed for fallback either (operator
+	// owns probe-failure semantics through their own config).
+	if tracer.has("runner.probe_failed_serial_fallback") {
+		t.Errorf("operator-supplied Governor must not trigger autoSerialFallback")
+	}
+}
+
+func TestRunner_ProbeFailure_FallsBackToSerial(t *testing.T) {
+	// Auto-managed governor whose probe returns an error → the runner
+	// downshifts the wave cap to 1 (serial). Build the governor with a
+	// ProbeOverride that fails so we don't depend on the platform's
+	// auto-detected probes.
+	failingProbe := &fakeVRAMProbe{err: errors.New("probe nope")}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
+		Model:         vram.DefaultVRAMModel(),
+		Ceiling:       vram.MaxConcurrencyCeiling,
+		ProbeOverride: failingProbe,
+	})
+	if err != nil {
+		t.Fatalf("NewGovernor: %v", err)
+	}
+	// MaxConcurrency=0 with the operator-supplied governor would NOT
+	// normally trigger probeHealthyOnce (that path is reserved for
+	// auto-wired governors). Construct the runner directly to test the
+	// fallback in isolation.
+	r := &runner{
+		cfg: Config{
+			Adapter: nil, Tracer: trace.Discard{}, Governor: g, MaxConcurrency: 0,
+		},
+		state:   &RunState{},
+		subtree: map[session.ID][]session.Envelope{},
+	}
+	r.probeHealthyOnce(context.Background())
+	if !r.autoSerialFallback {
+		t.Fatal("expected probe failure to set autoSerialFallback")
+	}
+	if got := r.computeConcurrency(context.Background(), 8); got != 1 {
+		t.Errorf("autoSerialFallback should collapse wave cap to 1, got %d", got)
 	}
 }

@@ -207,6 +207,11 @@ func run() error {
 		vram.SetOverride(budget)
 		fmt.Fprintf(os.Stderr, "demo: VRAM probe pinned to %d bytes (operator override)\n", budget)
 	}
+	// Library auto-manages concurrency (LOCKED 2026-05-21): always
+	// build a non-nil governor. When the operator omits the
+	// architecture flags, use vram.AutoGovernor (DefaultVRAMModel +
+	// MaxConcurrencyCeiling=8) — conservative throttling rather than
+	// unmanaged fan-out.
 	var governor *vram.Governor
 	if *modelLayers > 0 && *modelKVHidden > 0 && *modelKVDtype > 0 && *modelContextSize > 0 {
 		spec := vram.ModelSpec{
@@ -227,9 +232,10 @@ func run() error {
 			return fmt.Errorf("vram.NewGovernor: %w", err)
 		}
 		governor = g
-		fmt.Fprintf(os.Stderr, "demo: VRAM governor enabled (%s, ceiling=%d)\n", spec, g.Ceiling())
+		fmt.Fprintf(os.Stderr, "demo: explicit VRAM model (%s, ceiling=%d)\n", spec, g.Ceiling())
 	} else {
-		fmt.Fprintln(os.Stderr, "demo: no VRAM governor (provide --model-layers/--model-kv-hidden/--model-kv-dtype-bytes/--model-context-size to enable)")
+		governor = vram.AutoGovernor(tracer)
+		fmt.Fprintln(os.Stderr, "demo: auto-managed VRAM governor (DefaultVRAMModel — for accurate throttling pass --model-layers/--model-kv-hidden/--model-kv-dtype-bytes/--model-context-size)")
 	}
 	runnerCfg := runner.Config{
 		Adapter:        a,
@@ -244,7 +250,7 @@ func run() error {
 	}
 	switch *maxConcurrency {
 	case 0:
-		fmt.Fprintln(os.Stderr, "demo: no per-wave goroutine cap (governor controls inflight calls when wired)")
+		fmt.Fprintln(os.Stderr, "demo: library-managed concurrency (per-wave cap from governor ceiling; probe failure → serial)")
 	case 1:
 		fmt.Fprintln(os.Stderr, "demo: strict serial dispatch (MaxConcurrency=1)")
 	default:

@@ -18,6 +18,12 @@ trace.otel.service_name=oscillitron-bench
 bench.report_out=/tmp/bench-report.json
 bench.stream_out=/tmp/bench-stream.jsonl
 
+# Optional: text appended to every Case.Prompt before dispatch.
+# Use for format recipes that fix output-shape leakage on weak
+# substrates (e.g., extract-empty failures because the model
+# reasons correctly but doesn't end with a parseable letter).
+# bench.prompt_suffix=\n\nEnd your response with a single line: 'Answer: X' where X is A/B/C/D.
+
 # Benchmark + corpus
 #-------------------
 bench.benchmark=gpqa

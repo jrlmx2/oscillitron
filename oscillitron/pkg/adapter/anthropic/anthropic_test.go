@@ -159,9 +159,9 @@ func TestExecute_RoutesAllFiveV0Playbooks(t *testing.T) {
 	// Smoke that every v0 playbook has a system prompt registered and
 	// produces the right Execute category.
 	cases := []struct {
-		pb       session.Playbook
-		reply    string
-		wantCat  session.Category
+		pb      session.Playbook
+		reply   string
+		wantCat session.Category
 	}{
 		{session.PlaybookPlan, `{"sub_aps":[],"recompose":"none"}`, session.CategoryEmitSubtree},
 		{session.PlaybookProcess, `{"content":"x","confidence":0.5}`, session.CategoryReturnResult},

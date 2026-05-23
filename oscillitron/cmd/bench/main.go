@@ -638,8 +638,8 @@ func resolveSubstrate(role, model string) string {
 // 3B–7B models are documented as unreliable with Hermes's tool-call
 // envelope.
 var smallModelSubstrings = []string{
-	"phi",            // phi4-mini, phi3, phi2 — all ≤4B
-	"llama3.2:3b",    // Hermes explicitly flags this as "no tool calling"
+	"phi",         // phi4-mini, phi3, phi2 — all ≤4B
+	"llama3.2:3b", // Hermes explicitly flags this as "no tool calling"
 	"llama3.2:1b",
 	"gemma:7b",
 	"gemma2:9b",
@@ -694,7 +694,7 @@ func flagPassed(name string) bool {
 // stringSliceFlag collects repeatable --price NAME=RATE flag values.
 type stringSliceFlag []string
 
-func (s *stringSliceFlag) String() string  { return strings.Join(*s, ",") }
+func (s *stringSliceFlag) String() string { return strings.Join(*s, ",") }
 func (s *stringSliceFlag) Set(v string) error {
 	*s = append(*s, v)
 	return nil

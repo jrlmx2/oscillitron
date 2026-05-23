@@ -84,7 +84,7 @@ func TestAnthropicSynthesizer_ErrorsOnEmptyContent(t *testing.T) {
 	srv, _ := anthropicMockServer(t, `{"content":"","confidence":0.9}`)
 	s, _ := NewAnthropic(AnthropicConfig{APIKey: "sk-x", BaseURL: srv.URL})
 	_, err := s.Synthesize(context.Background(), SynthesizeRequest{
-		Left: session.ReturnResultPayload{Result: session.Payload{Content: "L"}},
+		Left:  session.ReturnResultPayload{Result: session.Payload{Content: "L"}},
 		Right: session.ReturnResultPayload{Result: session.Payload{Content: "R"}},
 	})
 	if err == nil {

@@ -110,9 +110,9 @@ func TestMessages_NonSuccessReturnsErrorWithBody(t *testing.T) {
 func TestMessages_ValidatesRequiredFields(t *testing.T) {
 	c, _ := New(Config{APIKey: "sk-x"})
 	cases := []MessagesRequest{
-		{MaxTokens: 10, Messages: []Message{{Role: "user", Content: "x"}}},       // no Model
-		{Model: "m", Messages: []Message{{Role: "user", Content: "x"}}},          // no MaxTokens
-		{Model: "m", MaxTokens: 10},                                              // no Messages
+		{MaxTokens: 10, Messages: []Message{{Role: "user", Content: "x"}}}, // no Model
+		{Model: "m", Messages: []Message{{Role: "user", Content: "x"}}},    // no MaxTokens
+		{Model: "m", MaxTokens: 10},                                        // no Messages
 	}
 	for i, req := range cases {
 		if _, err := c.Messages(context.Background(), req); err == nil {

@@ -222,7 +222,7 @@ func TestWilsonLowerBound_KnownInputs(t *testing.T) {
 		want float64 // tolerance is 0.005
 	}{
 		{"0/0", 0, 0, 0.95, 0.0},
-		{"1/1@95", 1, 1, 0.95, 0.207},  // Wilson LB ≈ 0.207
+		{"1/1@95", 1, 1, 0.95, 0.207}, // Wilson LB ≈ 0.207
 		{"50/100@95", 50, 100, 0.95, 0.402},
 		{"99/100@95", 99, 100, 0.95, 0.946},
 		{"100/100@95", 100, 100, 0.95, 0.964},
@@ -243,9 +243,9 @@ func TestNormalQuantile_KnownValues(t *testing.T) {
 		want float64 // tol 0.001
 	}{
 		{0.5, 0.0},
-		{0.975, 1.959964},  // z_{.025}
+		{0.975, 1.959964}, // z_{.025}
 		{0.025, -1.959964},
-		{0.995, 2.575829},  // z_{.005}
+		{0.995, 2.575829}, // z_{.005}
 	}
 	for _, tc := range cases {
 		got := normalQuantile(tc.p)

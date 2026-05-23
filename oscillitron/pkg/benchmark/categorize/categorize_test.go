@@ -152,7 +152,7 @@ func TestAggregate_BasicCounts(t *testing.T) {
 			{
 				Case: caseOf("c3", "C"),
 				Results: []benchmark.OrchestratorResult{
-					failResult("frontier", "Thinking...", ""),  // format_no_letter
+					failResult("frontier", "Thinking...", ""), // format_no_letter
 					passResult("vote-3", "C"),
 				},
 			},

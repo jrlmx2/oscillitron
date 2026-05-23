@@ -11,11 +11,11 @@
 //
 // Configuration is via standard OTel env vars (no Go-side config):
 //
-//   OTEL_EXPORTER_OTLP_ENDPOINT  (default https://localhost:4318)
-//   OTEL_EXPORTER_OTLP_PROTOCOL  (http/protobuf | http/json)
-//   OTEL_EXPORTER_OTLP_HEADERS   (auth headers, e.g., DD-API-KEY=...)
-//   OTEL_SERVICE_NAME            (the value passed to New is sent
-//                                 as service.name)
+//	OTEL_EXPORTER_OTLP_ENDPOINT  (default https://localhost:4318)
+//	OTEL_EXPORTER_OTLP_PROTOCOL  (http/protobuf | http/json)
+//	OTEL_EXPORTER_OTLP_HEADERS   (auth headers, e.g., DD-API-KEY=...)
+//	OTEL_SERVICE_NAME            (the value passed to New is sent
+//	                              as service.name)
 //
 // pkg/trace stays stdlib-only; the OTel dependency lives entirely
 // here, so importing pkg/trace doesn't pull in OTel.

@@ -144,13 +144,13 @@ type SelectedExemplar struct {
 
 // Result reports what a curation run produced.
 type Result struct {
-	CasesScanned       int           // total CaseResults read from JSONL
-	CandidatesFiltered int           // passed Allowlist + MinScore
-	BatchesProcessed   int           // batches that completed cleanly
-	BatchesFailed      int           // batches where the adapter call or parse failed
-	ExemplarsSelected  int           // the cold-path session picked these
-	ExemplarsAdded     int           // successfully written to Store
-	AdapterTokens      int           // sum of TokensUsed across batches
+	CasesScanned       int // total CaseResults read from JSONL
+	CandidatesFiltered int // passed Allowlist + MinScore
+	BatchesProcessed   int // batches that completed cleanly
+	BatchesFailed      int // batches where the adapter call or parse failed
+	ExemplarsSelected  int // the cold-path session picked these
+	ExemplarsAdded     int // successfully written to Store
+	AdapterTokens      int // sum of TokensUsed across batches
 	Elapsed            time.Duration
 }
 
@@ -495,9 +495,9 @@ func excerpt(s string, max int) string {
 // schema evolves.
 
 type caseResult struct {
-	CaseID  string                  `json:"case_id"`
-	Case    caseSpec                `json:"case"`
-	Results []orchestratorResult    `json:"results"`
+	CaseID  string               `json:"case_id"`
+	Case    caseSpec             `json:"case"`
+	Results []orchestratorResult `json:"results"`
 }
 
 type caseSpec struct {

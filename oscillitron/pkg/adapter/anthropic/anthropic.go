@@ -22,8 +22,8 @@ import (
 	"net/http"
 	"strings"
 
-	upstream "github.com/jrlmx2/oscillitron/pkg/anthropic"
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
+	upstream "github.com/jrlmx2/oscillitron/pkg/anthropic"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 

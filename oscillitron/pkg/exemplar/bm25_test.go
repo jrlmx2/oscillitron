@@ -21,8 +21,8 @@ func TestTokenize_BasicCases(t *testing.T) {
 		{"with-hyphens and_underscores", []string{"with", "hyphens", "and", "underscores"}},
 		{"punctuation, lots! of? it.", []string{"punctuation", "lots", "of", "it"}},
 		{"numbers 42 and 3.14", []string{"numbers", "42", "and", "14"}}, // "3" dropped (len<2)
-		{"a b c only longer", []string{"only", "longer"}},                // single-char tokens dropped
-		{"E1 E2 quantum", []string{"e1", "e2", "quantum"}},                // tech-y tokens preserved
+		{"a b c only longer", []string{"only", "longer"}},               // single-char tokens dropped
+		{"E1 E2 quantum", []string{"e1", "e2", "quantum"}},              // tech-y tokens preserved
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {
@@ -48,7 +48,7 @@ func TestTokenize_UnicodeLettersAndDigits(t *testing.T) {
 func TestBuildBM25Index_CorpusStats(t *testing.T) {
 	corpus := []Exemplar{
 		{Action: "process", Prompt: "alpha beta gamma"},  // 3 tokens
-		{Action: "process", Prompt: "alpha delta"},        // 2 tokens
+		{Action: "process", Prompt: "alpha delta"},       // 2 tokens
 		{Action: "process", Prompt: "beta epsilon zeta"}, // 3 tokens
 	}
 	idx := buildBM25Index(corpus)
@@ -87,9 +87,9 @@ func TestBuildBM25Index_RepeatedTermsCountOnceForDF(t *testing.T) {
 
 func TestBM25Score_HigherWithMoreTermOverlap(t *testing.T) {
 	corpus := []Exemplar{
-		{Action: "x", Prompt: "quantum physics energy"},      // matches all 3 query terms
-		{Action: "x", Prompt: "quantum chemistry"},            // matches 1 query term
-		{Action: "x", Prompt: "biology evolution genetics"},  // matches 0 query terms
+		{Action: "x", Prompt: "quantum physics energy"},     // matches all 3 query terms
+		{Action: "x", Prompt: "quantum chemistry"},          // matches 1 query term
+		{Action: "x", Prompt: "biology evolution genetics"}, // matches 0 query terms
 	}
 	idx := buildBM25Index(corpus)
 	q := tokenize("quantum physics energy levels")

@@ -80,15 +80,15 @@ type casesFile struct {
 }
 
 type caseResult struct {
-	ID                 string
-	OrchestratorDraft  string
-	OrchestratorTokens int
+	ID                  string
+	OrchestratorDraft   string
+	OrchestratorTokens  int
 	OrchestratorCostUSD float64
-	OrchestratorScore  grader.Score
-	FrontierDraft      string
-	FrontierTokens     int
-	FrontierCostUSD    float64
-	FrontierScore      grader.Score
+	OrchestratorScore   grader.Score
+	FrontierDraft       string
+	FrontierTokens      int
+	FrontierCostUSD     float64
+	FrontierScore       grader.Score
 }
 
 func run() error {

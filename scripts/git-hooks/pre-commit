@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# CLAUDE GENERATED
+# Pre-commit hook — runs gofmt + go vet on staged Go files.
+# Installed by scripts/install-hooks.sh into core.hooksPath.
+#
+# No external tooling required beyond the Go toolchain that's
+# already needed to build the project.
+#
+# Portable to bash 3.2 (macOS default — no mapfile / readarray).
+# CI (.github/workflows/check.yml) runs the same checks as a
+# backstop.
+set -euo pipefail
+
+# Staged .go files (added / copied / modified). Empty when no Go
+# files are staged — hook exits cleanly in that case.
+staged=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.go$' || true)
+if [ -z "$staged" ]; then
+    exit 0
+fi
+
+# --- gofmt -l on staged files ---
+# Pass staged files as args via xargs. Newline-delimited input is
+# fine since paths in this repo don't contain spaces (enforce in
+# review if that ever changes).
+unformatted=$(echo "$staged" | xargs gofmt -l)
+if [ -n "$unformatted" ]; then
+    echo "pre-commit: the following Go files need gofmt:"
+    echo "$unformatted" | sed 's/^/  /'
+    echo
+    echo "Run 'cd oscillitron && gofmt -w .' (or 'gofmt -w <file>') and re-stage."
+    exit 1
+fi
+
+# --- go vet on the whole module ---
+# vet doesn't accept file-level args sensibly; run on the module
+# from its root.
+if [ -d oscillitron ]; then
+    (cd oscillitron && go vet ./...) || {
+        echo "pre-commit: go vet failed. Fix the reported issues and re-commit."
+        exit 1
+    }
+fi
+
+exit 0

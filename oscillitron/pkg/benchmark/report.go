@@ -7,6 +7,8 @@ import (
 	"io"
 	"os"
 	"time"
+
+	"github.com/jrlmx2/oscillitron/pkg/stakes"
 )
 
 // WriteJSON serializes a Report to w as indented JSON. Designed so the
@@ -156,6 +158,7 @@ type caseJSON struct {
 	ID       string            `json:"id"`
 	Prompt   string            `json:"prompt"`
 	Expected string            `json:"expected"`
+	Stakes   stakes.Level      `json:"stakes,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 

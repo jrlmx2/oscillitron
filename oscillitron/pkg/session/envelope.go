@@ -27,6 +27,7 @@ package session
 
 import (
 	"github.com/jrlmx2/oscillitron/pkg/classification"
+	"github.com/jrlmx2/oscillitron/pkg/stakes"
 )
 
 // SchemaVersion lets the envelope evolve additively. Bumped only on
@@ -164,8 +165,21 @@ type Envelope struct {
 	// produce. Doubles as the preloaded prompt requirement that forces
 	// the producing LLM to self-classify against it.
 	OutputSchema string `json:"output_schema"`
-	// Classification is the expected level (from the envelope contract).
+	// Classification is the expected confidentiality level (from the
+	// envelope contract).
 	Classification classification.Level `json:"classification"`
+
+	// Stakes is the effort-routing annotation distinct from
+	// Classification. Confidentiality answers "where can this data
+	// go"; Stakes answers "how careful do we need to be about being
+	// right". v3.0 wires the bench Vote orchestrator to scale its
+	// attempt count by Stakes; v3.4 extends to coping decisions.
+	//
+	// Zero value (empty string) is intentionally NOT one of the
+	// valid levels and reads as Medium via stakes.Effective() — so
+	// envelopes constructed before v3.0 (or by callers that don't
+	// set Stakes) get the same default behavior as pre-v3.0.
+	Stakes stakes.Level `json:"stakes,omitempty"`
 
 	// NeedsVerification is the parent override: forces a critique pass
 	// regardless of the verifier-policy sampling roll. Suppression by

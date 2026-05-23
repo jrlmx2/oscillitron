@@ -34,6 +34,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter/curated"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/lmstudio"
+	"github.com/jrlmx2/oscillitron/pkg/adapter/minimal"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/ollama"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/vllm"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
@@ -44,6 +45,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/config"
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
+	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/trace/otel"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
@@ -107,6 +109,8 @@ func run() error {
 		governorCeil  = flag.Int("governor-ceiling", 0, "max concurrent leases (0 = runtime.NumCPU())")
 		governorRes   = flag.Float64("governor-reserve-fraction", 0, "VRAM safety margin as fraction of available (0 = 5%)")
 		vramBudget    = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 16GB); pins what the governor's probe reports")
+
+		minimalOutput = flag.Bool("minimal-output", false, "strip the JSON envelope from process-playbook instructions (uses pkg/adapter/minimal); intended for small substrates that get crushed by the ~250-token formatting tax. Frontier (anthropic) is unaffected — only the OpenAI-compat substrates (hermes/ollama/lmstudio/vllm) support raw overrides. Pair with --orchestrator-substrate=ollama to test small-model lift from envelope removal; see references/substrate-routing.md for the empirical motivation (phi4-mini published 36.9% on GPQA Diamond vs. 21–26% in our prior runs).")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -283,11 +287,11 @@ func run() error {
 	}
 
 	// Build adapters per role.
-	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel)
+	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput)
 	if err != nil {
 		return err
 	}
-	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel)
+	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput)
 	if err != nil {
 		return err
 	}
@@ -480,8 +484,12 @@ func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 // buildAdapter mirrors cmd/phase1's helper. Each role picks a
 // substrate; defaults are sensible for "local Hermes orchestrator,
 // hosted-frontier baseline". substrate="auto" defers to
-// resolveSubstrate which inspects the model name.
-func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
+// resolveSubstrate which inspects the model name. minimalOutput=true
+// swaps the process-playbook prompt for the stripped-down version in
+// pkg/adapter/minimal; only applies to OpenAI-compat substrates that
+// expose RawExecuteInstructions (hermes/ollama/lmstudio/vllm). The
+// anthropic adapter is unaffected.
+func buildAdapter(role, substrate, url, model string, minimalOutput bool) (adapter.Adapter, error) {
 	if substrate == "auto" {
 		substrate = resolveSubstrate(role, model)
 	}
@@ -490,7 +498,11 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		if url == "" {
 			url = "http://127.0.0.1:8642"
 		}
-		a, err := hermes.New(hermes.SingleEndpoint(url, model))
+		cfg := hermes.SingleEndpoint(url, model)
+		if minimalOutput {
+			cfg.RawExecuteInstructions = minimalProcessOverride()
+		}
+		a, err := hermes.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (hermes %s): %w", role, url, err)
 		}
@@ -502,7 +514,11 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		if model == "" {
 			return nil, fmt.Errorf("%s adapter (ollama): --%s-model is required (ollama has no server-side default)", role, role)
 		}
-		a, err := ollama.New(ollama.SingleEndpoint(url, model))
+		cfg := ollama.SingleEndpoint(url, model)
+		if minimalOutput {
+			cfg.RawExecuteInstructions = minimalProcessOverride()
+		}
+		a, err := ollama.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)
 		}
@@ -514,7 +530,11 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		if model == "" {
 			return nil, fmt.Errorf("%s adapter (lmstudio): --%s-model is required (lmstudio has no server-side default)", role, role)
 		}
-		a, err := lmstudio.New(lmstudio.SingleEndpoint(url, model))
+		cfg := lmstudio.SingleEndpoint(url, model)
+		if minimalOutput {
+			cfg.RawExecuteInstructions = minimalProcessOverride()
+		}
+		a, err := lmstudio.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (lmstudio %s): %w", role, url, err)
 		}
@@ -526,7 +546,11 @@ func buildAdapter(role, substrate, url, model string) (adapter.Adapter, error) {
 		if model == "" {
 			return nil, fmt.Errorf("%s adapter (vllm): --%s-model is required (vllm has no server-side default)", role, role)
 		}
-		a, err := vllm.New(vllm.SingleEndpoint(url, model))
+		cfg := vllm.SingleEndpoint(url, model)
+		if minimalOutput {
+			cfg.RawExecuteInstructions = minimalProcessOverride()
+		}
+		a, err := vllm.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (vllm %s): %w", role, url, err)
 		}
@@ -768,5 +792,20 @@ func printReport(w *os.File, r benchmark.Report) {
 		if shown == 0 {
 			fmt.Fprintln(w, "  (no failures or errors)")
 		}
+	}
+}
+
+// minimalProcessOverride returns the RawExecuteInstructions map that
+// swaps the process playbook's default JSON-envelope prompt for the
+// stripped-down MCQ template in pkg/adapter/minimal. Only process is
+// overridden — the bench's Vote and Single orchestrators only call
+// Execute on PlaybookProcess, so other playbooks are untouched.
+//
+// See the package comment in pkg/adapter/minimal for the empirical
+// motivation (phi4-mini's published 36.9% on GPQA Diamond vs. our
+// ~22% with the envelope).
+func minimalProcessOverride() map[session.Playbook]string {
+	return map[session.Playbook]string{
+		session.PlaybookProcess: minimal.ProcessInstructions,
 	}
 }

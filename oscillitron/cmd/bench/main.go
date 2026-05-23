@@ -34,6 +34,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter/curated"
 	"github.com/jrlmx2/oscillitron/pkg/adapter/hermes"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
+	"github.com/jrlmx2/oscillitron/pkg/benchmark/categorize"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/suffix"
@@ -603,7 +604,8 @@ func parseBytes(s string) (uint64, error) {
 }
 
 // printReport renders a human-readable summary: aggregates per
-// orchestrator and the sliding-window evolution.
+// orchestrator, failure categorization, and the sliding-window
+// evolution.
 func printReport(w *os.File, r benchmark.Report) {
 	fmt.Fprintf(w, "\n=== Benchmark: %s ===\n", r.BenchmarkName)
 	fmt.Fprintf(w, "Cases: %d   Elapsed: %s\n\n", len(r.Cases), r.EndedAt.Sub(r.StartedAt).Round(time.Second))
@@ -618,6 +620,11 @@ func printReport(w *os.File, r benchmark.Report) {
 		}
 		fmt.Fprintln(w)
 	}
+
+	// Failure categorization — surfaces WHY cases failed beyond
+	// pass/fail (format vs reasoning vs refusal vs operational).
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "--- "+strings.TrimRight(categorize.FormatTable(categorize.Aggregate(r)), "\n"))
 
 	if len(r.Windows) > 0 {
 		fmt.Fprintf(w, "\n--- Sliding window (size=%d) ---\n", r.Windows[0].Size)

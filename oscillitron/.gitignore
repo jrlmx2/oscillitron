@@ -29,3 +29,5 @@ Thumbs.db
 
 # Binaries built into root from cmd/
 /oscillitron
+
+/bench

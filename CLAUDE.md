@@ -36,10 +36,10 @@ Production-grade LLM handling at a fraction of the cost. A neural-ensemble runti
 
 ## Status
 
-- **Stage:** scaffolding — code subproject seeded with the AP/router skeleton; no Hermes integration yet.
+- **Stage:** **v3 complete (2026-05-23).** v1 set the orchestration floor (vote+critique on cheap substrate ≈ frontier quality, locked at v1.0.0). v2 built the curation substrate (per-action exemplar store, cold-path mining, warm-path retrieval — v2.0.0 in dev). v3 added the inadequacy-coping layer: stakes-driven attempt scaling, prompt + response notice signals, calibrated confidence, cope rule-table dispatcher with frontier escalation. All 5 substrate adapters working (hermes, ollama, vllm, lmstudio, anthropic). Full test suite green under `-race`. Next: v4 — user-feedback intake (the keystone for calibrated learning over time).
 - **Owner:** Jim (jrlmx2@gmail.com)
 - **Created:** 2026-05-17
-- **Code subproject:** [`oscillitron/`](oscillitron/) — Go runtime. See [`oscillitron/CLAUDE.md`](oscillitron/CLAUDE.md) for code-mode conventions and current implementation status.
+- **Code subproject:** [`oscillitron/`](oscillitron/) — Go runtime. See [`oscillitron/CLAUDE.md`](oscillitron/CLAUDE.md) for current package inventory + code-mode conventions.
 
 ## Stack & tooling
 

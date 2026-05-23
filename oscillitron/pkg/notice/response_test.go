@@ -118,8 +118,12 @@ func TestExtractConfidence(t *testing.T) {
 		{"The answer is A.\nconfidence: 0.7", 0.7, true},
 		// Last match wins (model walked through then committed)
 		{"I'd estimate confidence: 0.6 initially, then refined to confidence: 0.9", 0.9, true},
-		// Clamping
-		{"confidence: 1.5", 1.0, true},
+		// v3.5 percent-scale normalization.
+		{"confidence: 1.5", 0.015, true},
+		{"confidence: 50", 0.5, true},
+		{"confidence: 95", 0.95, true},
+		{"confidence: 100", 1.0, true},
+		{"confidence: 200", 1.0, true},
 		// Missing → not found
 		{"The answer is A. Done.", 0, false},
 		{"", 0, false},
@@ -175,6 +179,37 @@ func TestEffectiveConfidence_RawClamped(t *testing.T) {
 	}
 	if got := EffectiveConfidence(-0.5, a); got != 0.0 {
 		t.Errorf("raw -0.5 should clamp to 0.0; got %v", got)
+	}
+}
+
+// --- NormalizeConfidence (v3.5 percent-scale handling) ---
+
+func TestNormalizeConfidence(t *testing.T) {
+	cases := []struct {
+		in   float64
+		want float64
+	}{
+		// Decimal scale (expected).
+		{0.0, 0.0},
+		{0.5, 0.5},
+		{0.95, 0.95},
+		{1.0, 1.0},
+		// Percent scale (qwen2.5:7b's pattern when schema bounds
+		// aren't engine-enforced).
+		{50, 0.5},
+		{95, 0.95},
+		{100, 1.0},
+		{1.5, 0.015},
+		// Out of range above 100 — clamp.
+		{200, 1.0},
+		// Negative — clamp.
+		{-0.5, 0.0},
+	}
+	for _, tc := range cases {
+		got := NormalizeConfidence(tc.in)
+		if got < tc.want-0.001 || got > tc.want+0.001 {
+			t.Errorf("NormalizeConfidence(%v) = %v, want %v", tc.in, got, tc.want)
+		}
 	}
 }
 

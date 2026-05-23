@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/classification"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
@@ -222,8 +223,10 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 	return &session.Execute{
 		Category: session.CategoryReturnResult,
 		ReturnResult: &session.ReturnResultPayload{
-			Result:     session.Payload{Kind: "result", Content: content},
-			Confidence: p.Confidence,
+			Result: session.Payload{Kind: "result", Content: content},
+			// v3.5 percent-normalize: schema enforces type but not
+			// numeric bounds; qwen2.5:7b emits 95/100 (percent).
+			Confidence: notice.NormalizeConfidence(p.Confidence),
 			Signals: session.Signals{
 				GroundedPass:   p.GroundedPass,
 				Contradictions: p.Contradictions,

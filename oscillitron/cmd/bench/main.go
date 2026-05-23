@@ -265,15 +265,21 @@ func run() error {
 	}
 
 	// Build the governor first — orchestrators and graders all share it.
-	governor, err := maybeBuildGovernor(*modelLayers, *modelKVHidden, *modelKVDtype, *modelContext, *modelPrefix,
+	// Library auto-manages concurrency (LOCKED 2026-05-21): we always
+	// build a non-nil governor. When the operator omits the model-
+	// architecture flags, we use vram.DefaultVRAMModel (Llama-7B-class
+	// conservative + 3 GB resident) under MaxConcurrencyCeiling=8.
+	// Yesterday's Vote-5 phi4-mini OOM (5×3GB = 15GB through unified
+	// memory → jetsam) is the exact case this catches without flags.
+	governor, autoManaged, err := buildGovernor(*modelLayers, *modelKVHidden, *modelKVDtype, *modelContext, *modelPrefix,
 		firstNonEmpty(*modelName, *orchModel), *governorCeil, *governorRes, *vramBudget, tracer)
 	if err != nil {
 		return err
 	}
-	if governor == nil {
-		fmt.Fprintln(os.Stderr, "bench: no VRAM governor (supply --model-layers/--model-kv-hidden/--model-context-size to enable)")
+	if autoManaged {
+		fmt.Fprintln(os.Stderr, "bench: auto-managed VRAM governor (DefaultVRAMModel — for accurate throttling pass --model-layers/--model-kv-hidden/--model-kv-dtype-bytes/--model-context-size)")
 	} else {
-		fmt.Fprintf(os.Stderr, "bench: governor enabled (%s, ceiling=%d)\n", governor.Model(), governor.Ceiling())
+		fmt.Fprintf(os.Stderr, "bench: explicit VRAM model (%s, ceiling=%d)\n", governor.Model(), governor.Ceiling())
 	}
 
 	// Build adapters per role.
@@ -428,23 +434,31 @@ func run() error {
 	return nil
 }
 
-// maybeBuildGovernor constructs a *vram.Governor when the operator
-// supplied a complete ModelSpec; returns (nil, nil) otherwise. A nil
-// governor is safe to pass to orchestrators and graders — Acquire on
-// nil returns a no-op lease.
-func maybeBuildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
-	ceiling int, reserveFrac float64, vramBudget string, tracer trace.Tracer) (*vram.Governor, error) {
-	if layers <= 0 || kvHidden <= 0 || ctx <= 0 {
-		return nil, nil
-	}
+// buildGovernor always returns a non-nil *vram.Governor per the
+// 2026-05-21 library-auto-manages-concurrency lock. When the operator
+// supplied a complete ModelSpec (--model-layers, --model-kv-hidden,
+// --model-context-size all set), the returned governor uses that spec
+// — that path is the accurate-per-model throttle.
+//
+// Otherwise we fall back to vram.AutoGovernor (DefaultVRAMModel +
+// MaxConcurrencyCeiling=8). The second return value reports which
+// path was taken so the caller can log the right hint.
+func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
+	ceiling int, reserveFrac float64, vramBudget string, tracer trace.Tracer) (*vram.Governor, bool, error) {
 	if vramBudget != "" {
 		budget, err := parseBytes(vramBudget)
 		if err != nil {
-			return nil, fmt.Errorf("--vram-budget: %w", err)
+			return nil, false, fmt.Errorf("--vram-budget: %w", err)
 		}
 		vram.SetOverride(budget)
 	}
-	return vram.NewGovernor(vram.GovernorConfig{
+	if layers <= 0 || kvHidden <= 0 || ctx <= 0 {
+		// Auto-managed path. The operator didn't supply real
+		// architecture; use the conservative default that catches
+		// N×3GB OOM scenarios on small substrates.
+		return vram.AutoGovernor(tracer), true, nil
+	}
+	g, err := vram.NewGovernor(vram.GovernorConfig{
 		Model: vram.ModelSpec{
 			Name:         name,
 			Layers:       layers,
@@ -457,6 +471,10 @@ func maybeBuildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 		ReserveFraction: reserveFrac,
 		Tracer:          tracer,
 	})
+	if err != nil {
+		return nil, false, err
+	}
+	return g, false, nil
 }
 
 // buildAdapter mirrors cmd/phase1's helper. Each role picks a

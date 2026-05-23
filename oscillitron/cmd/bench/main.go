@@ -46,6 +46,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/trace/otel"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
@@ -111,6 +112,8 @@ func run() error {
 		vramBudget    = flag.String("vram-budget", "", "operator override for available VRAM (e.g. 16GB); pins what the governor's probe reports")
 
 		minimalOutput = flag.Bool("minimal-output", false, "strip the JSON envelope from process-playbook instructions (uses pkg/adapter/minimal); intended for small substrates that get crushed by the ~250-token formatting tax. Frontier (anthropic) is unaffected — only the OpenAI-compat substrates (hermes/ollama/lmstudio/vllm) support raw overrides. Pair with --orchestrator-substrate=ollama to test small-model lift from envelope removal; see references/substrate-routing.md for the empirical motivation (phi4-mini published 36.9% on GPQA Diamond vs. 21–26% in our prior runs).")
+
+		stakesMode = flag.String("stakes", "", "v3.0: assign per-case stakes that drive Vote orchestrator's effective N. Values: '' (default — every case = Medium = current behavior), 'low' (every case Low → vote-1 cheap path), 'medium' (every case Medium = base N), 'high' (every case High → 2× base N), 'rotate' (round-robin low/medium/high across cases — useful for measuring cost-profile differentiation in one run). See scratch/v3-design.md §7.0.")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -327,6 +330,16 @@ func run() error {
 	loader, err := buildLoader(*benchName, *casesPath, *limit)
 	if err != nil {
 		return err
+	}
+
+	// v3.0: wrap the loader to assign per-case stakes per --stakes mode.
+	// When --stakes is unset (default), zero-value Stakes flows through
+	// (which the Vote orchestrator reads as Medium = current behavior).
+	if *stakesMode != "" {
+		loader, err = wrapStakesAssignment(loader, *stakesMode)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Build orchestrators.
@@ -807,5 +820,47 @@ func printReport(w *os.File, r benchmark.Report) {
 func minimalProcessOverride() map[session.Playbook]string {
 	return map[session.Playbook]string{
 		session.PlaybookProcess: minimal.ProcessInstructions,
+	}
+}
+
+// stakesLoader wraps another loader to assign per-case stakes
+// according to the --stakes mode. Read by buildLoader's caller when
+// the operator passes a non-empty --stakes flag.
+type stakesLoader struct {
+	inner benchmark.Loader
+	mode  string // "low" | "medium" | "high" | "rotate"
+}
+
+func (s stakesLoader) Name() string { return s.inner.Name() + "-stakes-" + s.mode }
+
+func (s stakesLoader) Load(ctx context.Context) ([]benchmark.Case, error) {
+	cases, err := s.inner.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	rotation := []stakes.Level{stakes.Low, stakes.Medium, stakes.High}
+	for i := range cases {
+		switch s.mode {
+		case "low":
+			cases[i].Stakes = stakes.Low
+		case "medium":
+			cases[i].Stakes = stakes.Medium
+		case "high":
+			cases[i].Stakes = stakes.High
+		case "rotate":
+			cases[i].Stakes = rotation[i%len(rotation)]
+		}
+	}
+	return cases, nil
+}
+
+// wrapStakesAssignment validates the --stakes mode and returns the
+// wrapped loader.
+func wrapStakesAssignment(inner benchmark.Loader, mode string) (benchmark.Loader, error) {
+	switch mode {
+	case "low", "medium", "high", "rotate":
+		return stakesLoader{inner: inner, mode: mode}, nil
+	default:
+		return nil, fmt.Errorf("--stakes: unknown mode %q (want 'low' | 'medium' | 'high' | 'rotate')", mode)
 	}
 }

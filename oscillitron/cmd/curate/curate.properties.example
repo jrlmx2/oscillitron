@@ -1,0 +1,35 @@
+# CLAUDE GENERATED
+#
+# Example properties for cmd/curate. Copy to curate.properties and
+# pass via `--config curate.properties`. CLI flags always override.
+#
+# Inputs / outputs
+#-----------------
+curate.stream=/tmp/bench-stream.jsonl
+curate.store_dir=/tmp/oscillitron-exemplars
+curate.action=process
+
+# Filtering
+#----------
+curate.batch_size=20
+curate.min_score=0
+curate.max_tokens_per_action=20000
+
+# Cold-path session
+#------------------
+curate.substrate=hermes
+curate.url=http://127.0.0.1:8642
+curate.model=
+curate.session_id_prefix=oscillitron:curation:
+
+# Orchestrator allowlist (skip vote-style multi-call orchestrators
+# whose Raw is a concatenation). Each key under curate.allowlist.*
+# is added as one allowed name.
+# curate.allowlist.frontier=frontier-default
+# curate.allowlist.haiku=frontier-claude-haiku-4-5
+
+# Trace / observability (shared keys with cmd/bench)
+#---------------------------------------------------
+trace.verbose=true
+trace.otel.enabled=false
+trace.otel.service_name=oscillitron-curate

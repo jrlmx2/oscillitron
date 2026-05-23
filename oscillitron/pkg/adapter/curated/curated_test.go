@@ -463,3 +463,63 @@ func (failingStore) Retrieve(_ context.Context, _, _ string, _ int) ([]exemplar.
 func (failingStore) GC(_ context.Context) (int, error) { return 0, nil }
 
 var _ exemplar.Store = (*failingStore)(nil)
+
+// --- ActionOverride ---
+
+// recordingStore captures the action key used in Retrieve so tests
+// can assert that ActionOverride takes precedence over env.Evaluate.Playbook.
+type recordingStore struct {
+	requestedActions []string
+	corpus           map[string][]exemplar.Exemplar
+}
+
+func newRecordingStore() *recordingStore {
+	return &recordingStore{corpus: map[string][]exemplar.Exemplar{}}
+}
+
+func (r *recordingStore) Add(_ context.Context, e exemplar.Exemplar) error {
+	r.corpus[e.Action] = append(r.corpus[e.Action], e)
+	return nil
+}
+
+func (r *recordingStore) Retrieve(_ context.Context, action, _ string, _ int) ([]exemplar.Exemplar, error) {
+	r.requestedActions = append(r.requestedActions, action)
+	return r.corpus[action], nil
+}
+
+func (r *recordingStore) GC(_ context.Context) (int, error) { return 0, nil }
+
+var _ exemplar.Store = (*recordingStore)(nil)
+
+func TestExecute_ActionOverride_UsedInsteadOfPlaybook(t *testing.T) {
+	store := newRecordingStore()
+	_ = store.Add(context.Background(), exemplar.Exemplar{
+		Action: "qa-mcq", Prompt: "What is X?", Output: "X is Y", SourceCase: "c1",
+	})
+	a := &Adapter{
+		Inner:          &recordingAdapter{name: "stub"},
+		Store:          store,
+		ActionOverride: "qa-mcq",
+	}
+
+	// env.Evaluate.Playbook = "process" (the default), but ActionOverride
+	// = "qa-mcq" should win for retrieval.
+	_, _ = a.Execute(context.Background(), envWithPlaybook(session.PlaybookProcess, "raw"))
+
+	if len(store.requestedActions) != 1 {
+		t.Fatalf("expected 1 Retrieve call; got %d", len(store.requestedActions))
+	}
+	if store.requestedActions[0] != "qa-mcq" {
+		t.Errorf("Retrieve action = %q, want qa-mcq (ActionOverride should win)", store.requestedActions[0])
+	}
+}
+
+func TestExecute_NoActionOverride_FallsBackToPlaybook(t *testing.T) {
+	store := newRecordingStore()
+	a := &Adapter{Inner: &recordingAdapter{name: "stub"}, Store: store}
+	_, _ = a.Execute(context.Background(), envWithPlaybook(session.PlaybookProcess, "raw"))
+
+	if len(store.requestedActions) != 1 || store.requestedActions[0] != "process" {
+		t.Errorf("expected Retrieve action = process; got %v", store.requestedActions)
+	}
+}

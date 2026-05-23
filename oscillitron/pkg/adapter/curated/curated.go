@@ -72,6 +72,14 @@ type Adapter struct {
 	//
 	// Nil = trace.Discard{}.
 	Tracer trace.Tracer
+	// ActionOverride, when non-empty, replaces env.Evaluate.Playbook
+	// as the action key used for retrieval. Use when the warm-path
+	// orchestrators' playbook differs from the action key the cold-
+	// path curation wrote under (e.g., bench orchestrators always
+	// emit PlaybookProcess but the operator curated to "qa-mcq").
+	// Zero value (empty string) preserves the original behavior:
+	// retrieve under env.Evaluate.Playbook.
+	ActionOverride string
 }
 
 // DefaultTopK is the default number of exemplars retrieved per
@@ -140,7 +148,10 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	if k <= 0 {
 		k = DefaultTopK
 	}
-	action := string(env.Evaluate.Playbook)
+	action := a.ActionOverride
+	if action == "" {
+		action = string(env.Evaluate.Playbook)
+	}
 
 	exemplars, err := a.Store.Retrieve(ctx, action, env.Input.Content, k)
 	if err != nil {

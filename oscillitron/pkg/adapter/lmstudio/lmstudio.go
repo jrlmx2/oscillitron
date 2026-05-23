@@ -127,6 +127,12 @@ type Config struct {
 	// RawExecuteInstructions overrides the adapter's default execute
 	// preamble per playbook. Most callers should leave this empty.
 	RawExecuteInstructions map[session.Playbook]string
+
+	// ResponseFormat is the OpenAI-compat `response_format`
+	// parameter (v3.5). When set, LM Studio constrains the model
+	// to emit JSON matching this schema. See pkg/adapter/minimal
+	// for the standard wrap. Optional; nil = no constraint.
+	ResponseFormat map[string]any
 }
 
 // Adapter is an adapter.Adapter targeting one LM Studio instance per
@@ -334,10 +340,11 @@ type tokenUsage struct {
 // We send stream=false because we want one shot per call; the bench's
 // observability layer reads completions, not streamed deltas.
 type chatRequest struct {
-	Model    string         `json:"model"`
-	Messages []chatMessage  `json:"messages"`
-	Stream   bool           `json:"stream"`
-	Options  map[string]any `json:"options,omitempty"`
+	Model          string         `json:"model"`
+	Messages       []chatMessage  `json:"messages"`
+	Stream         bool           `json:"stream"`
+	Options        map[string]any `json:"options,omitempty"`
+	ResponseFormat map[string]any `json:"response_format,omitempty"`
 }
 
 type chatMessage struct {
@@ -371,8 +378,9 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 			{Role: "system", Content: instructions},
 			{Role: "user", Content: env.Input.Content},
 		},
-		Stream:  false,
-		Options: ep.Options,
+		Stream:         false,
+		Options:        ep.Options,
+		ResponseFormat: a.cfg.ResponseFormat,
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {

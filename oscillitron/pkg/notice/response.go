@@ -167,14 +167,11 @@ func detectInternalInconsistency(s string) (Detection, bool) {
 var confidenceRE = regexp.MustCompile(`(?i)confidence\s*[:=]\s*([0-9]*\.?[0-9]+)`)
 
 // ExtractConfidence parses a "confidence: 0.X" annotation from raw
-// response text. Case-insensitive, last match wins (in case the
-// model wrote about confidence in reasoning then committed a final
-// value at the end). Returns (value, true) on hit; (0, false) on
-// miss. Value clamped to [0.0, 1.0].
+// response text. Case-insensitive, last match wins. Returns
+// (value, true) on hit; (0, false) on miss. Value normalized via
+// NormalizeConfidence.
 //
-// Designed for the minimal-output prompt (pkg/adapter/minimal),
-// which asks for `confidence: X.X` on its own line. Tolerates the
-// model adding it inline ("My confidence: 0.7 in this answer") too.
+// Designed for the minimal-output prompt; tolerates inline usage.
 func ExtractConfidence(raw string) (float64, bool) {
 	matches := confidenceRE.FindAllStringSubmatch(raw, -1)
 	if len(matches) == 0 {
@@ -184,14 +181,33 @@ func ExtractConfidence(raw string) (float64, bool) {
 	if len(last) < 2 {
 		return 0, false
 	}
-	val := parseFloat(last[1])
+	return NormalizeConfidence(parseFloat(last[1])), true
+}
+
+// NormalizeConfidence maps a parsed-or-extracted confidence value
+// to [0, 1] with percent-scale handling:
+//
+//	val < 0          → 0 (clamp; defensive)
+//	val ≤ 1          → val (already a decimal)
+//	1 < val ≤ 100    → val / 100 (percent — qwen2.5:7b's pattern)
+//	val > 100        → 1 (clamp; out of range either way)
+//
+// Used by ExtractConfidence (text-parsed path) AND by adapter
+// parseReturnResultJSON (JSON-envelope path). Schema-enforced JSON
+// confidence still needs this — Ollama's strict mode enforces type
+// but NOT numeric bounds, so qwen2.5:7b emits 95/100 thinking
+// percent despite the schema saying max=1.
+func NormalizeConfidence(val float64) float64 {
 	if val < 0 {
-		val = 0
+		return 0
+	}
+	if val > 1 && val <= 100 {
+		return val / 100
 	}
 	if val > 1 {
-		val = 1
+		return 1
 	}
-	return val, true
+	return val
 }
 
 // parseFloat is a tiny stdlib-free float parser for [0, 1] range.

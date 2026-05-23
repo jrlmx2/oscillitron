@@ -266,11 +266,16 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 			},
 		}
 	default:
+		// Confidence: 0 = "not reported" (NOT "zero confidence"). See
+		// pkg/adapter/ollama/structured.go for the full rationale —
+		// cope.Decide treats 0 as ShipWithCaveat (not escalate),
+		// which is the correct behavior when we don't actually know
+		// how confident the substrate is.
 		return &session.Execute{
 			Category: session.CategoryReturnResult,
 			ReturnResult: &session.ReturnResultPayload{
 				Result:     session.Payload{Kind: "result", Content: strings.TrimSpace(raw)},
-				Confidence: 0.1,
+				Confidence: 0,
 			},
 		}
 	}

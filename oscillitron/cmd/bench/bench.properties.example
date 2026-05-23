@@ -1,7 +1,14 @@
 # CLAUDE GENERATED
 #
-# Example properties file for cmd/bench. Copy to bench.properties and
-# pass via `--config bench.properties`. CLI flags always override.
+# Example properties file for cmd/bench. Copy to bench.properties
+# and pass via `--config bench.properties`. CLI flags always
+# override.
+#
+# Bench accumulates many flags (substrate routing × 2 roles,
+# governor, curation, v3 notice/cope, ...); the properties file
+# is the recommended way to keep operator memory load down.
+# Either commit your real properties file or keep it local — both
+# work.
 #
 # Trace / observability
 #----------------------
@@ -65,3 +72,43 @@ bench.curate.min_score=0
 bench.use_store.action=process
 bench.use_store.topk=3
 bench.use_store.max_tokens=0
+
+# v3.0 stakes-driven attempt scaling
+#-----------------------------------
+# Vote orchestrator scales N by stakes: Low=1, Medium=N, High=2N.
+# Values: '' (every case = Medium = pre-v3.0 behavior), 'low',
+# 'medium', 'high', 'rotate' (round-robin per case — test mode).
+# See scratch/v3-design.md §7.0.
+bench.stakes=
+
+# v3.1 minimal output (strips JSON envelope)
+#-------------------------------------------
+# Small substrates (≤7B) get crushed by the ~250-token JSON
+# envelope in the default process prompt. --minimal-output uses
+# pkg/adapter/minimal with a ~60-token bare-MCQ prompt that also
+# asks the model to emit `confidence: X.X` on its own line.
+# Frontier (anthropic) is unaffected.
+bench.minimal_output=false
+
+# v3.1/v3.2 notice layer (prompt + response inadequacy signals)
+#--------------------------------------------------------------
+# Enables pre-call (input overflow, persona-heavy) + post-call
+# (refusal language, self-correction, internal inconsistency)
+# detectors on ollama-direct. Emits ollama.notice_assessment +
+# ollama.notice_response_assessment trace events on detections.
+# Observability-only; does not alter calls. Cheap; leave on.
+bench.notice=true
+# Override the substrate context window for the overflow
+# detector. 0 falls back to bench's --model-context-size (if set).
+bench.notice.context_size=0
+
+# v3.4 cope rule-table dispatcher (frontier escalation)
+#------------------------------------------------------
+# Wraps the Vote orchestrator with the cope dispatcher.
+# High-stakes low-confidence cases escalate to the frontier
+# adapter. Off by default — operator opts in explicitly because
+# escalation has real cost. Tune thresholds per the §7.4 rule
+# table.
+bench.cope.enabled=false
+bench.cope.high_confidence=0.85
+bench.cope.low_confidence=0.5

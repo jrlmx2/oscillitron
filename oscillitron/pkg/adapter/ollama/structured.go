@@ -265,11 +265,24 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 			},
 		}
 	default:
+		// Confidence: 0 = "not reported," NOT "zero confidence." When
+		// the substrate doesn't emit a parseable confidence (neither
+		// JSON envelope nor a `confidence: X.X` minimal-output line),
+		// downstream consumers MUST distinguish missing from low.
+		// Critically: cope.Decide treats 0 as ShipWithCaveat, NOT as
+		// "low confidence → escalate" — escalating on missing data
+		// is expensive and wrong (we don't actually know the model
+		// is uncertain).
+		//
+		// applyEffectiveConfidence (in ollama.go) checks `<= 0.0` to
+		// know it can stamp a recovered confidence from raw text; if
+		// no confidence: line was emitted either, the field stays 0
+		// all the way through to the report.
 		return &session.Execute{
 			Category: session.CategoryReturnResult,
 			ReturnResult: &session.ReturnResultPayload{
 				Result:     session.Payload{Kind: "result", Content: strings.TrimSpace(raw)},
-				Confidence: 0.1,
+				Confidence: 0,
 			},
 		}
 	}

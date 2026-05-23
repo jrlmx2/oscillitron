@@ -42,8 +42,16 @@ type verifySpecRaw struct {
 	Spec string `json:"spec"`
 }
 
+// returnResultPayloadJSON accepts BOTH:
+//   - the legacy envelope: {content, confidence, grounded_pass, ...}
+//   - the v3.5 structured-output envelope: {answer, confidence}
+//
+// parseReturnResultJSON picks Answer when present (preferred for
+// MCQ benchmarks), falling back to Content. Operators using the
+// schema enforcement set Answer; legacy callers keep Content.
 type returnResultPayloadJSON struct {
-	Content        string   `json:"content"`
+	Content        string   `json:"content,omitempty"`
+	Answer         string   `json:"answer,omitempty"`
 	Confidence     float64  `json:"confidence"`
 	GroundedPass   *bool    `json:"grounded_pass,omitempty"`
 	Contradictions []string `json:"contradictions,omitempty"`
@@ -204,10 +212,17 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 	if err := json.Unmarshal([]byte(obj), &p); err != nil {
 		return nil, fmt.Errorf("ollama: parse return_result JSON: %w", err)
 	}
+	// v3.5: Answer (structured-output schema) takes precedence over
+	// Content (legacy envelope). Falls back to Content when Answer
+	// is absent so existing JSON-envelope responses keep working.
+	content := p.Answer
+	if content == "" {
+		content = p.Content
+	}
 	return &session.Execute{
 		Category: session.CategoryReturnResult,
 		ReturnResult: &session.ReturnResultPayload{
-			Result:     session.Payload{Kind: "result", Content: p.Content},
+			Result:     session.Payload{Kind: "result", Content: content},
 			Confidence: p.Confidence,
 			Signals: session.Signals{
 				GroundedPass:   p.GroundedPass,

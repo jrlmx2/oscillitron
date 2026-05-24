@@ -301,12 +301,23 @@ func TestExecutePlan(t *testing.T) {
 	}
 }
 
-func TestExecutePlanRejectsUnknownRecompose(t *testing.T) {
+func TestExecutePlanFallsBackOnUnknownRecompose(t *testing.T) {
+	// Behavior change: malformed plan JSON (unknown recompose specs,
+	// invalid escapes, struct/type mismatches, etc.) no longer crash
+	// the parent call tree. parseExecuteResponse falls back to
+	// unstructuredFallback for graceful degradation.
 	f := newFake(t)
 	f.setEvents(completedEvent(`{"sub_aps":[],"recompose":"bogus"}`))
 	a, _ := New(SingleEndpoint(f.server.URL, ""))
-	if _, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookPlan)); err == nil {
-		t.Fatal("expected error for unknown recompose spec")
+	out, err := a.Execute(context.Background(), envWithEvaluate("ap-1", "x", session.PlaybookPlan))
+	if err != nil {
+		t.Fatalf("Execute should fall back rather than error on unknown recompose: %v", err)
+	}
+	if out.Execute == nil || out.Execute.Category != session.CategoryEmitSubtree {
+		t.Fatalf("expected emit_subtree fallback; got %+v", out.Execute)
+	}
+	if out.Execute.EmitSubtree.Recompose != session.RecomposeNone {
+		t.Errorf("expected RecomposeNone fallback; got %q", out.Execute.EmitSubtree.Recompose)
 	}
 }
 

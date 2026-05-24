@@ -192,16 +192,34 @@ func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*sessi
 		}
 		return unstructuredFallback(pb, raw), nil
 	}
+	var (
+		exec *session.Execute
+		perr error
+	)
 	switch pb {
 	case session.PlaybookPlan:
-		return parseEmitSubtreeJSON(obj)
+		exec, perr = parseEmitSubtreeJSON(obj)
 	case session.PlaybookProcess, session.PlaybookCompose:
-		return parseReturnResultJSON(obj)
+		exec, perr = parseReturnResultJSON(obj)
 	case session.PlaybookCritique, session.PlaybookVerifyGrounded:
-		return parseVerifierSignalJSON(obj)
+		exec, perr = parseVerifierSignalJSON(obj)
 	default:
 		return nil, fmt.Errorf("ollama: unknown playbook %q in Execute", pb)
 	}
+	if perr != nil {
+		// The model produced JSON-shaped output but it didn't match
+		// the expected schema (escape codes, wrong field types,
+		// truncation, etc.). Fall back to the unstructured handler
+		// rather than failing the whole call tree — the bench will
+		// mark this case as a graceful fail-by-extraction rather
+		// than crashing every sibling AP. Strict mode (require=true)
+		// still surfaces the error.
+		if require {
+			return nil, perr
+		}
+		return unstructuredFallback(pb, raw), nil
+	}
+	return exec, nil
 }
 
 func parseEmitSubtreeJSON(obj string) (*session.Execute, error) {

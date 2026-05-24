@@ -211,16 +211,28 @@ func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*sessi
 		}
 		return unstructuredFallback(pb, raw), nil
 	}
+	var (
+		exec *session.Execute
+		perr error
+	)
 	switch pb {
 	case session.PlaybookPlan:
-		return parseEmitSubtreeJSON(obj)
+		exec, perr = parseEmitSubtreeJSON(obj)
 	case session.PlaybookProcess, session.PlaybookCompose:
-		return parseReturnResultJSON(obj)
+		exec, perr = parseReturnResultJSON(obj)
 	case session.PlaybookCritique, session.PlaybookVerifyGrounded:
-		return parseVerifierSignalJSON(obj)
+		exec, perr = parseVerifierSignalJSON(obj)
 	default:
 		return nil, fmt.Errorf("hermes: unknown playbook %q in Execute", pb)
 	}
+	if perr != nil {
+		// See pkg/adapter/ollama/structured.go for the full rationale.
+		if require {
+			return nil, perr
+		}
+		return unstructuredFallback(pb, raw), nil
+	}
+	return exec, nil
 }
 
 // parseEmitSubtreeJSON decodes the plan-playbook execute payload.

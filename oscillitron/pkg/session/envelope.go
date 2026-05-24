@@ -250,6 +250,18 @@ type ReturnResultPayload struct {
 	Result     Payload `json:"result"`
 	Confidence float64 `json:"confidence"`
 	Signals    Signals `json:"signals"`
+	// Reasoning carries the substrate's hidden reasoning/thinking
+	// trace when the model emitted one (Qwen3.x, DeepSeek-R1,
+	// Magistral, etc.). Empty when the substrate didn't think or
+	// thinking-mode was disabled by policy. Not part of the
+	// extracted answer — downstream consumers treat it as
+	// observability data (operators read it; verifiers may grade
+	// reasoning quality independently of the final answer; curation
+	// may capture reasoning-as-exemplar). Lives on the lean
+	// envelope rather than the trace ledger because v0 downstream
+	// readers (cope dispatcher, recomposer) may want to consult it
+	// when deciding whether to ship vs. escalate.
+	Reasoning string `json:"reasoning,omitempty"`
 }
 
 // Signals is the lean local-signal bundle the parent recomposer and

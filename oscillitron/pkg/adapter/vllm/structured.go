@@ -13,7 +13,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jrlmx2/oscillitron/pkg/adapter/minimal"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
@@ -44,12 +43,12 @@ type verifySpecRaw struct {
 	Spec string `json:"spec"`
 }
 
-// returnResultPayloadJSON — see pkg/adapter/ollama/structured.go
-// for the full rationale. Accepts both legacy `content` and v3.5
-// `answer` fields; parseReturnResultJSON picks Answer when present.
+// returnResultPayloadJSON — see pkg/adapter/ollama/structured.go.
+// Field preference: Response → Answer → Content.
 type returnResultPayloadJSON struct {
-	Content        string   `json:"content,omitempty"`
+	Response       string   `json:"response,omitempty"`
 	Answer         string   `json:"answer,omitempty"`
+	Content        string   `json:"content,omitempty"`
 	Confidence     float64  `json:"confidence"`
 	GroundedPass   *bool    `json:"grounded_pass,omitempty"`
 	Contradictions []string `json:"contradictions,omitempty"`
@@ -210,8 +209,11 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 	if err := json.Unmarshal([]byte(obj), &p); err != nil {
 		return nil, fmt.Errorf("vllm: parse return_result JSON: %w", err)
 	}
-	// v3.5: Answer (structured-output) takes precedence over Content.
-	content := p.Answer
+	// Field preference: Response → Answer → Content.
+	content := p.Response
+	if content == "" {
+		content = p.Answer
+	}
 	if content == "" {
 		content = p.Content
 	}
@@ -282,16 +284,14 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 		// cope.Decide treats 0 as ShipWithCaveat (not escalate),
 		// which is the correct behavior when we don't actually know
 		// how confident the substrate is.
-		// XML-tag path: recover confidence from <confidence>X</confidence>
-		// when the substrate emitted the canonical tag format. Result
-		// content stays as raw text (with tags inline) — downstream
-		// extractors scan inside.
-		conf, _ := minimal.ExtractConfidenceTag(raw)
+		// Confidence: 0 = "not reported." See pkg/adapter/ollama for
+		// the rationale on distinguishing missing-vs-low confidence
+		// for cope dispatcher routing.
 		return &session.Execute{
 			Category: session.CategoryReturnResult,
 			ReturnResult: &session.ReturnResultPayload{
 				Result:     session.Payload{Kind: "result", Content: strings.TrimSpace(raw)},
-				Confidence: conf,
+				Confidence: 0,
 			},
 		}
 	}

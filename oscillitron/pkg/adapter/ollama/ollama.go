@@ -40,6 +40,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/semanticpool"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/thinking"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
@@ -144,6 +145,21 @@ type Config struct {
 	// not /v1/chat/completions) — for Hermes, format enforcement
 	// would happen via soul.md, which we deliberately exited.
 	ResponseFormat map[string]any
+
+	// Thinking decides whether reasoning/thinking-mode should be
+	// enabled for each Execute call. nil = substrate default
+	// (which on Qwen3.x, DeepSeek-R1, Magistral etc. means
+	// thinking-on; on non-reasoning substrates it's a no-op).
+	//
+	// Wired as `"think": <bool>` at the top level of the
+	// chat-completions request body. The Ollama /v1/chat/completions
+	// surface honors this flag; substrates without reasoning mode
+	// silently ignore it.
+	//
+	// See pkg/thinking for stock policies (AlwaysOn / AlwaysOff /
+	// ByStakes / ByPlaybook / Composite) and references/
+	// reasoning-model-setup.md for the architectural framing.
+	Thinking thinking.Policy
 }
 
 // Adapter is an adapter.Adapter targeting one Ollama instance per
@@ -255,7 +271,7 @@ func (a *Adapter) Evaluate(ctx context.Context, env session.Envelope) (session.E
 		instructions = renderEvaluateInstructions(env)
 	}
 	instructions = a.withPoolPreamble(ctx, instructions)
-	raw, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate")
+	raw, _, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate")
 	if err != nil {
 		return env, err
 	}
@@ -314,7 +330,7 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 		instructions = renderExecuteInstructions(pb, env)
 	}
 	instructions = a.withPoolPreamble(ctx, instructions)
-	raw, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute")
+	raw, reasoning, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute")
 	if err != nil {
 		return env, err
 	}
@@ -325,6 +341,13 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 		return env, err
 	}
 	execute.TokensUsed = usage.input + usage.output
+	// Stamp the model's reasoning trace (when present) onto the
+	// return_result so downstream consumers (cope dispatcher,
+	// recomposer, curation) can read it. Empty when the substrate
+	// didn't think or thinking-mode was disabled by policy.
+	if reasoning != "" && execute.ReturnResult != nil {
+		execute.ReturnResult.Reasoning = reasoning
+	}
 	// v3.3: stamp effective confidence onto the return_result so the
 	// orchestrator surfaces it in benchmark.Answer. For
 	// minimal-output responses where the JSON envelope is absent,
@@ -393,11 +416,23 @@ type chatRequest struct {
 	Stream         bool           `json:"stream"`
 	Options        map[string]any `json:"options,omitempty"`
 	ResponseFormat map[string]any `json:"response_format,omitempty"`
+	// Think is the per-call thinking-mode flag honored by Ollama's
+	// /v1/chat/completions surface (and the underlying engine's
+	// support for the Qwen3-style reasoning toggle). Pointer so
+	// nil → omit (substrate default) vs explicitly true / false.
+	Think *bool `json:"think,omitempty"`
 }
 
 type chatMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`
+	// Reasoning carries the substrate's hidden chain-of-thought
+	// trace when the model produced one (Qwen3.x, DeepSeek-R1,
+	// Magistral, etc., when thinking-mode is on). Empty on
+	// non-reasoning substrates or when thinking was disabled.
+	// Surfaced separately from Content by Ollama's /v1 wrapper so
+	// the JSON parser doesn't have to deal with embedded reasoning.
+	Reasoning string `json:"reasoning,omitempty"`
 }
 
 // chatResponse matches the OpenAI /v1/chat/completions response.
@@ -416,10 +451,10 @@ type chatResponse struct {
 }
 
 // oneCall posts one chat-completion request and returns the response
-// text, token usage, and the OpenAI-style finish_reason (stop|length|
-// content_filter|tool_calls). The finish_reason is also written to
-// the trace so categorize can read it.
-func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string) (string, tokenUsage, string, error) {
+// text, the model's hidden reasoning trace (empty when none), token
+// usage, and the OpenAI-style finish_reason. The finish_reason is
+// written to the trace so categorize can read it.
+func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string) (string, string, tokenUsage, string, error) {
 	// v3.1: pre-call notice inspection. When the operator wired an
 	// Inspector, run the prompt-side detectors and emit a trace
 	// event if any fired. The call itself is unchanged — notice is
@@ -437,34 +472,41 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 		Options:        ep.Options,
 		ResponseFormat: a.cfg.ResponseFormat,
 	}
+	// Thinking-mode: ask the policy. nil-safe — when the operator
+	// hasn't wired a policy, leave the field unset and the substrate
+	// uses its own default.
+	if a.cfg.Thinking != nil {
+		think := a.cfg.Thinking.ShouldThink(env)
+		body.Think = &think
+	}
 	buf, err := json.Marshal(body)
 	if err != nil {
-		return "", tokenUsage{}, "", fmt.Errorf("ollama: marshal chat request: %w", err)
+		return "", "", tokenUsage{}, "", fmt.Errorf("ollama: marshal chat request: %w", err)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep.BaseURL+"/v1/chat/completions", bytes.NewReader(buf))
 	if err != nil {
-		return "", tokenUsage{}, "", fmt.Errorf("ollama: build chat request: %w", err)
+		return "", "", tokenUsage{}, "", fmt.Errorf("ollama: build chat request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	start := time.Now()
 	resp, err := a.cfg.HTTPClient.Do(req)
 	if err != nil {
-		return "", tokenUsage{}, "", fmt.Errorf("ollama: POST /v1/chat/completions: %w", err)
+		return "", "", tokenUsage{}, "", fmt.Errorf("ollama: POST /v1/chat/completions: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return "", tokenUsage{}, "", fmt.Errorf("ollama: POST /v1/chat/completions: status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		return "", "", tokenUsage{}, "", fmt.Errorf("ollama: POST /v1/chat/completions: status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 
 	var parsed chatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
-		return "", tokenUsage{}, "", fmt.Errorf("ollama: decode chat response: %w", err)
+		return "", "", tokenUsage{}, "", fmt.Errorf("ollama: decode chat response: %w", err)
 	}
 	if len(parsed.Choices) == 0 {
-		return "", tokenUsage{}, "", errors.New("ollama: chat response had no choices")
+		return "", "", tokenUsage{}, "", errors.New("ollama: chat response had no choices")
 	}
 	choice := parsed.Choices[0]
 	usage := tokenUsage{
@@ -488,7 +530,41 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 	// when anything fires.
 	a.inspectPostCall(ctx, env, choice.Message.Content, phase)
 
-	return choice.Message.Content, usage, choice.FinishReason, nil
+	// Surface the reasoning trace as a separate trace event when
+	// the model emitted one. Operators reading `-v` logs see the
+	// full (truncated) reasoning content; downstream consumers can
+	// grep `msg=ollama.thinking_emitted` to find every reasoning
+	// trace produced across a run.
+	if choice.Message.Reasoning != "" {
+		trace.Info(a.cfg.Tracer, ctx, "ollama.thinking_emitted",
+			slog.String("ap_id", string(env.ID)),
+			slog.String("phase", phase),
+			slog.String("model", ep.Model),
+			slog.Int("reasoning_chars", len(choice.Message.Reasoning)),
+			slog.String("reasoning", truncateForTrace(choice.Message.Reasoning, maxTraceReasoningChars)),
+		)
+	}
+
+	return choice.Message.Content, choice.Message.Reasoning, usage, choice.FinishReason, nil
+}
+
+// maxTraceReasoningChars caps the per-call reasoning trace emitted to
+// the tracer. Reasoning traces can be thousands of tokens; logging
+// them in full would bloat the trace stream. The cap is generous
+// enough that you can usually read the model's chain of thought
+// in `-v` output without scrolling through pages.
+const maxTraceReasoningChars = 4000
+
+// truncateForTrace shortens s to at most n characters, appending a
+// "…[truncated, N more chars]" suffix when truncated. Used for
+// trace-event payloads where the full content lives elsewhere (or in
+// the model's own JSONL output) and the trace just needs a readable
+// preview.
+func truncateForTrace(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + fmt.Sprintf("…[truncated, %d more chars]", len(s)-n)
 }
 
 // recordCost records the phase's usage into the tracker (when wired).

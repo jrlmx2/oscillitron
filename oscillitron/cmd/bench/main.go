@@ -52,6 +52,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
+	"github.com/jrlmx2/oscillitron/pkg/thinking"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/trace/otel"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
@@ -128,6 +129,7 @@ func run() error {
 		copeLow      = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
 		treeEnable   = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
 		treeMaxDepth = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
+		thinkingMode = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -335,11 +337,15 @@ func run() error {
 	}
 
 	// Build adapters per role.
-	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext))
+	thinkPolicy, err := parseThinkingPolicy(*thinkingMode)
 	if err != nil {
 		return err
 	}
-	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext))
+	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	if err != nil {
+		return err
+	}
+	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
 	if err != nil {
 		return err
 	}
@@ -584,7 +590,7 @@ func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 // pkg/adapter/minimal; only applies to OpenAI-compat substrates that
 // expose RawExecuteInstructions (hermes/ollama/lmstudio/vllm). The
 // anthropic adapter is unaffected.
-func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspector *notice.Inspector) (adapter.Adapter, error) {
+func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy) (adapter.Adapter, error) {
 	if substrate == "auto" {
 		substrate = resolveSubstrate(role, model)
 	}
@@ -623,6 +629,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspec
 		// ollama adapter consumes Inspector today; other substrates
 		// will gain parallel wiring in follow-up phases.
 		cfg.Inspector = inspector
+		cfg.Thinking = thinkingPolicy
 		a, err := ollama.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)
@@ -639,6 +646,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspec
 		if minimalOutput {
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
+		cfg.Thinking = thinkingPolicy
 		a, err := lmstudio.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (lmstudio %s): %w", role, url, err)
@@ -655,6 +663,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspec
 		if minimalOutput {
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
+		cfg.Thinking = thinkingPolicy
 		a, err := vllm.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (vllm %s): %w", role, url, err)
@@ -953,6 +962,30 @@ func printReport(w *os.File, r benchmark.Report) {
 // See the package comment in pkg/adapter/minimal for the empirical
 // motivation (phi4-mini's published 36.9% on GPQA Diamond vs. our
 // ~22% with the envelope).
+// parseThinkingPolicy maps the --thinking flag string into a
+// thinking.Policy. Returns nil for "substrate-default" so the
+// adapter leaves the request's `think` field unset (substrate
+// uses its own default).
+func parseThinkingPolicy(s string) (thinking.Policy, error) {
+	switch s {
+	case "off":
+		return thinking.AlwaysOff{}, nil
+	case "on":
+		return thinking.AlwaysOn{}, nil
+	case "by-stakes":
+		return thinking.ByStakes{}, nil
+	case "by-playbook":
+		return thinking.ByPlaybook{On: map[session.Playbook]bool{
+			session.PlaybookPlan:    true,
+			session.PlaybookCompose: true,
+		}}, nil
+	case "substrate-default":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("--thinking: unknown policy %q (expected off|on|by-stakes|by-playbook|substrate-default)", s)
+	}
+}
+
 func minimalProcessOverride() map[session.Playbook]string {
 	return map[session.Playbook]string{
 		session.PlaybookProcess: minimal.ProcessInstructions,

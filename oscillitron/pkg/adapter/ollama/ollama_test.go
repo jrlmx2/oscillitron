@@ -14,6 +14,7 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
+	"github.com/jrlmx2/oscillitron/pkg/thinking"
 )
 
 // fakeOllama is a minimal httptest server that mimics Ollama's
@@ -33,6 +34,11 @@ type scriptedResponse struct {
 	finishReason string
 	tokensIn     int
 	tokensOut    int
+	// reasoning is the OpenAI-compat `message.reasoning` field
+	// Ollama populates when the substrate's thinking mode produced
+	// a chain-of-thought trace. Empty by default in tests; set when
+	// asserting on reasoning-aware paths.
+	reasoning string
 }
 
 type capturedCall struct {
@@ -81,9 +87,13 @@ func newFakeOllama() *fakeOllama {
 			w.Write([]byte(next.content))
 			return
 		}
+		msg := map[string]any{"role": "assistant", "content": next.content}
+		if next.reasoning != "" {
+			msg["reasoning"] = next.reasoning
+		}
 		resp := map[string]any{
 			"choices": []map[string]any{{
-				"message":       map[string]any{"role": "assistant", "content": next.content},
+				"message":       msg,
 				"finish_reason": next.finishReason,
 			}},
 			"usage": map[string]any{
@@ -670,4 +680,174 @@ func TestNoticeAssessment_NilInspectorIsNoOp(t *testing.T) {
 	if ev := tracer.findEvent("ollama.notice_assessment"); ev != nil {
 		t.Errorf("nil Inspector should not emit notice events; got %+v", ev)
 	}
+}
+
+// --- Thinking-mode policy plumbing ---
+
+func TestExecute_ThinkingPolicy_OnSendsTrueInRequest(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{status: http.StatusOK, content: "A", finishReason: "stop"})
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Thinking = thinking.AlwaysOn{}
+	})
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if len(f.calls) != 1 {
+		t.Fatalf("calls=%d, want 1", len(f.calls))
+	}
+	got, ok := f.calls[0].rawRequest["think"]
+	if !ok {
+		t.Fatalf("request missing 'think' field; got keys %v", mapKeys(f.calls[0].rawRequest))
+	}
+	if v, _ := got.(bool); v != true {
+		t.Errorf("think = %v, want true", got)
+	}
+}
+
+func TestExecute_ThinkingPolicy_OffSendsFalseInRequest(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{status: http.StatusOK, content: "A", finishReason: "stop"})
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Thinking = thinking.AlwaysOff{}
+	})
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	got, ok := f.calls[0].rawRequest["think"]
+	if !ok {
+		t.Fatalf("request missing 'think' field")
+	}
+	if v, _ := got.(bool); v != false {
+		t.Errorf("think = %v, want false", got)
+	}
+}
+
+func TestExecute_ThinkingPolicy_NilOmitsField(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{status: http.StatusOK, content: "A", finishReason: "stop"})
+	a := newAdapter(t, f.server.URL) // no Thinking opt — Config.Thinking stays nil
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if _, ok := f.calls[0].rawRequest["think"]; ok {
+		t.Errorf("nil Thinking policy should omit 'think' field; got %v", f.calls[0].rawRequest["think"])
+	}
+}
+
+func TestExecute_ReasoningSurfacesOnReturnResult(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status: http.StatusOK,
+		// Sneak a JSON-shaped content so parseReturnResultJSON picks
+		// it up cleanly — the test isn't about content extraction.
+		content:      `{"answer":"A","confidence":0.9}`,
+		reasoning:    "Thinking: the answer is A because of X, Y, Z.",
+		finishReason: "stop",
+	})
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Thinking = thinking.AlwaysOn{}
+	})
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	got, err := a.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got.Execute == nil || got.Execute.ReturnResult == nil {
+		t.Fatal("env.Execute.ReturnResult missing")
+	}
+	want := "Thinking: the answer is A because of X, Y, Z."
+	if got.Execute.ReturnResult.Reasoning != want {
+		t.Errorf("Reasoning = %q, want %q", got.Execute.ReturnResult.Reasoning, want)
+	}
+}
+
+func TestExecute_ReasoningEmitsTraceEvent(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      `{"answer":"A","confidence":0.9}`,
+		reasoning:    "step 1 ... step 2 ... step 3",
+		finishReason: "stop",
+	})
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Thinking = thinking.AlwaysOn{}
+		c.Tracer = tracer
+	})
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	ev := tracer.findEvent("ollama.thinking_emitted")
+	if ev == nil {
+		t.Fatalf("expected ollama.thinking_emitted event; got events: %v", tracer.events)
+	}
+	if got, _ := ev.attrs["reasoning"].(string); got != "step 1 ... step 2 ... step 3" {
+		t.Errorf("reasoning attr = %q, want literal trace content", got)
+	}
+	if got, _ := ev.attrs["reasoning_chars"].(int64); got == 0 {
+		t.Errorf("reasoning_chars should be populated; got %v", ev.attrs["reasoning_chars"])
+	}
+}
+
+func TestExecute_NoReasoningMeansNoTraceEvent(t *testing.T) {
+	f := newFakeOllama()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      `{"answer":"A","confidence":0.9}`,
+		finishReason: "stop",
+	}) // no reasoning
+	tracer := &recordingTracer{}
+	a := newAdapter(t, f.server.URL, func(c *Config) { c.Tracer = tracer })
+	env := session.Envelope{
+		ID:       "ap-1",
+		Input:    session.Payload{Kind: "task", Content: "Q"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	if _, err := a.Execute(context.Background(), env); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if ev := tracer.findEvent("ollama.thinking_emitted"); ev != nil {
+		t.Errorf("substrate emitted no reasoning; thinking_emitted should NOT fire; got %+v", ev)
+	}
+}
+
+// mapKeys is a tiny helper used only in the assertion error message
+// for the omits-field test.
+func mapKeys(m map[string]any) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
 }

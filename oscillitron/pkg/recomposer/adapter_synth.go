@@ -75,7 +75,7 @@ func (s AdapterSynth) Synthesize(ctx context.Context, req SynthesizeRequest) (Sy
 	env := session.NewRoot(
 		session.ID(fmt.Sprintf("synth-step-%d", req.StepIndex)),
 		input,
-		`{"content": "<merged>", "confidence": <0..1>}`,
+		"<response>merged</response><confidence>0..1</confidence>",
 		classification.Internal,
 		session.Budget{TokensRemaining: 16_000, DepthRemaining: 1},
 	)
@@ -108,8 +108,11 @@ func renderAdapterSynthInput(preamble string, req SynthesizeRequest) string {
 	b.WriteString(req.Left.Result.Content)
 	b.WriteString("\n\nRight:\n")
 	b.WriteString(req.Right.Result.Content)
-	b.WriteString("\n\nIntegrate Left and Right. ")
-	b.WriteString(`Return JSON: {"content": "<the single best answer>", "confidence": <0..1>}.`)
+	b.WriteString("\n\nIntegrate Left and Right into a single best answer to the underlying task.")
+	// Format hint deliberately omitted here — the substrate adapter's
+	// ProcessInstructions already supplies the <response>/<confidence>
+	// tag format. Repeating it from inside the synthesis prompt
+	// produced conflicting signals to the model.
 	return b.String()
 }
 

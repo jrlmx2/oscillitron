@@ -49,6 +49,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
+	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -122,9 +123,11 @@ func run() error {
 		notice_       = flag.Bool("notice", true, "v3.1: enable prompt-side notice inspection on ollama-direct calls. Detects input overflow, persona-heavy prompts, etc.; emits `ollama.notice_assessment` trace events when signals fire. Cheap, observability-only (does not alter calls). Disabled with --notice=false. See scratch/v3-design.md §3.1 + §7.1.")
 		noticeCtxSize = flag.Int("notice-context-size", 0, "v3.1: substrate context window in tokens, used by the notice layer's overflow detectors. 0 = unset (overflow checks skip, persona-heavy still runs). Default matches whatever the operator passed via --model-context-size for the governor; if both are unset, pass this explicitly per substrate (phi4-mini=131072, llama-70b=128000, etc.).")
 
-		copeEnable = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
-		copeHigh   = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
-		copeLow    = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
+		copeEnable   = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
+		copeHigh     = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
+		copeLow      = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
+		treeEnable   = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
+		treeMaxDepth = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -428,6 +431,18 @@ func run() error {
 	orchestrators := []benchmark.Orchestrator{
 		frontierOrch,
 		orchAsBenchmarkOrch,
+	}
+	if *treeEnable {
+		treeOrch := orchestrator.Tree{
+			NameStr:     "tree-" + adapterModel(*orchSubstrate, *orchModel),
+			Adapter:     orchAdapter,
+			Synthesizer: recomposer.AdapterSynth{Adapter: orchAdapter},
+			Extractor:   benchCfg.Extractor,
+			Governor:    governor,
+			Tracer:      tracer,
+			MaxDepth:    *treeMaxDepth,
+		}
+		orchestrators = append(orchestrators, treeOrch)
 	}
 
 	// Grader: per-benchmark Primary from the benchmark config; dual

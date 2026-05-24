@@ -5,72 +5,50 @@ import (
 	"testing"
 )
 
-func TestProcessInstructions_MentionsLetters(t *testing.T) {
-	// Smoke test: the minimal template must steer the model toward a
-	// single closing letter. Without that, last-match-wins extraction
-	// has nothing to match.
-	want := []string{"single letter", "A, B, C, or D"}
+func TestProcessInstructions_TaskAgnostic(t *testing.T) {
+	// The minimal template must NOT contain MCQ-specific framing.
+	// Task specifics belong in the case prompt (built by the
+	// per-benchmark loader), never in the universal instructions.
 	got := strings.ToLower(ProcessInstructions)
-	for _, w := range want {
-		if !strings.Contains(got, strings.ToLower(w)) {
-			t.Errorf("ProcessInstructions missing %q; got:\n%s", w, ProcessInstructions)
+	mcqForbidden := []string{
+		"single letter",
+		"a, b, c, or d",
+		"multiple-choice",
+		"multiple choice",
+		"final character",
+	}
+	for _, w := range mcqForbidden {
+		if strings.Contains(got, w) {
+			t.Errorf("ProcessInstructions contains MCQ-specific phrase %q; the universal template should be task-agnostic — task specifics belong in the loader's case prompt", w)
 		}
 	}
 }
 
-// TestProcessInstructions_HasClosingPositionDiscipline guards
-// bug #5 from the 2026-05-23 code review: the prompt used to say
-// "Reply with the single letter…" but lacked a closing-position
-// imperative. Multichoice grader uses last-match-wins regex over
-// [A-D], so without anchoring the letter to the end of the
-// response, models that emit "Answer: D. (Note this excludes
-// option A.)" get last-match-wins → A → marked wrong.
-//
-// Empirically motivated: phi4-mini on 198-case Diamond produced
-// 12 format_no_letter cases on the frontier arm — a slice of
-// those were last-match-wins picking up a non-final letter. The
-// closing-position imperative makes the fallback path (when
-// response_format isn't honored) extract correctly.
-func TestProcessInstructions_HasClosingPositionDiscipline(t *testing.T) {
-	got := strings.ToLower(ProcessInstructions)
-	// "end" + "response" together prevent matching e.g. "send the response".
-	if !strings.Contains(got, "end your response") && !strings.Contains(got, "end with") {
-		t.Errorf("ProcessInstructions missing closing-position imperative ('end your response with…'); got:\n%s", ProcessInstructions)
-	}
-}
-
-func TestProcessInstructions_AsksForConfidence(t *testing.T) {
-	// v3.x: the chain depends on the model self-reporting confidence.
-	// If this assertion fails because the prompt evolved, double-check
-	// that confidence still flows to ExtractConfidence somehow (or via
-	// ProcessSchema enforcement).
-	want := []string{"confidence", "0.0", "1.0"}
-	got := strings.ToLower(ProcessInstructions)
-	for _, w := range want {
-		if !strings.Contains(got, w) {
-			t.Errorf("ProcessInstructions missing %q (confidence is v3-chain-load-bearing); got:\n%s", w, ProcessInstructions)
+func TestProcessInstructions_HasResponseTags(t *testing.T) {
+	// The XML-tagged format is the canonical wire shape across every
+	// substrate. Both tags must appear in the instruction text so the
+	// model gets the explicit format.
+	for _, tag := range []string{"<response>", "</response>", "<confidence>", "</confidence>"} {
+		if !strings.Contains(ProcessInstructions, tag) {
+			t.Errorf("ProcessInstructions missing required tag %q; current text:\n%s", tag, ProcessInstructions)
 		}
 	}
 }
 
 func TestProcessInstructions_IsActuallyMinimal(t *testing.T) {
-	// Pin the contract that minimal is much smaller than the default
-	// envelope. If this fails because we made the template longer,
-	// reconsider whether the additions are pulling weight — every
-	// extra sentence is context tax on the small model.
-	maxChars := 600
+	// Pin the contract that minimal stays much smaller than the
+	// default envelope. If this fails because we made the template
+	// longer, reconsider whether the additions are pulling weight —
+	// every extra sentence is context tax on small models.
+	maxChars := 400
 	if got := len(ProcessInstructions); got > maxChars {
 		t.Errorf("ProcessInstructions is %d chars; should stay under %d (defeats the purpose otherwise)", got, maxChars)
 	}
 }
 
-func TestProcessInstructions_NoJSONEnvelope(t *testing.T) {
-	// The whole point of this package is to drop the legacy JSON
-	// envelope (content/grounded_pass/contradictions/...). Belt-
-	// and-suspenders: assert no envelope-shape keywords leak in.
-	// Note: structured-output enforcement at the API level (via
-	// ProcessSchema + AsResponseFormat) is a separate concern;
-	// the schema lives outside the instruction text.
+func TestProcessInstructions_NoLegacyEnvelope(t *testing.T) {
+	// Belt-and-suspenders: assert no legacy JSON-envelope keywords
+	// leak in. The old envelope had content/grounded_pass/etc.
 	banned := []string{
 		"JSON",
 		"json object",
@@ -79,45 +57,70 @@ func TestProcessInstructions_NoJSONEnvelope(t *testing.T) {
 	}
 	for _, b := range banned {
 		if strings.Contains(ProcessInstructions, b) {
-			t.Errorf("ProcessInstructions contains %q; minimal should not mention legacy envelope", b)
+			t.Errorf("ProcessInstructions contains %q; minimal should not mention legacy envelope or JSON shape", b)
 		}
 	}
 }
 
-func TestProcessSchema_Shape(t *testing.T) {
-	s := ProcessSchema()
-	if got, _ := s["type"].(string); got != "object" {
-		t.Errorf("schema type = %q, want object", got)
+// --- parse.go tests ---
+
+func TestExtractResponseTag(t *testing.T) {
+	cases := []struct {
+		name      string
+		raw       string
+		wantVal   string
+		wantFound bool
+	}{
+		{"basic", "<response>A</response>", "A", true},
+		{"with whitespace", "<response>  hello  </response>", "hello", true},
+		{"multiline content", "<response>\nThis is\nmulti-line\n</response>", "This is\nmulti-line", true},
+		{"latex inside", `<response>\boxed{53}</response>`, `\boxed{53}`, true},
+		{"last match wins", "<response>first</response> then <response>final</response>", "final", true},
+		{"no tag", "just some text with letter A", "", false},
+		{"empty input", "", "", false},
+		{"prose-then-tag", "Let me think... <response>C</response>", "C", true},
+		{"unclosed tag returns no match", "<response>oops", "", false},
 	}
-	props, _ := s["properties"].(map[string]any)
-	if _, ok := props["answer"]; !ok {
-		t.Errorf("schema missing properties.answer")
-	}
-	if _, ok := props["confidence"]; !ok {
-		t.Errorf("schema missing properties.confidence")
-	}
-	required, _ := s["required"].([]string)
-	if len(required) != 2 {
-		t.Errorf("schema required has %d fields, want 2", len(required))
-	}
-	if addl, _ := s["additionalProperties"].(bool); addl {
-		t.Errorf("additionalProperties should be false (closed schema)")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, found := ExtractResponseTag(tc.raw)
+			if found != tc.wantFound {
+				t.Errorf("found = %v, want %v", found, tc.wantFound)
+			}
+			if got != tc.wantVal {
+				t.Errorf("got = %q, want %q", got, tc.wantVal)
+			}
+		})
 	}
 }
 
-func TestAsResponseFormat_WrapsSchema(t *testing.T) {
-	rf := AsResponseFormat("test_name", ProcessSchema())
-	if got, _ := rf["type"].(string); got != "json_schema" {
-		t.Errorf("response_format.type = %q, want json_schema", got)
+func TestExtractConfidenceTag(t *testing.T) {
+	cases := []struct {
+		name      string
+		raw       string
+		wantVal   float64
+		wantFound bool
+	}{
+		{"basic decimal", "<confidence>0.85</confidence>", 0.85, true},
+		{"with whitespace", "<confidence>  0.7  </confidence>", 0.7, true},
+		{"integer", "<confidence>1</confidence>", 1.0, true},
+		{"zero", "<confidence>0</confidence>", 0.0, true},
+		{"last match wins", "<confidence>0.3</confidence> then <confidence>0.9</confidence>", 0.9, true},
+		{"no tag", "no confidence reported", 0, false},
+		{"empty input", "", 0, false},
+		{"placeholder unfilled", "<confidence>0.0 to 1.0</confidence>", 0, false},
+		{"non-numeric", "<confidence>high</confidence>", 0, false},
+		{"unclosed tag", "<confidence>0.8", 0, false},
 	}
-	js, _ := rf["json_schema"].(map[string]any)
-	if got, _ := js["name"].(string); got != "test_name" {
-		t.Errorf("json_schema.name = %q, want test_name", got)
-	}
-	if got, _ := js["strict"].(bool); !got {
-		t.Errorf("json_schema.strict should be true")
-	}
-	if _, ok := js["schema"].(map[string]any); !ok {
-		t.Errorf("json_schema.schema not embedded as map")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, found := ExtractConfidenceTag(tc.raw)
+			if found != tc.wantFound {
+				t.Errorf("found = %v, want %v", found, tc.wantFound)
+			}
+			if got != tc.wantVal {
+				t.Errorf("got = %v, want %v", got, tc.wantVal)
+			}
+		})
 	}
 }

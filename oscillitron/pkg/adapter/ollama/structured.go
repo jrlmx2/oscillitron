@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jrlmx2/oscillitron/pkg/adapter/minimal"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
@@ -282,24 +283,28 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 			},
 		}
 	default:
-		// Confidence: 0 = "not reported," NOT "zero confidence." When
-		// the substrate doesn't emit a parseable confidence (neither
-		// JSON envelope nor a `confidence: X.X` minimal-output line),
-		// downstream consumers MUST distinguish missing from low.
-		// Critically: cope.Decide treats 0 as ShipWithCaveat, NOT as
-		// "low confidence → escalate" — escalating on missing data
-		// is expensive and wrong (we don't actually know the model
-		// is uncertain).
+		// XML-tag path: if the model produced the canonical
+		// <response>...</response><confidence>X</confidence> format,
+		// extract the confidence value so the cope dispatcher has
+		// real signal. The Result.Content stays as the full raw
+		// text (with tags inline) — the downstream extractor
+		// (Multichoice / BoxedAnswer) scans inside the tags fine
+		// because letters / \boxed{} sit at word boundaries.
 		//
-		// applyEffectiveConfidence (in ollama.go) checks `<= 0.0` to
-		// know it can stamp a recovered confidence from raw text; if
-		// no confidence: line was emitted either, the field stays 0
-		// all the way through to the report.
+		// Confidence: 0 = "not reported," NOT "zero confidence."
+		// When neither a parseable confidence tag nor a
+		// `confidence: X.X` minimal-output line is present, the
+		// field stays 0 and downstream consumers MUST distinguish
+		// missing from low. cope.Decide treats 0 as ShipWithCaveat,
+		// not "low confidence → escalate" — escalating on missing
+		// data is expensive and wrong (the model is not actually
+		// known to be uncertain).
+		conf, _ := minimal.ExtractConfidenceTag(raw)
 		return &session.Execute{
 			Category: session.CategoryReturnResult,
 			ReturnResult: &session.ReturnResultPayload{
 				Result:     session.Payload{Kind: "result", Content: strings.TrimSpace(raw)},
-				Confidence: 0,
+				Confidence: conf,
 			},
 		}
 	}

@@ -163,8 +163,12 @@ func detectInternalInconsistency(s string) (Detection, bool) {
 
 // confidenceRE extracts a "confidence: X.Y" or "confidence = X.Y"
 // line from text. Case-insensitive. Tolerates whitespace.
-// Captures the numeric portion.
-var confidenceRE = regexp.MustCompile(`(?i)confidence\s*[:=]\s*([0-9]*\.?[0-9]+)`)
+// Captures the numeric portion. The leading \b prevents matching
+// inside larger words — without it, "overconfidence: 0.2" would
+// match the "confidence: 0.2" suffix and clobber the real value
+// (or worse, become the last-match-wins answer when the model
+// reasons through calibration explicitly).
+var confidenceRE = regexp.MustCompile(`(?i)\bconfidence\s*[:=]\s*([0-9]*\.?[0-9]+)`)
 
 // ExtractConfidence parses a "confidence: 0.X" annotation from raw
 // response text. Case-insensitive, last match wins. Returns

@@ -131,6 +131,16 @@ func TestExtractConfidence(t *testing.T) {
 		{"confidence: 1", 1.0, true},
 		// Leading dot
 		{"confidence: .5", 0.5, true},
+		// Bug #3 (2026-05-23): the regex previously matched inside
+		// "overconfidence" and other -confidence suffix words. With
+		// \b leading, these should no longer match — or, when a
+		// legitimate "confidence: X" appears alongside the suffix
+		// word, that legitimate match wins.
+		{"Watch for overconfidence: 0.2", 0, false},
+		{"This shows underconfidence: 0.3", 0, false},
+		{"hyperconfidence: 0.5", 0, false},
+		{"Watch for overconfidence; my confidence: 0.7 in this", 0.7, true},
+		{"My confidence: 0.4 — but watch for overconfidence: 0.9", 0.4, true},
 	}
 	for _, tc := range cases {
 		val, ok := ExtractConfidence(tc.raw)

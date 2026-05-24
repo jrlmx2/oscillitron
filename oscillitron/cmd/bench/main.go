@@ -283,7 +283,6 @@ func run() error {
 			}
 		}
 	}
-	_ = props // future expansion
 
 	var tracer trace.Tracer = trace.Discard{}
 	var tracers trace.Multi

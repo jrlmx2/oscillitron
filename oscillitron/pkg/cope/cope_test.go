@@ -2,6 +2,7 @@
 package cope
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
@@ -137,7 +138,7 @@ func TestExplain_PopulatesRationale(t *testing.T) {
 			t.Errorf("Explain(%v, %q) returned empty Rationale", tc.conf, tc.level)
 		}
 		// Check the rationale mentions a key concept.
-		if !contains(d.Rationale, tc.wantContains) {
+		if !strings.Contains(d.Rationale, tc.wantContains) {
 			t.Errorf("Explain(%v, %q).Rationale = %q, want to contain %q",
 				tc.conf, tc.level, d.Rationale, tc.wantContains)
 		}
@@ -152,13 +153,4 @@ func TestExplain_PassesThroughEffectiveStakes(t *testing.T) {
 	if d.Stakes != stakes.Medium {
 		t.Errorf("Decision.Stakes = %q, want medium (effective of zero value)", d.Stakes)
 	}
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

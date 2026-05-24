@@ -16,7 +16,6 @@ package calibration
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
@@ -172,7 +171,9 @@ func FormatTable(s Summary) string {
 	var b strings.Builder
 	b.WriteString("Confidence calibration (per orchestrator)\n")
 
-	// Group by orchestrator for printing.
+	// Group by orchestrator for printing. Rows already arrive in
+	// report order (Compute walks Aggregates), so first-seen ordering
+	// preserves it.
 	byOrch := map[string][]Row{}
 	var orchOrder []string
 	for _, r := range s.Rows {
@@ -181,10 +182,6 @@ func FormatTable(s Summary) string {
 		}
 		byOrch[r.OrchestratorName] = append(byOrch[r.OrchestratorName], r)
 	}
-	sort.SliceStable(orchOrder, func(i, j int) bool {
-		// Preserve report order — we walked Aggregates already.
-		return false
-	})
 
 	for _, name := range orchOrder {
 		fmt.Fprintf(&b, "  %s\n", name)

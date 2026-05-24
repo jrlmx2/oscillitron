@@ -105,14 +105,139 @@ Full details in conversation history. **Cross-confirmed by multiple angles** = h
 
 **Recommended next-PR bundle (high-confidence, small, unambiguous):**
 
-- #1 (partial RuleTable) — fix the AND→OR, or use a `Configured bool` sentinel
-- #2 (empty-extraction aggregation) — move the `if r.confidence > 0` check inside the `extracted != ""` block in `vote.go`
-- #3 (regex word boundary) — change `confidenceRE` to `(?i)\bconfidence\s*[:=]\s*...` or anchor with `(?:^|\s)`
-- #5 (minimal.go closing-position) — restore "End your response with..." in `ProcessInstructions`
+Each sketch below is enough to apply the fix without re-deriving the analysis. Line numbers anchor to `b1657e1`.
+
+---
+
+**#1 — Partial-zero RuleTable bypasses default-fill** (`oscillitron/pkg/benchmark/orchestrator/coping.go:77`)
+
+Current:
+
+```go
+rules := c.Rules
+if rules.HighConfidence == 0 && rules.LowConfidence == 0 {
+    rules = cope.DefaultRuleTable()
+}
+```
+
+Bug: AND condition only triggers when BOTH are zero. An operator who sets only `HighConfidence=0.9` (leaving `LowConfidence=0`) silently bypasses default-fill — `LowConfidence` stays 0, and the caveat band collapses to nothing (every "low confidence" case ships clean instead of ship-with-caveat).
+
+Fix (preserves per-field operator overrides, unlike a blanket `||`):
+
+```go
+rules := c.Rules
+defaults := cope.DefaultRuleTable()
+if rules.HighConfidence == 0 {
+    rules.HighConfidence = defaults.HighConfidence
+}
+if rules.LowConfidence == 0 {
+    rules.LowConfidence = defaults.LowConfidence
+}
+```
+
+Alternative (cleaner long-term): add `Configured bool` to `RuleTable` and check that instead — distinguishes "operator set 0.0 deliberately" from "operator didn't set it." But the per-field fill is the smaller change.
+
+Test to add: `TestCoping_PartialRuleTable_FillsMissingDefaults` — set only HighConfidence, assert LowConfidence gets default.
+
+---
+
+**#2 — Empty-extraction attempts still aggregate into Answer.Confidence** (`oscillitron/pkg/benchmark/orchestrator/vote.go:183`)
+
+Current:
+
+```go
+for _, r := range results {
+    if r.err != nil {
+        if firstErr == nil { firstErr = r.err }
+        continue
+    }
+    if r.confidence > 0 {                  // ← aggregates BEFORE extraction check
+        confidenceSum += r.confidence
+        confidenceCount++
+    }
+    extracted := v.Extractor.Extract(r.raw)
+    rawParts = append(rawParts, r.raw)
+    totalTokens += r.tokens
+    successes++
+    if extracted == "" {
+        continue                            // ← but votes are gated here
+    }
+    votes[extracted]++
+}
+```
+
+Bug: an attempt that produces high confidence but no extractable letter still contributes to the mean. The cope dispatcher downstream sees a falsely high mean confidence and ships an answer that nobody actually voted for. The most dangerous failure mode is "model emits prose + confidence: 0.9 but no A/B/C/D" — that attempt counts toward calibration but contributes zero votes.
+
+Fix: move the confidence aggregation past the empty-extraction gate.
+
+```go
+extracted := v.Extractor.Extract(r.raw)
+rawParts = append(rawParts, r.raw)
+totalTokens += r.tokens
+successes++
+if extracted == "" {
+    continue
+}
+if r.confidence > 0 {
+    confidenceSum += r.confidence
+    confidenceCount++
+}
+votes[extracted]++
+```
+
+Test to add: `TestVote_ConfidenceExcludesEmptyExtraction` — feed 3 attempts where the third has confidence=0.95 + empty extraction; assert mean = (c1+c2)/2, not (c1+c2+0.95)/3.
+
+---
+
+**#3 — `confidenceRE` matches inside "overconfidence"** (`oscillitron/pkg/notice/response.go:167`)
+
+Current:
+
+```go
+var confidenceRE = regexp.MustCompile(`(?i)confidence\s*[:=]\s*([0-9]*\.?[0-9]+)`)
+```
+
+Bug: no left-anchor on `confidence`, so "overconfidence: 0.2" matches and the percent-normalizer (added in #56) does the rest. Realistic-ish failure case from a hard-science Diamond prompt: model emits "...calibration adjustment for overconfidence: 0.2..." → ExtractConfidence captures `0.2` → cope dispatcher reads low confidence on what may have been a confident correct answer → unnecessary escalate (or refuse, no-frontier case).
+
+Fix: word-boundary the left side.
+
+```go
+var confidenceRE = regexp.MustCompile(`(?i)\bconfidence\s*[:=]\s*([0-9]*\.?[0-9]+)`)
+```
+
+`\b` in Go's `regexp` (RE2) is word boundary — handles start-of-string, post-punctuation, post-space without anchoring the whole regex.
+
+Test to add: extend `TestExtractConfidence` with cases `"Watch for overconfidence: 0.2"` → `(0, false)`; `"My confidence: 0.7, but watch for overconfidence: 0.2"` → `(0.7, true)` (still last-match-wins on legitimate matches).
+
+---
+
+**#5 — `ProcessInstructions` lost closing-position discipline** (`oscillitron/pkg/adapter/minimal/minimal.go:63`)
+
+Current:
+
+```go
+const ProcessInstructions = `Answer the following multiple-choice question. Choose the best option and report your confidence as a number between 0.0 and 1.0. Reply with the single letter (A, B, C, or D) as your answer.`
+```
+
+Bug: the older version had "End your response with the letter…" as the closing imperative. The current wording says *what* to reply but not *where* in the response — so when the schema-enforced path fails (any non-OpenAI-compatible substrate, or a server that quietly ignores `response_format`), the Multichoice grader's last-match-wins regex catches whatever letter happens to appear last. Common failure shape: "Answer: D. (Note this excludes option A.)" → last match is `A` → marked wrong despite the correct answer.
+
+Why this matters under v3.5: the existing comment in the file ("The text instruction stays useful for fallback when a server doesn't honor response_format") explicitly relies on the text discipline as the fallback. The fallback is missing one of its two jobs.
+
+Fix: restore the closing-position imperative as the last sentence.
+
+```go
+const ProcessInstructions = `Answer the following multiple-choice question. Choose the best option and report your confidence as a number between 0.0 and 1.0. End your response with the single letter (A, B, C, or D) as your final character.`
+```
+
+(Slight stronger phrasing than the original "End your response with the letter" — "final character" pushes against trailing punctuation/parens that the previous wording sometimes allowed through.)
+
+Test: hard to unit-test directly (it's a prompt). Easier to verify via a small ad-hoc grader-only check on the existing `/tmp/v35-phi.jsonl` once phi finishes — count cases where the schema-extracted answer ≠ last-match-regex on Raw. A non-trivial gap there is the symptom this fix targets.
+
+---
 
 Larger / discussion-worthy fixes (separate PRs):
-- #4 (multi-substrate parity for raw-text confidence) — needs design pass
-- #6 (cost double-counting) — needs operator-facing decision
+- #4 (multi-substrate parity for raw-text confidence) — needs design pass: do hermes/vllm/lmstudio need `EffectiveConfidenceFromRaw` plumbing or do they always go through structured-output? If always structured, #4 reduces to "remove the dead code path." If sometimes not, full parity is the right answer.
+- #6 (cost double-counting on Escalate) — needs operator-facing decision: should the reported cost be (a) actual inner+frontier rate, or (b) frontier rate × (inner+frontier tokens)? The current code does (b) when rates differ, which overstates frontier-only cost.
 
 ## Wider architectural threads still open
 

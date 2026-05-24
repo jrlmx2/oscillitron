@@ -42,6 +42,8 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/categorize"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/grader"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/gpqa"
+	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/math500"
+	"github.com/jrlmx2/oscillitron/pkg/benchmark/loader/mmlu_pro"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark/orchestrator"
 	"github.com/jrlmx2/oscillitron/pkg/config"
 	"github.com/jrlmx2/oscillitron/pkg/cope"
@@ -66,7 +68,7 @@ func run() error {
 	var priceFlag stringSliceFlag
 	flag.Var(&priceFlag, "price", "blended USD-per-million-tokens for one orchestrator, format NAME=RATE (e.g., 'orchestrator-vote-3-default=0.01' or 'frontier-google/gemma-4-e4b=4.50'). Repeatable.")
 	var (
-		benchName     = flag.String("benchmark", "gpqa", "benchmark name (gpqa)")
+		benchName     = flag.String("benchmark", "gpqa", "benchmark name (gpqa, mmlu-pro, math-500)")
 		casesPath     = flag.String("cases", "cmd/bench/cases/gpqa_diamond.json", "JSON snapshot path (operator-downloaded; see cmd/bench/cases/README.md)")
 		limit         = flag.Int("limit", 0, "cap the number of cases (0 = all)")
 		voteN         = flag.Int("vote-n", 5, "N attempts for the vote orchestrator")
@@ -370,11 +372,13 @@ func run() error {
 			*useStoreDir, *useStoreAction, *useStoreTopK, *useStoreMaxTokens)
 	}
 
-	// Build loader (gpqa for now; extensible).
-	loader, err := buildLoader(*benchName, *casesPath, *limit)
+	// Build benchmark config (loader + grader + extractor configured
+	// for the chosen --benchmark).
+	benchCfg, err := buildBenchmark(*benchName, *casesPath, *limit)
 	if err != nil {
 		return err
 	}
+	loader := benchCfg.Loader
 
 	// v3.0: wrap the loader to assign per-case stakes per --stakes mode.
 	// When --stakes is unset (default), zero-value Stakes flows through
@@ -386,10 +390,10 @@ func run() error {
 		}
 	}
 
-	// Build orchestrators.
-	extractor := orchestrator.ExtractorFunc(func(raw string) string {
-		return grader.ExtractLetter(raw, grader.MultichoiceLetters)
-	})
+	// Build orchestrators. The extractor and grader come from the
+	// benchmark config built above: MCQ benchmarks (GPQA, MMLU-Pro)
+	// produce a letter; MATH-500 produces a \boxed{} expression.
+	extractor := benchCfg.Extractor
 	frontierOrch := orchestrator.Single{
 		NameStr:   "frontier-" + adapterModel(*frontSubstrate, *frontModel),
 		Adapter:   frontAdapter,
@@ -430,11 +434,11 @@ func run() error {
 		orchAsBenchmarkOrch,
 	}
 
-	// Grader: Multichoice as Primary; dual scaffolding is in place but
-	// no Secondary wired by default (LLM-judge secondary is a future
-	// flag).
+	// Grader: per-benchmark Primary from the benchmark config; dual
+	// scaffolding is in place but no Secondary wired by default
+	// (LLM-judge secondary is a future flag).
 	mainGrader := grader.Dual{
-		Primary: grader.Multichoice{},
+		Primary: benchCfg.Grader,
 	}
 
 	// Optional per-case JSONL streamer for crash-safe long runs.
@@ -724,12 +728,48 @@ var smallModelSubstrings = []string{
 	"qwen2.5-coder:7b",
 }
 
-func buildLoader(name, path string, limit int) (benchmark.Loader, error) {
+// benchmarkConfig bundles the three per-benchmark pieces the runner
+// needs: the Loader (parses dataset to []Case), the Grader (decides
+// pass/fail per case), and the Extractor the orchestrator uses for
+// per-attempt vote tallying. MCQ benchmarks (GPQA, MMLU-Pro) produce
+// a letter; MATH-500 produces a \boxed{} expression. Keeping these
+// bundled means cmd/bench can't accidentally pair an MCQ extractor
+// with a math grader (or vice versa).
+type benchmarkConfig struct {
+	Loader    benchmark.Loader
+	Grader    benchmark.Grader
+	Extractor orchestrator.Extractor
+}
+
+func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 	switch name {
 	case "gpqa", "gpqa-diamond":
-		return gpqa.Loader{Path: path, Limit: limit}, nil
+		return benchmarkConfig{
+			Loader: gpqa.Loader{Path: path, Limit: limit},
+			Grader: grader.Multichoice{}, // default Letters = "ABCD"
+			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+				return grader.ExtractLetter(raw, grader.MultichoiceLetters)
+			}),
+		}, nil
+	case "mmlu-pro", "mmlu_pro":
+		const letters = "ABCDEFGHIJ"
+		return benchmarkConfig{
+			Loader: mmlu_pro.Loader{Path: path, Limit: limit},
+			Grader: grader.Multichoice{Letters: letters},
+			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+				return grader.ExtractLetter(raw, letters)
+			}),
+		}, nil
+	case "math-500", "math500":
+		return benchmarkConfig{
+			Loader: math500.Loader{Path: path, Limit: limit},
+			Grader: grader.BoxedAnswer{},
+			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+				return grader.ExtractBoxed(raw)
+			}),
+		}, nil
 	default:
-		return nil, fmt.Errorf("unknown benchmark %q (supported: gpqa)", name)
+		return benchmarkConfig{}, fmt.Errorf("unknown benchmark %q (supported: gpqa, mmlu-pro, math-500)", name)
 	}
 }
 
@@ -914,8 +954,8 @@ func minimalProcessOverride() map[session.Playbook]string {
 }
 
 // stakesLoader wraps another loader to assign per-case stakes
-// according to the --stakes mode. Read by buildLoader's caller when
-// the operator passes a non-empty --stakes flag.
+// according to the --stakes mode. Applied to buildBenchmark's
+// Loader when the operator passes a non-empty --stakes flag.
 type stakesLoader struct {
 	inner benchmark.Loader
 	mode  string // "low" | "medium" | "high" | "rotate"

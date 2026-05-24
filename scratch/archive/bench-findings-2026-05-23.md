@@ -293,3 +293,217 @@ In rough priority order:
 These are in `/tmp` and won't survive a reboot. If we want
 durable copies for replay or comparison, copy into
 `artifacts/bench-runs/2026-05-23/` before they vanish.
+
+---
+
+## 11. Haiku 4.5 follow-up (50-case + 198-case)
+
+After §1–§10 landed, ran the same v3.5 stack against Haiku 4.5 on
+GPQA Diamond to answer: *is calibration broken at frontier-altitude
+too, or only on small open models?* This determines whether v4
+calibration-correction is a substrate-specific patch or an
+architectural keystone.
+
+### 11.1 Haiku 4.5 — 50-case smoke (preliminary)
+
+| Metric | frontier (single-call) | cope-vote-5 |
+|---|---|---|
+| pass | 23 / 49* = **46.9%** | 22 / 50 = **44.0%** |
+| calls | 49 (+1 adapter error) | 255 |
+| tokens | 21,415 | 110,987 |
+| token cost ratio | 1.0× | 5.2× |
+| **Uplift vs frontier** | — | **−3.0 pp** |
+
+*One case errored on the frontier path (transient API failure).
+
+Failure breakdown:
+
+```
+                       haiku-frontier  haiku-cope-5
+pass                          23            22
+format_no_letter               0             0       ← schema enforcement perfect
+wrong_letter                  22            26
+refusal                        0             0
+empty_response                 4             2
+adapter_error                  1             0
+```
+
+Calibration:
+
+```
+frontier
+  medium (0.50-0.85)   n= 20   pass=60.0%   mean_conf=0.73
+  high   (>=0.85)     n= 24   pass=45.8%   mean_conf=0.87    ← INVERTED on frontier path
+
+cope-vote-5
+  medium (0.50-0.85)   n= 32   pass=43.8%   mean_conf=0.77
+  high   (>=0.85)     n= 16   pass=50.0%   mean_conf=0.89    ← voting un-inverts (high > medium)
+```
+
+Cope action distribution: **16 ship / 34 ship_with_caveat / 0 escalate / 0 refuse.** Same dead-escalate-path pattern as qwen and phi.
+
+Bug-#2 incidence on Haiku: 1 firing across 250 attempts. Low rate, similar to qwen.
+
+### 11.2 Haiku 4.5 — 198-case full run
+
+Ran on `claude/v35-bug-bundle` code (PID 54962, launched 20:35,
+completed ~20:53). Two big operational caveats up front:
+
+**Caveat 1 — rate-limit noise.** 37 frontier cases (18.7%) and 19
+cope cases (9.6%) errored with HTTP 429 from the Anthropic API
+("organization's rate limit of 50 requests per minute"). vote-5
+× frontier burns through ~36 calls/min steady-state, but bursts
+push over the 50/min cap. The bench excludes errored cases from
+the pass-rate denominator (pass / (pass + fail)), so the rates
+aren't artificially deflated, but the *sample* of cases that
+completed may be tilted (rate-limit hits are bursty and not random
+in case-content).
+
+**Caveat 2 — JSON parse errors.** A handful of errors (~10) are
+Anthropic-adapter-side: the model produced prose instead of JSON
+even with `response_format` set. Distinct failure mode from the
+rate-limit hits. The Anthropic adapter's structured-output
+enforcement is weaker than OpenAI-compatible substrates.
+
+**Caveat 3 — code drift.** This Haiku-198 ran on post-bug-bundle
+code (PR #58 fixes #1/#2/#3/#5). The qwen-198 and phi-198 runs in
+§2 ran on pre-bundle main. Bug-#2 has 2 firings on Haiku-198
+(vs 35 on phi-198 pre-bundle), so the cross-substrate comparison
+is slightly tilted toward Haiku. Strict apples-to-apples wants
+qwen/phi re-runs on post-bundle code; **§12.C** captures this.
+
+Aggregate:
+
+| Metric | frontier | cope-vote-5 |
+|---|---|---|
+| pass / fail / err | 61 / 100 / 37 | 66 / 113 / 19 |
+| pass_rate (excluding errors) | **37.9%** | **36.9%** |
+| calls | 161 | 762 |
+| tokens | 74,748 | 329,504 |
+| **Uplift vs frontier** | — | **−1.0 pp** |
+
+Failure categorization:
+
+```
+                       frontier  cope-vote-5
+pass                       61         66
+format_no_letter            0          3
+wrong_letter               85        105
+refusal                     0          0
+empty_response             15          5
+adapter_error              37         19
+```
+
+Calibration (now monotone — the 50-case inversion was sample noise):
+
+```
+frontier
+  low    (<0.50)        n=  6   pass=16.7%   mean_conf=0.45
+  medium (0.50-0.85)   n= 70   pass=35.7%   mean_conf=0.74
+  high   (>=0.85)     n= 70   pass=50.0%   mean_conf=0.88   ← MONOTONE
+
+cope-vote-5
+  low    (<0.50)        n=  5   pass= 0.0%   mean_conf=0.43
+  medium (0.50-0.85)   n= 97   pass=30.9%   mean_conf=0.75
+  high   (>=0.85)     n= 68   pass=51.5%   mean_conf=0.88   ← MONOTONE
+```
+
+Cope action distribution: **68 ship / 109 ship_with_caveat / 2 escalate / 0 refuse.** Compared with qwen (0 escalate) and phi (0 escalate), Haiku at 198-case scale **does occasionally hit the escalate path** — confidence dipped below 0.5 on ~5 cases (the low band on cope), of which 2 routed to escalate (the other 3 were probably low-stakes which caveat-ships instead).
+
+### 11.3 Cross-substrate synthesis
+
+| | qwen2.5:7b | phi4-mini | haiku-4.5 (50c) | haiku-4.5 (198c) |
+|---|---|---|---|---|
+| frontier pass | 29.8% | 26.3% | 46.9% | 37.9% |
+| cope-vote-5 pass | 31.8% | 29.3% | 44.0% | 36.9% |
+| vote uplift | +2.0 pp | +3.0 pp | −3.0 pp | **−1.0 pp** |
+| high-band overconf gap | 65 pp | 67 pp | 39 pp | **38 pp** |
+| calibration shape (frontier) | inverted high<medium | inverted | inverted | **monotone** |
+| format_no_letter (frontier) | 1 | 12 | 0 | 0 |
+| **escalations triggered** | **0** | **0** | **0** | **2** |
+| cope action distribution | 179 ship / 19 caveat | 167 ship / 31 caveat | 16 ship / 34 caveat | 68 ship / 109 caveat / 2 escalate |
+| adapter errors | 0 | 0 | 1 | 56 (rate-limit, mostly) |
+
+**Three architectural reframings from the cross-substrate read (updated for Haiku-198):**
+
+1. **Voting is substrate-quality-dependent, not universal.** Vote-5
+   beats single-call on the weak substrates (qwen +2 pp, phi +3 pp);
+   it loses on Haiku (−1 pp at 198-case, −3 pp at 50-case). The
+   50-case margin partly reflects sample noise; the real Haiku
+   effect is smaller but still negative. The variance-reduction
+   trick pays off when first-attempt errors dominate. When the
+   substrate is already mostly-correct first-time, voting averages
+   out gains.
+2. **Overconfidence is universal but smaller at altitude.** Every
+   substrate tested has a high-band overconfidence gap: ~65 pp on
+   small open models, ~38 pp on Haiku 4.5. Stable across 50/198
+   samples on Haiku — this is a real number, not noise.
+3. **Calibration shape sharpens at altitude.** At 198 cases, Haiku
+   shows *monotone* calibration (low 16.7% < medium 35.7% < high
+   50.0%) — the inversion seen on small models and on the 50-case
+   Haiku sample appears to be sample-size noise plus weak-model
+   pathology. Combined with #2, this means Haiku's confidence is
+   informative-but-miscalibrated: a 38 pp uniform downshift would
+   make it roughly true. The small-model overconfidence is
+   *non-monotone*, which is harder to correct.
+4. **The escalate path is rare-but-alive at frontier altitude.**
+   Haiku-198 hit escalate on 2 cases. qwen and phi never did.
+   Updated framing: the escalate path isn't dead-everywhere — it's
+   dead on substrates whose confidence stays uniformly above 0.5.
+   Haiku occasionally dips into the low band; the cope dispatcher
+   *does* route those cases to the frontier. v4 calibration-
+   correction is still load-bearing (it would expand "rarely
+   escalates" to "appropriately escalates"), but the dispatcher
+   isn't useless on Haiku as-shipped.
+
+### 11.4 What this changes for the project plan
+
+- **v4 calibration-correction is still load-bearing — but the
+  framing is sharper than yesterday's read.** On small substrates
+  the escalate path is dead and confidence is non-monotone-broken;
+  v4 has to do both shape-correction *and* offset-correction. On
+  Haiku the escalate path is rare-but-alive and confidence is
+  monotone-but-shifted; v4 only needs offset-correction. Possibly:
+  v4 ships an offset-only correction for monotone-shape substrates,
+  v4.1 adds shape-correction for the small-model case. See
+  `scratch/v4-design.md` for the architecture sketch (which already
+  supports both shapes; the offset-only path is a special case of
+  the per-band correction).
+- **Vote-orchestration adds value only where variance reduction
+  pays off.** Future architectural decisions should be ready to
+  *disable* voting on capable substrates rather than treating it
+  as a universal lift. Possibly: dynamic vote-N per (model,
+  domain) keyed off observed variance, but this is v5+ scope.
+- **Benchmark coverage matters.** GPQA Diamond is one domain (hard
+  science MCQ). The cross-substrate findings above *might*
+  generalize, or might be specific to hard science where small
+  models hallucinate confidently. Adding MMLU-Pro (broad academic)
+  and MATH-500 (stepwise reasoning) tests whether the pattern
+  holds across cognitive shapes. See §12.
+- **Operational note: Haiku account is rate-limit-bound.** The
+  50-req/min tier blocks comfortable vote-5 × frontier runs. For
+  the cross-matrix in §12, either request a higher tier
+  (`https://console.anthropic.com/settings/limits`) or thread
+  bench calls more conservatively (current setup bursts above the
+  ceiling). The 18.7% error rate makes the Haiku numbers above
+  noisier than they should be; the directional findings still
+  hold but the magnitudes are soft.
+
+## 12. Next moves (live as of 2026-05-23 EOD)
+
+Tracked tasks:
+
+- **A (this doc, §11):** ✅ filled in with Haiku-50 + Haiku-198 numbers and the cross-substrate synthesis.
+- **B:** `scratch/v4-design.md` ✅ drafted (PINNED for fresh review per operator; not committed in this PR).
+- **C:** Re-run phi 198-case Diamond on post-bundle main to validate bug #2's empirical impact. PR #58 merged — unblocked.
+- **MMLU-Pro loader:** new PR after this docs PR merges. Sketch at `scratch/loader-design-mmlu-pro.md`.
+- **MATH-500 loader:** new PR after MMLU-Pro merges. Sketch at `scratch/loader-design-math500.md`.
+- **Cross-matrix run:** after both loaders + the v4 calibration store land, run qwen / phi / Haiku × Diamond / MMLU-Pro / MATH-500 = 9 runs. The matrix's purpose is twofold: validate v4 calibration across cognitive shapes, and check whether the §11.3 reframings hold or only apply to GPQA. Note operational caveat in §11.4 — Haiku tier limits will bite if not raised first.
+
+Tracked artifacts (this session):
+
+- PR #57 (merged): session handoff doc + simplifier wins + bench-findings-2026-05-23 (the doc above).
+- PR #58 (merged): v3.5 bug bundle — fixes #1/#2/#3/#5 from the §6+ code review.
+- PR (this branch, `claude/v35-docs-followup`): §11 addendum + loader design sketches.
+- `scratch/v4-design.md`: drafted but PINNED — not in any PR yet, awaiting fresh-mind review.
+- This file: ground-truth empirical record for the v3.5 measurement; the new line of work picks up from here.

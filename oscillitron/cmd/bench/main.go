@@ -124,12 +124,13 @@ func run() error {
 		notice_       = flag.Bool("notice", true, "v3.1: enable prompt-side notice inspection on ollama-direct calls. Detects input overflow, persona-heavy prompts, etc.; emits `ollama.notice_assessment` trace events when signals fire. Cheap, observability-only (does not alter calls). Disabled with --notice=false. See scratch/v3-design.md §3.1 + §7.1.")
 		noticeCtxSize = flag.Int("notice-context-size", 0, "v3.1: substrate context window in tokens, used by the notice layer's overflow detectors. 0 = unset (overflow checks skip, persona-heavy still runs). Default matches whatever the operator passed via --model-context-size for the governor; if both are unset, pass this explicitly per substrate (phi4-mini=131072, llama-70b=128000, etc.).")
 
-		copeEnable   = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
-		copeHigh     = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
-		copeLow      = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
-		treeEnable   = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
-		treeMaxDepth = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
-		thinkingMode = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
+		copeEnable       = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
+		copeHigh         = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
+		copeLow          = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
+		treeEnable       = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
+		treeMaxDepth     = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
+		structuredOutput = flag.Bool("structured-output", true, "v3.5+: constrain the OpenAI-compat substrate (ollama/vllm/lmstudio) to the {response, confidence} JSON shape via response_format schema enforcement. On by default — required for any substrate at or above the capability floor (see references/model-capability-floor.md). Disable only to A/B-test the prompt-only path; expect substrate-dependent results.")
+		thinkingMode     = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -341,11 +342,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
 	if err != nil {
 		return err
 	}
-	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
 	if err != nil {
 		return err
 	}
@@ -590,16 +591,19 @@ func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 // pkg/adapter/minimal; only applies to OpenAI-compat substrates that
 // expose RawExecuteInstructions (hermes/ollama/lmstudio/vllm). The
 // anthropic adapter is unaffected.
-func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy) (adapter.Adapter, error) {
+func buildAdapter(role, substrate, url, model string, minimalOutput, structuredOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy) (adapter.Adapter, error) {
 	if substrate == "auto" {
 		substrate = resolveSubstrate(role, model)
 	}
-	// XML-tag format is universal across substrates (minimal.ProcessInstructions
-	// instructs the model to emit <response>...</response><confidence>...</confidence>).
-	// No per-substrate JSON-schema enforcement needed any more — the prior
-	// `response_format` mechanism was killed when the XML-tag format landed
-	// (the schema only worked on OpenAI-compat substrates and bifurcated
-	// behavior across the matrix).
+	// When --structured-output is set (the default), the OpenAI-compat
+	// adapters constrain the model to the {response, confidence} JSON
+	// shape via the chat-completions `response_format` schema.
+	// Hermes uses /v1/runs and ignores this; Anthropic uses its own
+	// surface. Both pass through silently.
+	var schemaRF map[string]any
+	if structuredOutput {
+		schemaRF = minimal.AsResponseFormat("process_response", minimal.ProcessSchema())
+	}
 	switch substrate {
 	case "hermes":
 		if url == "" {
@@ -625,6 +629,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspec
 		if minimalOutput {
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
+		cfg.ResponseFormat = schemaRF
 		// v3.1: thread the notice Inspector if enabled. Only the
 		// ollama adapter consumes Inspector today; other substrates
 		// will gain parallel wiring in follow-up phases.
@@ -646,6 +651,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspec
 		if minimalOutput {
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
+		cfg.ResponseFormat = schemaRF
 		cfg.Thinking = thinkingPolicy
 		a, err := lmstudio.New(cfg)
 		if err != nil {
@@ -663,6 +669,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput bool, inspec
 		if minimalOutput {
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
+		cfg.ResponseFormat = schemaRF
 		cfg.Thinking = thinkingPolicy
 		a, err := vllm.New(cfg)
 		if err != nil {

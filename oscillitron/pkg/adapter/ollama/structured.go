@@ -12,7 +12,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/jrlmx2/oscillitron/pkg/adapter/minimal"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
@@ -43,16 +42,23 @@ type verifySpecRaw struct {
 	Spec string `json:"spec"`
 }
 
-// returnResultPayloadJSON accepts BOTH:
-//   - the legacy envelope: {content, confidence, grounded_pass, ...}
-//   - the v3.5 structured-output envelope: {answer, confidence}
+// returnResultPayloadJSON accepts the {response, confidence} shape
+// produced by pkg/adapter/minimal.ProcessSchema, plus legacy field
+// names (answer, content) for backward compatibility with older
+// JSONL artifacts on disk and any caller still wiring the
+// pre-rename envelope.
 //
-// parseReturnResultJSON picks Answer when present (preferred for
-// MCQ benchmarks), falling back to Content. Operators using the
-// schema enforcement set Answer; legacy callers keep Content.
+// parseReturnResultJSON picks the first non-empty of:
+//
+//	Response → Answer → Content
+//
+// Operators on the current `response_format` path set Response;
+// the v3.5-era Answer name is kept as legacy fallback; Content is
+// the original legacy envelope's field.
 type returnResultPayloadJSON struct {
-	Content        string   `json:"content,omitempty"`
+	Response       string   `json:"response,omitempty"`
 	Answer         string   `json:"answer,omitempty"`
+	Content        string   `json:"content,omitempty"`
 	Confidence     float64  `json:"confidence"`
 	GroundedPass   *bool    `json:"grounded_pass,omitempty"`
 	Contradictions []string `json:"contradictions,omitempty"`
@@ -213,10 +219,14 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 	if err := json.Unmarshal([]byte(obj), &p); err != nil {
 		return nil, fmt.Errorf("ollama: parse return_result JSON: %w", err)
 	}
-	// v3.5: Answer (structured-output schema) takes precedence over
-	// Content (legacy envelope). Falls back to Content when Answer
-	// is absent so existing JSON-envelope responses keep working.
-	content := p.Answer
+	// Field preference: Response (current schema) → Answer (v3.5
+	// legacy) → Content (original legacy envelope). Each subsequent
+	// fallback is empty when callers use a more recent shape; we
+	// pick the first populated one.
+	content := p.Response
+	if content == "" {
+		content = p.Answer
+	}
 	if content == "" {
 		content = p.Content
 	}
@@ -283,28 +293,20 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 			},
 		}
 	default:
-		// XML-tag path: if the model produced the canonical
-		// <response>...</response><confidence>X</confidence> format,
-		// extract the confidence value so the cope dispatcher has
-		// real signal. The Result.Content stays as the full raw
-		// text (with tags inline) — the downstream extractor
-		// (Multichoice / BoxedAnswer) scans inside the tags fine
-		// because letters / \boxed{} sit at word boundaries.
-		//
 		// Confidence: 0 = "not reported," NOT "zero confidence."
-		// When neither a parseable confidence tag nor a
-		// `confidence: X.X` minimal-output line is present, the
-		// field stays 0 and downstream consumers MUST distinguish
-		// missing from low. cope.Decide treats 0 as ShipWithCaveat,
-		// not "low confidence → escalate" — escalating on missing
-		// data is expensive and wrong (the model is not actually
-		// known to be uncertain).
-		conf, _ := minimal.ExtractConfidenceTag(raw)
+		// When the model emitted unstructured output (response_format
+		// schema enforcement somehow failed AND it wasn't valid JSON
+		// either), we have no parseable confidence signal. The field
+		// stays 0 and downstream consumers MUST distinguish missing
+		// from low. cope.Decide treats 0 as ShipWithCaveat, not as
+		// "low confidence → escalate" — escalating on missing data
+		// is expensive and wrong (the model is not actually known
+		// to be uncertain).
 		return &session.Execute{
 			Category: session.CategoryReturnResult,
 			ReturnResult: &session.ReturnResultPayload{
 				Result:     session.Payload{Kind: "result", Content: strings.TrimSpace(raw)},
-				Confidence: conf,
+				Confidence: 0,
 			},
 		}
 	}

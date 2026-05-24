@@ -58,9 +58,14 @@ package minimal
 //     fields. The text instruction stays useful for fallback when
 //     a server doesn't honor response_format.
 //   - The bench's Multichoice grader runs last-match-wins regex
-//     over [A-D]; the schema-enforced `answer` field is what we
-//     actually consume.
-const ProcessInstructions = `Answer the following multiple-choice question. Choose the best option and report your confidence as a number between 0.0 and 1.0. Reply with the single letter (A, B, C, or D) as your answer.`
+//     over [A-D]; the closing-position imperative ("end your
+//     response with…") is load-bearing on the fallback path. When
+//     response_format isn't honored (or the substrate doesn't
+//     support it), the grader extracts the last A/B/C/D in the
+//     text — without a closing-position imperative, models often
+//     emit "Answer: D. (Note this excludes option A.)" and
+//     last-match-wins catches the wrong letter.
+const ProcessInstructions = `Answer the following multiple-choice question. Choose the best option and report your confidence as a number between 0.0 and 1.0. End your response with the single letter (A, B, C, or D) as your final character.`
 
 // ProcessSchema returns the JSON Schema constraining the model's
 // response to {answer: string, confidence: number 0-1}. Used with

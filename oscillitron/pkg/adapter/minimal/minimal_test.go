@@ -19,6 +19,27 @@ func TestProcessInstructions_MentionsLetters(t *testing.T) {
 	}
 }
 
+// TestProcessInstructions_HasClosingPositionDiscipline guards
+// bug #5 from the 2026-05-23 code review: the prompt used to say
+// "Reply with the single letter…" but lacked a closing-position
+// imperative. Multichoice grader uses last-match-wins regex over
+// [A-D], so without anchoring the letter to the end of the
+// response, models that emit "Answer: D. (Note this excludes
+// option A.)" get last-match-wins → A → marked wrong.
+//
+// Empirically motivated: phi4-mini on 198-case Diamond produced
+// 12 format_no_letter cases on the frontier arm — a slice of
+// those were last-match-wins picking up a non-final letter. The
+// closing-position imperative makes the fallback path (when
+// response_format isn't honored) extract correctly.
+func TestProcessInstructions_HasClosingPositionDiscipline(t *testing.T) {
+	got := strings.ToLower(ProcessInstructions)
+	// "end" + "response" together prevent matching e.g. "send the response".
+	if !strings.Contains(got, "end your response") && !strings.Contains(got, "end with") {
+		t.Errorf("ProcessInstructions missing closing-position imperative ('end your response with…'); got:\n%s", ProcessInstructions)
+	}
+}
+
 func TestProcessInstructions_AsksForConfidence(t *testing.T) {
 	// v3.x: the chain depends on the model self-reporting confidence.
 	// If this assertion fails because the prompt evolved, double-check

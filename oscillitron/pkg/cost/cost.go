@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package cost tracks per-call spend in two parallel ledgers: actual
 // (what the chosen model cost) and counterfactual (what a frontier
 // baseline would have cost for the same token volume). The

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package config provides a tiny .properties-style configuration
 // loader. Inspired by Spring Boot's application.properties but
 // deliberately a fraction of the surface — no profiles, no relaxed

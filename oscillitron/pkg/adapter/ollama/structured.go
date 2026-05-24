@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package ollama
 
 // NOTE: same duplication note as instructions.go — these parsers are

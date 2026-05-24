@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Hermes persona slim-down (operator-facing)
 

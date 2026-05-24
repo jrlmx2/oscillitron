@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package ollama
 
 // NOTE: these instruction templates are duplicated from

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package session defines the AP envelope under the uniform-node +
 // evaluate/execute call-tree model.
 //

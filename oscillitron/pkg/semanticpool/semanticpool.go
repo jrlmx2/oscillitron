@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package semanticpool implements the shared semantic pool from the
 // parent CLAUDE.md "Per-instance vs. shared resources" lock
 // (2026-05-18):

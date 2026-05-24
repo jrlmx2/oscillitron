@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package minimal
 
 import (

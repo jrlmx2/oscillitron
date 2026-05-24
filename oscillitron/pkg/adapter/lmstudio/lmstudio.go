@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package lmstudio is a direct-to-LM-Studio adapter that bypasses
 // Hermes.
 //

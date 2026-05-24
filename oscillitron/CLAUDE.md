@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Oscillitron — Go runtime
 
 This subproject is the **code** for Oscillitron. The design lives in the parent project:
@@ -139,7 +138,6 @@ go run ./cmd/oscillitron --config oscillitron.properties
 - **Interfaces in the package they're consumed in.** `Adapter` is in `pkg/adapter` because everyone consumes it. Concrete impls live in subpackages (`pkg/adapter/stub`).
 - **Tests next to code** (`foo_test.go` alongside `foo.go`). Integration tests under `internal/test/`.
 - **No `main` logic in `cmd/`.** `cmd/oscillitron/main.go` wires components together and runs them; all logic lives in `pkg/`.
-- **Provenance marker.** Every file Claude authors has `// CLAUDE GENERATED` at the top.
 
 ## Repo facts (locked 2026-05-18)
 

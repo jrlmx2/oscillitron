@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // LLM-driven Recomposer variant.
 //
 // Concat's binary reducer is text-level: it joins two payloads with a

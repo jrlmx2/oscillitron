@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package orchestrator implements benchmark.Orchestrator strategies.
 //
 //   - Single: one adapter call per case. The frontier-baseline arm.

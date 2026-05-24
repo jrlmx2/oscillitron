@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Demo runner — exercises the uniform-node + evaluate/execute call
 // tree end-to-end with the stub adapter.
 //

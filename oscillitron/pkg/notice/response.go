@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // v3.2 response-side detectors + confidence extraction.
 //
 // v3.1 (notice.go) flagged signals BEFORE the call from the prompt

@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Oscillatron — Library Plan (Phase 1 + Phase 2 Thin Skeleton)
 
 **Status:** Draft v0.2 (substantive revision of v0.1)

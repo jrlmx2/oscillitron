@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package hardcap is a v0 Inhibitor that aborts a chain when it
 // exceeds a fixed iteration cap. This is the "belt-and-suspenders"
 // inhibition per design-notes.md "Inhibition as circuit-breaker"

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package calibration computes the v3.3 "confidence vs. pass rate"
 // table from a benchmark.Report. The thesis being tested:
 // **calibrated confidence means higher-confidence answers pass more

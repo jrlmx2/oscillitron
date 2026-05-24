@@ -1,4 +1,3 @@
-# CLAUDE GENERATED
 #
 # Example properties for cmd/curate. Copy to curate.properties and
 # pass via `--config curate.properties`. CLI flags always override.

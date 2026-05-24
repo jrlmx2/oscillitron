@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Session handoff — 2026-05-23
 
 A new session can pick up the work from this file alone. Critical paths are inline.

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package mmlu_pro loads MMLU-Pro cases from disk.
 //
 // Dataset: https://huggingface.co/datasets/TIGER-Lab/MMLU-Pro

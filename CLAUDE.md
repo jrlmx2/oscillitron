@@ -1,9 +1,4 @@
-<!-- CLAUDE GENERATED -->
 # Oscillitron
-
-## Provenance rule (project-wide, enforced)
-
-Every document Claude authors in this project carries the literal marker `CLAUDE GENERATED` at the top, in the comment syntax appropriate for the format (`<!-- CLAUDE GENERATED -->` for markdown/HTML, `# CLAUDE GENERATED` for Python/shell/YAML, `// CLAUDE GENERATED` for JS/TS/C-family, `/* CLAUDE GENERATED */` for CSS, `-- CLAUDE GENERATED` for SQL; for office formats use the document Author/Creator metadata; for strict-schema formats like JSON/CSV use a sibling `.claude-generated` manifest). Documents without this marker are treated as user-authored. Claude does not add the marker when merely editing a user-authored file — only when Claude is the original author or has substantially rewritten it. This rule resolves authorship ambiguity for restructuring, classification, and any provenance judgment; check for the marker first before falling back to heuristics.
 
 ## Folder conventions
 
@@ -176,7 +171,6 @@ Knowledge-work side (this folder) has no build step — it's docs and design not
 ## Conventions
 
 - **Code lives in `oscillitron/`; design lives at the project root.** When in code-mode, the subproject CLAUDE.md (`oscillitron/CLAUDE.md`) takes precedence and is more specific. This root file is the canonical source of truth for architecture and open decisions.
-- **Provenance marker** required on every Claude-authored file (see top of this file).
 - **No edits to `inputs/`** — ever.
 - **Open decisions** stay in this file (the list below) until they're locked, at which point they migrate into the relevant section (Architecture, Stack, etc.) with a `LOCKED YYYY-MM-DD` tag.
 

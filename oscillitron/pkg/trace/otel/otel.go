@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package otel bridges Oscillitron's trace events to the OpenTelemetry
 // Logs SDK. Operators ship logs to Datadog/Splunk/etc. by running an
 // OTel collector that ingests OTLP and routes to their backend —

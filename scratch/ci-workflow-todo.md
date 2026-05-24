@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # TODO: add CI workflow
 
 The hygiene PR (gofmt + git hooks) ships local enforcement only.

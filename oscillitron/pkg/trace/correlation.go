@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package trace
 
 import "context"

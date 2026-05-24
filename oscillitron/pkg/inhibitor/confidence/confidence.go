@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package confidence is an Inhibitor that watches per-invocation
 // confidence scores reported by adapters on a return_result execute
 // payload. Two drift signals per design-notes.md "Inhibition as

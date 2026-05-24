@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jrlmx2/oscillitron/pkg/adapter/minimal"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/session"
@@ -313,11 +314,14 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 		// cope.Decide treats 0 as ShipWithCaveat (not escalate),
 		// which is the correct behavior when we don't actually know
 		// how confident the substrate is.
+		// XML-tag path: recover confidence from <confidence>X</confidence>
+		// when the substrate emitted the canonical tag format.
+		conf, _ := minimal.ExtractConfidenceTag(raw)
 		return &session.Execute{
 			Category: session.CategoryReturnResult,
 			ReturnResult: &session.ReturnResultPayload{
 				Result:     session.Payload{Kind: "result", Content: strings.TrimSpace(raw)},
-				Confidence: 0,
+				Confidence: conf,
 			},
 		}
 	}

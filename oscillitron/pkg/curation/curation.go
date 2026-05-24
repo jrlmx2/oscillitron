@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package curation is the cold-path side of the three-tier
 // self-improvement architecture (warm path / cold path / substrate).
 //

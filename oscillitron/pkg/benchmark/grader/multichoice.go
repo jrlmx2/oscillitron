@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package grader implements benchmark.Grader strategies.
 //
 //   - Multichoice: exact-match on extracted A/B/C/D letter (or A-Z

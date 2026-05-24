@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package gpqa loads GPQA Diamond cases from disk.
 //
 // Dataset: https://huggingface.co/datasets/Idavidrein/gpqa

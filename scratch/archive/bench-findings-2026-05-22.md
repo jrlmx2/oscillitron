@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Bench findings — 2026-05-22
 

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package contradictions is an Inhibitor that watches the
 // return_result Signals.Contradictions field accumulating along a
 // path through the call tree. Per design-notes.md "Drift signals to

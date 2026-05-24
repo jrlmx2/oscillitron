@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package notice is the v3.1 "notice" layer — cheap, deterministic
 // detectors that flag inadequacy signals BEFORE and AFTER the
 // substrate call. v3.1 ships the prompt-side detectors (§3.1 of

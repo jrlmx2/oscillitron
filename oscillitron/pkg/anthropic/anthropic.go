@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package anthropic is a stdlib-only HTTP client for the Anthropic
 // Messages API. Used by frontier-backed Judge (pkg/judge) and
 // Synthesizer (pkg/recomposer) implementations.

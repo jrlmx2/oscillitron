@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package eval is the grader harness for Phase 1's empirical
 // validation (library-plan §2.3, §2.5). It runs a workload of Tasks
 // through a caller-supplied Runner, grades each result with a

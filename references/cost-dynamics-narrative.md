@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Cost dynamics narrative (evaluator-facing)
 

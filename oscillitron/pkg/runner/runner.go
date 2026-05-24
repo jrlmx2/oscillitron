@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package runner walks the AP call tree under the uniform-node +
 // evaluate/execute model.
 //

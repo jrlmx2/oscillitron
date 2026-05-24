@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package anthropic provides an adapter.Adapter backed by the
 // Anthropic Messages API. Used to drive Oscillitron's call tree
 // against a frontier model (or Claude Haiku as a hosted cheap proxy

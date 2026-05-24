@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package stakes defines the "how careful do we need to be about
 // getting this right" axis, distinct from data classification.
 //

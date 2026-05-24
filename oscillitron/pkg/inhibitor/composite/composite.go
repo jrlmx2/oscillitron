@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package composite combines multiple Inhibitors and aggregates their
 // verdicts. Precedence is Abort > Restart > Continue: any member
 // voting Abort produces an Abort; otherwise any Restart produces a

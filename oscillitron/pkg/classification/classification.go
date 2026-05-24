@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package classification defines data-classification levels propagated
 // through session envelopes and used for routing decisions.
 //

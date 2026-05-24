@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package vllm
 
 // NOTE: same duplication note as instructions.go — these parsers are

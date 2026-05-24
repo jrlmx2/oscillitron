@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Oscillitron
 
 Production-grade LLM handling at a fraction of the cost. A neural-ensemble runtime where weak/cheap base models are wrapped as "oscillators" coordinated through "action potentials" (spike-like events), with specialization growing organically over time inside scaffolded seed niches.

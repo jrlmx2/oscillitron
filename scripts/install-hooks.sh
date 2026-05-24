@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# CLAUDE GENERATED
 # Point this checkout's git at the tracked hooks directory.
 # One-time per clone. Idempotent — safe to re-run.
 #

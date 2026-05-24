@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Oscillitron design notes (working)
 
 Ideas in motion. Not locked. Promote to `CLAUDE.md` (or to a `references/` doc) once an idea settles enough to act on.

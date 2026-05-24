@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package cope is the v3.4 "act" layer — the rule-table dispatcher
 // that reads inadequacy signals (effective confidence + stakes) and
 // picks a coping action.

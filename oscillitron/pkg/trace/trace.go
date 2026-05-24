@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package trace defines a small structured-event interface that
 // orchestrator and runtime components emit through. The default
 // implementation wraps log/slog; library-plan §6 reserves a seam for

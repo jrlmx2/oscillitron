@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package ollama is a direct-to-Ollama adapter that bypasses Hermes.
 //
 // Why this exists: Hermes is an agentic substrate built for tool-calling

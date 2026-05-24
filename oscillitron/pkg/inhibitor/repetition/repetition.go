@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package repetition is an Inhibitor that detects an invocation
 // cycling — re-emitting the same content across recent invocations.
 // Per design-notes.md "Drift signals to watch": repetition / cycling

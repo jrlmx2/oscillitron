@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Phase 1 measurement guide
 

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package-level defaults for the library-managed VRAM path. The
 // 2026-05-21 lock specifies that MaxConcurrency=0 means "let the
 // library figure it out" — these are the building blocks.

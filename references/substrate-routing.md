@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Substrate routing: small models bypass Hermes
 
 When `cmd/bench --orchestrator-substrate=auto` (the default), the bench picks an adapter based on the configured model. Small substrates route through `pkg/adapter/ollama` (direct chat-completions, no agentic envelope); larger substrates stay on `pkg/adapter/hermes`.

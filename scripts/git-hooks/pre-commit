@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# CLAUDE GENERATED
 # Pre-commit hook — runs gofmt + go vet on staged Go files.
 # Installed by scripts/install-hooks.sh into core.hooksPath.
 #

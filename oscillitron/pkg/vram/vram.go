@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package vram measures available GPU/accelerator memory across
 // platforms and estimates per-Hermes-session VRAM footprint for the
 // runner's dynamic concurrency cap.

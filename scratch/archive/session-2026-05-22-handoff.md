@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Session handoff — 2026-05-22
 

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package grader implements LLM-as-judge quality grading for Phase 1
 // kill-or-proceed measurement. Given the original task input and a
 // candidate output, an AnthropicGrader scores the candidate against a

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Bench driver — runs established LLM benchmarks (GPQA Diamond first;
 // MATH-500, AIME, MMLU-Pro, HLE, SWE-bench queued behind) and compares
 // an orchestration arm (Vote: N cheap-model calls + majority vote)

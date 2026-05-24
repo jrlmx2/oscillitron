@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Performance & sizing guide (operator-facing)
 

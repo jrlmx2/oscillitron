@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Prefix-cache behavior probe — operator tool, NOT a unit test.
 //
 // Asks the question: "Does Hermes' KV cache hit across session_id

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package vram
 
 // SessionEstimate is the input to an Estimator. Fields all relate to

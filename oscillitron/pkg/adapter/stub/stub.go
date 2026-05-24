@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package stub provides a no-network Adapter for tests and the demo
 // under the uniform-node + evaluate/execute model.
 //

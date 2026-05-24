@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Oscillitron Monetization Analysis: Preserving the Cost Wedge
 
 **Author:** Claude, for Jim

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package categorize classifies why each OrchestratorResult failed.
 // "Pass/fail" alone hides important detail — the empirical work
 // today showed phi4-mini's 13% pass rate on GPQA was 71% format

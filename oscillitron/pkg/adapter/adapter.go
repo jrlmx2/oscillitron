@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package adapter defines the contract between the runner and the
 // substrate that actually runs the specialist work — a Hermes
 // instance (production), a stub (tests/demo), or the frontier

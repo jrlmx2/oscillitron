@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Phase 1 measurement driver — the kill-or-proceed gate from
 // scratch/library-plan.md §2.5.
 //

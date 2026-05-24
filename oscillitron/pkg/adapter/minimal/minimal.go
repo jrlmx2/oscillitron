@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package minimal provides stripped-down playbook instructions for
 // small substrates that get crushed by the JSON-envelope tax.
 //

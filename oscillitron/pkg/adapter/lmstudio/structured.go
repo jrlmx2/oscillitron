@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package lmstudio
 
 // NOTE: same duplication note as instructions.go — these parsers are

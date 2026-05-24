@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Restructure Log
 
 Audit trail for project-restructure runs against `/Users/james/Documents/Claude/Projects/Oscillitron`.

@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Loader design — MATH-500
 

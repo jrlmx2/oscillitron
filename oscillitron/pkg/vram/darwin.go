@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 //go:build darwin
 
 package vram

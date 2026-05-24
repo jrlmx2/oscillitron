@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Loader design — MMLU-Pro
 

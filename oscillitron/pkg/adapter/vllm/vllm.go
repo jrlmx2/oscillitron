@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package vllm is a direct-to-vLLM adapter that bypasses Hermes.
 //
 // Why this exists: vLLM (https://docs.vllm.ai) is a high-throughput

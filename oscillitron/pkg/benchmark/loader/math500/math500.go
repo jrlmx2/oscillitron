@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package math500 loads MATH-500 cases from disk.
 //
 // Dataset: https://huggingface.co/datasets/HuggingFaceH4/MATH-500

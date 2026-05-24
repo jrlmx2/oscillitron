@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package recomposer combines a parent plan's resolved children into
 // a single composed return_result payload under the uniform-node +
 // evaluate/execute model.

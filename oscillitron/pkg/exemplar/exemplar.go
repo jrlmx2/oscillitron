@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package exemplar is the per-action substrate that closes
 // Oscillitron's self-improvement loop without violating
 // invocation isolation.

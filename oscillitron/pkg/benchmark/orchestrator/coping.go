@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // v3.4 Coping wrapper — applies the cope.RuleTable to an inner
 // orchestrator's Answer and optionally escalates to a frontier
 // orchestrator for high-stakes low-confidence cases.

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package verifier implements the verifier policy (locked 2026-05-20):
 // a phase-ramp sampling rate that decides whether the runtime emits a
 // critique AP after a return_result.

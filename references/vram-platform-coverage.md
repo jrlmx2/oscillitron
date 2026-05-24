@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # VRAM probe — platform coverage & limitations
 

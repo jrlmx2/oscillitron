@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Cmd curate is the cold-path curation driver — reads a bench's
 // --stream-out JSONL, asks the cold-path session ("you are the
 // {action} specialist") to identify which AP outcomes are worth

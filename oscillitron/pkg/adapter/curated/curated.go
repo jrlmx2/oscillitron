@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package curated wraps an adapter.Adapter, augmenting each Execute
 // call's input with retrieved exemplars from a per-action store.
 //

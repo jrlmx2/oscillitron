@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package judge implements the audit layer that feeds the verifier
 // policy's happiness signal (per the lock 2026-05-19).
 //

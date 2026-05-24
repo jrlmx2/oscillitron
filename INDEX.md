@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # Project Index
 
 Single entry point for everything Claude might load in this project. One line per resource:

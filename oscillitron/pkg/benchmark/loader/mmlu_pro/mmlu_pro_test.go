@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package mmlu_pro
 
 import (

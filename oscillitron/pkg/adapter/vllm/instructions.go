@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package vllm
 
 // NOTE: these instruction templates are duplicated from

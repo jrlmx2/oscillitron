@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # v3 design: inadequacy notice and coping
 
 **Status:** working draft, 2026-05-23. v3 builds on v1 (substrate + orchestration floor) and v2 (per-action exemplar substrate + cold-path curation). Captured from the design conversation 2026-05-23. Sections marked **LOCK CANDIDATE** need user sign-off before migrating to `oscillitron/CLAUDE.md` as architecture locks.

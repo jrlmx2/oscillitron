@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package hermes implements adapter.Adapter against the
 // OpenAI-compatible HTTP gateway shipped by Nous Research's
 // hermes-agent (see gateway/platforms/api_server.py in that repo).

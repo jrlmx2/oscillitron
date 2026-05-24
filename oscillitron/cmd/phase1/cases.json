@@ -1,5 +1,5 @@
 {
-  "_comment": "CLAUDE GENERATED. Phase 1 email-drafting workload — mundane office tasks with a nuance twist. Each case has an email thread plus a one-line intent that constrains the draft (tone, what to include/omit, what to ignore). Grading hits 4 dimensions: relevance, tone, completeness, professionalism.",
+  "_comment": "Phase 1 email-drafting workload — mundane office tasks with a nuance twist. Each case has an email thread plus a one-line intent that constrains the draft (tone, what to include/omit, what to ignore). Grading hits 4 dimensions: relevance, tone, completeness, professionalism.",
   "cases": [
     {
       "id": "case-001-decline-vp-friday",

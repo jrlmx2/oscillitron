@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 package lmstudio
 
 // NOTE: these instruction templates are duplicated from

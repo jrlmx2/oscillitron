@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 //go:build linux
 
 package vram

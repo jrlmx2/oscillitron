@@ -1,7 +1,5 @@
 # Oscillitron demo configuration — .properties format.
 #
-# CLAUDE GENERATED
-#
 # This file fills in any setting the user did NOT pass as a CLI flag.
 # CLI flags always win. Lines starting with '#' or '!' are comments;
 # duplicate keys: last write wins.

@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 # scratch/archive/
 
 Session-handoff notes and other one-shot working files that have

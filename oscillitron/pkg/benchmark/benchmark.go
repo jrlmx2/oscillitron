@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package benchmark drives established LLM benchmarks (GPQA Diamond,
 // MATH-500, AIME, MMLU-Pro, HLE, SWE-bench) through pluggable
 // Orchestrators and Graders, producing comparable quality + cost

@@ -1,4 +1,3 @@
-// CLAUDE GENERATED
 // Package inhibitor defines the contract for the circuit-breaker that
 // watches a reasoning path and decides whether to continue, restart,
 // or abort.

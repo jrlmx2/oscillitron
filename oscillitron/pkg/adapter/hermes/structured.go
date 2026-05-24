@@ -40,6 +40,32 @@ type verifySpecRaw struct {
 	Spec string `json:"spec"`
 }
 
+// UnmarshalJSON — see pkg/adapter/ollama/structured.go for the full
+// rationale. Tolerates bare-string and malformed forms; optional
+// metadata that shouldn't block the whole plan parse.
+func (v *verifySpecRaw) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err == nil {
+			v.Spec = s
+		}
+		return nil
+	}
+	var obj struct {
+		Kind string `json:"kind"`
+		Spec string `json:"spec"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil
+	}
+	v.Kind = obj.Kind
+	v.Spec = obj.Spec
+	return nil
+}
+
 // returnResultPayloadJSON is the execute-step JSON for PlaybookProcess
 // and PlaybookCompose.
 type returnResultPayloadJSON struct {

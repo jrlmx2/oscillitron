@@ -43,6 +43,37 @@ type verifySpecRaw struct {
 	Spec string `json:"spec"`
 }
 
+// UnmarshalJSON tolerates both the canonical {kind, spec} object form
+// and a bare string. Small models routinely emit verify_spec as a
+// string when they don't fully grok the schema (empirically observed
+// on qwen2.5:7b's plan playbook output). The verify_spec field is
+// optional metadata for downstream verifier integration — failing the
+// whole plan parse on a malformed sub-field would block the entire
+// call tree, so silently degrade instead. null / empty / unparseable
+// → empty verifySpecRaw, no error.
+func (v *verifySpecRaw) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	if data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err == nil {
+			v.Spec = s
+		}
+		return nil
+	}
+	var obj struct {
+		Kind string `json:"kind"`
+		Spec string `json:"spec"`
+	}
+	if err := json.Unmarshal(data, &obj); err != nil {
+		return nil
+	}
+	v.Kind = obj.Kind
+	v.Spec = obj.Spec
+	return nil
+}
+
 // returnResultPayloadJSON accepts BOTH:
 //   - the legacy envelope: {content, confidence, grounded_pass, ...}
 //   - the v3.5 structured-output envelope: {answer, confidence}

@@ -62,9 +62,12 @@ func (c *captureTracer) byName(name string) []capturedEvent {
 type scriptAdapter struct {
 	mu      sync.Mutex
 	answers []string
-	idx     int
-	calls   atomic.Int64
-	err     error
+	// confidences, if non-nil, supplies a per-attempt confidence
+	// parallel to answers. Length must match answers when set.
+	confidences []float64
+	idx         int
+	calls       atomic.Int64
+	err         error
 }
 
 func (s *scriptAdapter) Name() string { return "script" }
@@ -85,13 +88,17 @@ func (s *scriptAdapter) Execute(_ context.Context, env session.Envelope) (sessio
 		return env, errors.New("script exhausted")
 	}
 	ans := s.answers[s.idx]
+	rr := &session.ReturnResultPayload{
+		Result: session.Payload{Kind: "result", Content: ans},
+	}
+	if s.confidences != nil && s.idx < len(s.confidences) {
+		rr.Confidence = s.confidences[s.idx]
+	}
 	s.idx++
 	env.Execute = &session.Execute{
-		Category: session.CategoryReturnResult,
-		ReturnResult: &session.ReturnResultPayload{
-			Result: session.Payload{Kind: "result", Content: ans},
-		},
-		TokensUsed: 10,
+		Category:     session.CategoryReturnResult,
+		ReturnResult: rr,
+		TokensUsed:   10,
 	}
 	return env, nil
 }
@@ -174,6 +181,36 @@ func TestVote_EmptyExtractions_ExcludedFromTally(t *testing.T) {
 	}
 	if ans.Extracted != "A" {
 		t.Errorf("Extracted = %q, want A", ans.Extracted)
+	}
+}
+
+// TestVote_ConfidenceExcludesEmptyExtraction guards bug #2 from
+// the 2026-05-23 code review: an attempt that produced confident-
+// but-unextractable text was contributing its confidence to the
+// returned Answer.Confidence mean even though it cast no vote.
+// The cope dispatcher downstream then saw a falsely high mean and
+// could ship an answer no attempt actually voted for. Empirical
+// incidence: 35 firings on phi4-mini's 198-case GPQA Diamond run
+// (1 on qwen).
+func TestVote_ConfidenceExcludesEmptyExtraction(t *testing.T) {
+	// Three attempts. Two extract cleanly with conf 0.6 and 0.8;
+	// the third produces confident text that fails extraction.
+	// Expected: mean = (0.6 + 0.8) / 2 = 0.7. Bug behavior would
+	// have been (0.6 + 0.8 + 0.95) / 3 ≈ 0.78.
+	a := &scriptAdapter{
+		answers:     []string{"A", "B", ""},
+		confidences: []float64{0.6, 0.8, 0.95},
+	}
+	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
+	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	const want = 0.7
+	const tol = 1e-9
+	if ans.Confidence < want-tol || ans.Confidence > want+tol {
+		t.Errorf("Confidence = %v, want %v (empty-extraction's 0.95 must NOT contribute to the mean)", ans.Confidence, want)
 	}
 }
 

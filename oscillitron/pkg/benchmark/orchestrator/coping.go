@@ -70,12 +70,24 @@ func (c Coping) Answer(ctx context.Context, kase benchmark.Case) (benchmark.Answ
 		tracer = trace.Discard{}
 	}
 
-	// Fixup the rules: if Frontier wasn't wired, escalation is not
-	// allowed (we'd just refuse anyway). Operators get the
-	// "explicitly opt out by not providing Frontier" behavior.
+	// Fixup the rules: per-field default-fill so an operator who
+	// customizes one threshold doesn't silently lose the others to
+	// zero values. The earlier all-zero AND-condition bypassed
+	// defaults entirely on partial config (e.g., setting only
+	// HighConfidence collapsed LowConfidence to 0, erasing the
+	// caveat band, and left EscalateAllowed at false-zero, silently
+	// disabling escalation). Then AND with Frontier-presence so
+	// "explicitly opt out by not providing Frontier" still holds.
+	defaults := cope.DefaultRuleTable()
 	rules := c.Rules
-	if rules.HighConfidence == 0 && rules.LowConfidence == 0 {
-		rules = cope.DefaultRuleTable()
+	if rules.HighConfidence == 0 {
+		rules.HighConfidence = defaults.HighConfidence
+	}
+	if rules.LowConfidence == 0 {
+		rules.LowConfidence = defaults.LowConfidence
+	}
+	if !rules.EscalateAllowed {
+		rules.EscalateAllowed = defaults.EscalateAllowed
 	}
 	rules.EscalateAllowed = rules.EscalateAllowed && c.Frontier != nil
 

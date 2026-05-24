@@ -188,3 +188,54 @@ func TestCoping_NameImplemented(t *testing.T) {
 		t.Errorf("Name = %q, want cope-vote-5", c.Name())
 	}
 }
+
+// TestCoping_PartialRuleTable_FillsMissingDefaults guards bug #1
+// from the 2026-05-23 code review: an operator who customized only
+// one RuleTable field bypassed default-fill on the others. With
+// only HighConfidence set, LowConfidence collapsed to 0 (caveat
+// band erased) and EscalateAllowed stayed at false-zero (escalation
+// silently disabled). Fix: per-field default-fill.
+func TestCoping_PartialRuleTable_FillsMissingDefaults(t *testing.T) {
+	inner := &stubOrch{name: "inner", answer: benchmark.Answer{
+		Extracted: "B", Confidence: 0.6,
+	}}
+	front := &stubOrch{name: "front", answer: benchmark.Answer{
+		Extracted: "A", Confidence: 0.95, Calls: 1, TokensUsed: 200,
+	}}
+	c := Coping{
+		NameStr:  "cope",
+		Inner:    inner,
+		Frontier: front,
+		Rules: cope.RuleTable{
+			HighConfidence: 0.9, // customized; LowConfidence + EscalateAllowed at zero
+		},
+	}
+
+	// Conf 0.6 sits between the default LowConfidence (0.5) and the
+	// customized HighConfidence (0.9) — should land in the caveat
+	// band. Pre-fix: LowConfidence collapsed to 0, making this Ship.
+	ans, err := c.Answer(context.Background(), benchmark.Case{ID: "p1", Stakes: stakes.Medium})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if ans.CopeAction != string(cope.ShipWithCaveat) {
+		t.Errorf("CopeAction = %q, want ship_with_caveat (conf 0.6 should land in caveat band; pre-fix had LowConfidence=0 collapsing the band)", ans.CopeAction)
+	}
+
+	// Low-conf high-stakes case should escalate. Pre-fix:
+	// EscalateAllowed=false zero-value blocked escalation even with
+	// Frontier wired.
+	inner.answer = benchmark.Answer{Extracted: "B", Confidence: 0.3}
+	inner.calls = 0
+	front.calls = 0
+	ans, err = c.Answer(context.Background(), benchmark.Case{ID: "p2", Stakes: stakes.High})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if ans.CopeAction != string(cope.Escalate) {
+		t.Errorf("CopeAction = %q, want escalate (low conf + high stakes + frontier wired; pre-fix had EscalateAllowed=false-zero blocking)", ans.CopeAction)
+	}
+	if front.calls != 1 {
+		t.Errorf("frontier should have been called once; calls=%d", front.calls)
+	}
+}

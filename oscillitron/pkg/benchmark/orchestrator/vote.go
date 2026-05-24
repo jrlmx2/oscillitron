@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -101,14 +102,13 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	}
 	results := make([]result, effectiveN)
 	var wg sync.WaitGroup
-	for i := 0; i < effectiveN; i++ {
-		i := i
+	for i := range effectiveN {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			// Stamp attempt_idx so the adapter/governor events
 			// downstream of this goroutine carry it too.
-			aCtx := trace.WithCorrelation(ctx, "attempt_idx", fmt.Sprintf("%d", i))
+			aCtx := trace.WithCorrelation(ctx, "attempt_idx", strconv.Itoa(i))
 			start := time.Now()
 			trace.Info(tracer, aCtx, "vote.attempt_start")
 			lease, err := v.Governor.Acquire(aCtx)

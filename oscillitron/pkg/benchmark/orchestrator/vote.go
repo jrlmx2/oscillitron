@@ -180,17 +180,25 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			}
 			continue
 		}
-		if r.confidence > 0 {
-			confidenceSum += r.confidence
-			confidenceCount++
-		}
 		extracted := v.Extractor.Extract(r.raw)
 		rawParts = append(rawParts, r.raw)
 		totalTokens += r.tokens
 		successes++
 		if extracted == "" {
-			// Failed extraction — don't count as a vote.
+			// Failed extraction — don't count as a vote, and don't
+			// fold its confidence into the aggregate either. An
+			// attempt that produced confident-but-unextractable text
+			// (e.g., "I'm sure the answer is in the middle somewhere
+			// (confidence: 0.9)") would otherwise inflate the mean
+			// and mislead the downstream cope dispatcher. Bug
+			// empirically: 35 firings on phi4-mini's 198-case Diamond
+			// run vs 1 on qwen2.5:7b — disproportionately impacts
+			// weaker substrates.
 			continue
+		}
+		if r.confidence > 0 {
+			confidenceSum += r.confidence
+			confidenceCount++
 		}
 		votes[extracted]++
 	}

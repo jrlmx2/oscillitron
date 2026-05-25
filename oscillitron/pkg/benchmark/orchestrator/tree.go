@@ -254,7 +254,14 @@ func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (sessio
 		}
 		return env, nil
 	}
-	return a.inner.Evaluate(ctx, env)
+	out, err := a.inner.Evaluate(ctx, env)
+	if err != nil {
+		return out, err
+	}
+	if out.Evaluate != nil && out.Evaluate.Playbook != session.PlaybookProcess {
+		out.Evaluate.Playbook = session.PlaybookProcess
+	}
+	return out, nil
 }
 
 func (a treeAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {

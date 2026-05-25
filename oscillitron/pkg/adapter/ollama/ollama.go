@@ -146,6 +146,12 @@ type Config struct {
 	// would happen via soul.md, which we deliberately exited.
 	ResponseFormat map[string]any
 
+	// ExecuteResponseFormats provides per-playbook response_format
+	// schemas for Execute calls. When set, Execute looks up the
+	// playbook's schema here first; if missing, falls back to
+	// ResponseFormat. Evaluate always passes nil (prompt-only).
+	ExecuteResponseFormats map[session.Playbook]map[string]any
+
 	// Thinking decides whether reasoning/thinking-mode should be
 	// enabled for each Execute call. nil = substrate default
 	// (which on Qwen3.x, DeepSeek-R1, Magistral etc. means
@@ -271,7 +277,7 @@ func (a *Adapter) Evaluate(ctx context.Context, env session.Envelope) (session.E
 		instructions = renderEvaluateInstructions(env)
 	}
 	instructions = a.withPoolPreamble(ctx, instructions)
-	raw, _, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate")
+	raw, _, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate", nil)
 	if err != nil {
 		return env, err
 	}
@@ -330,7 +336,7 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 		instructions = renderExecuteInstructions(pb, env)
 	}
 	instructions = a.withPoolPreamble(ctx, instructions)
-	raw, reasoning, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute")
+	raw, reasoning, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute", a.executeResponseFormat(pb))
 	if err != nil {
 		return env, err
 	}
@@ -359,6 +365,16 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	env.Execute = execute
 	env.ExitReason = session.ExitDone
 	return env, nil
+}
+
+// executeResponseFormat returns the per-playbook response_format
+// schema when one is configured, falling back to the adapter-wide
+// ResponseFormat. Evaluate bypasses this entirely (passes nil).
+func (a *Adapter) executeResponseFormat(pb session.Playbook) map[string]any {
+	if rf, ok := a.cfg.ExecuteResponseFormats[pb]; ok {
+		return rf
+	}
+	return a.cfg.ResponseFormat
 }
 
 // applyEffectiveConfidence recovers + adjusts confidence when the
@@ -454,7 +470,7 @@ type chatResponse struct {
 // text, the model's hidden reasoning trace (empty when none), token
 // usage, and the OpenAI-style finish_reason. The finish_reason is
 // written to the trace so categorize can read it.
-func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string) (string, string, tokenUsage, string, error) {
+func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string, responseFormat map[string]any) (string, string, tokenUsage, string, error) {
 	// v3.1: pre-call notice inspection. When the operator wired an
 	// Inspector, run the prompt-side detectors and emit a trace
 	// event if any fired. The call itself is unchanged — notice is
@@ -470,7 +486,7 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 		},
 		Stream:         false,
 		Options:        ep.Options,
-		ResponseFormat: a.cfg.ResponseFormat,
+		ResponseFormat: responseFormat,
 	}
 	// Thinking-mode: ask the policy. nil-safe — when the operator
 	// hasn't wired a policy, leave the field unset and the substrate

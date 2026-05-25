@@ -45,6 +45,8 @@
 // `references/model-capability-floor.md`.
 package minimal
 
+import "github.com/jrlmx2/oscillitron/pkg/session"
+
 // ProcessInstructions is the task-agnostic instruction template for
 // the `process` playbook. Pairs with ProcessSchema (passed via
 // `response_format` on the chat-completions request) so the engine
@@ -94,6 +96,83 @@ func ProcessSchema() map[string]any {
 	}
 }
 
+// PlanSchema returns the JSON Schema constraining the model's
+// response for the `plan` playbook to {sub_aps, recompose}. The plan
+// playbook's output category is emit_subtree — it decomposes a task
+// into sub-APs and specifies how their results recompose.
+//
+// sub_aps items carry the fields an AP child needs: input (required),
+// plus optional input_kind, output_schema, classification, and
+// needs_verification. recompose is enum-constrained to the three
+// modes the runner supports (pairwise, sequential, none).
+func PlanSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"sub_aps": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"input_kind":         map[string]any{"type": "string"},
+						"input":              map[string]any{"type": "string"},
+						"output_schema":      map[string]any{"type": "string"},
+						"classification":     map[string]any{"type": "string"},
+						"needs_verification": map[string]any{"type": "boolean"},
+					},
+					"required":             []string{"input"},
+					"additionalProperties": false,
+				},
+			},
+			"recompose": map[string]any{
+				"type": "string",
+				"enum": []string{"pairwise", "sequential", "none"},
+			},
+		},
+		"required":             []string{"sub_aps", "recompose"},
+		"additionalProperties": false,
+	}
+}
+
+// CritiqueSchema returns the JSON Schema constraining the model's
+// response for the `critique` and `verify_grounded` playbooks to
+// {verdict, issues}. Both playbooks produce verifier_signal output —
+// a pass/fail/issues verdict with structured issue details.
+//
+// Each issue carries severity (info/warning/error), where (location
+// in the target), and what (description of the problem). All three
+// fields are required per issue so downstream consumers can triage
+// without guessing.
+func CritiqueSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"verdict": map[string]any{
+				"type": "string",
+				"enum": []string{"pass", "fail", "issues"},
+			},
+			"issues": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"severity": map[string]any{
+							"type": "string",
+							"enum": []string{"info", "warning", "error"},
+						},
+						"where": map[string]any{"type": "string"},
+						"what":  map[string]any{"type": "string"},
+					},
+					"required":             []string{"severity", "where", "what"},
+					"additionalProperties": false,
+				},
+			},
+		},
+		"required":             []string{"verdict", "issues"},
+		"additionalProperties": false,
+	}
+}
+
 // AsResponseFormat wraps a JSON schema in the OpenAI-standard
 // `response_format` envelope:
 //
@@ -111,5 +190,25 @@ func AsResponseFormat(name string, schema map[string]any) map[string]any {
 			"schema": schema,
 			"strict": true,
 		},
+	}
+}
+
+// AllPlaybookFormats returns a map from every v0 playbook to its
+// pre-wrapped AsResponseFormat envelope, ready to pass directly as
+// the `response_format` field on a chat-completions request.
+//
+// Mapping:
+//   - plan           → PlanSchema        (emit_subtree output)
+//   - process        → ProcessSchema     (return_result output)
+//   - critique       → CritiqueSchema    (verifier_signal output)
+//   - verify_grounded → CritiqueSchema   (same verifier_signal shape)
+//   - compose        → ProcessSchema     (return_result, same shape as process)
+func AllPlaybookFormats() map[session.Playbook]map[string]any {
+	return map[session.Playbook]map[string]any{
+		session.PlaybookPlan:           AsResponseFormat("plan_response", PlanSchema()),
+		session.PlaybookProcess:        AsResponseFormat("process_response", ProcessSchema()),
+		session.PlaybookCritique:       AsResponseFormat("critique_response", CritiqueSchema()),
+		session.PlaybookVerifyGrounded: AsResponseFormat("verify_grounded_response", CritiqueSchema()),
+		session.PlaybookCompose:        AsResponseFormat("compose_response", ProcessSchema()),
 	}
 }

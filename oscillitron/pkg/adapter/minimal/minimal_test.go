@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
 func TestProcessInstructions_TaskAgnostic(t *testing.T) {
@@ -143,5 +145,146 @@ func TestProcessSchema_MarshalsCleanJSON(t *testing.T) {
 	}
 	if _, ok := roundtrip["json_schema"]; !ok {
 		t.Errorf("roundtrip lost json_schema field")
+	}
+}
+
+// --- PlanSchema tests ---
+
+func TestPlanSchema_Shape(t *testing.T) {
+	s := PlanSchema()
+	if got, _ := s["type"].(string); got != "object" {
+		t.Errorf("schema type = %q, want object", got)
+	}
+	props, _ := s["properties"].(map[string]any)
+	if _, ok := props["sub_aps"]; !ok {
+		t.Errorf("schema missing properties.sub_aps")
+	}
+	if _, ok := props["recompose"]; !ok {
+		t.Errorf("schema missing properties.recompose")
+	}
+	required, _ := s["required"].([]string)
+	if len(required) != 2 {
+		t.Errorf("schema required has %d fields, want 2 (sub_aps, recompose)", len(required))
+	}
+	if addl, _ := s["additionalProperties"].(bool); addl {
+		t.Errorf("additionalProperties should be false (closed schema)")
+	}
+}
+
+func TestPlanSchema_RecomposeEnum(t *testing.T) {
+	s := PlanSchema()
+	props, _ := s["properties"].(map[string]any)
+	recompose, _ := props["recompose"].(map[string]any)
+	enum, ok := recompose["enum"].([]string)
+	if !ok {
+		t.Fatalf("recompose.enum is not []string; got %T", recompose["enum"])
+	}
+	want := []string{"pairwise", "sequential", "none"}
+	if len(enum) != len(want) {
+		t.Fatalf("recompose.enum has %d values, want %d", len(enum), len(want))
+	}
+	for i, v := range want {
+		if enum[i] != v {
+			t.Errorf("recompose.enum[%d] = %q, want %q", i, enum[i], v)
+		}
+	}
+}
+
+func TestPlanSchema_MarshalsCleanJSON(t *testing.T) {
+	rf := AsResponseFormat("plan_response", PlanSchema())
+	body, err := json.Marshal(rf)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var roundtrip map[string]any
+	if err := json.Unmarshal(body, &roundtrip); err != nil {
+		t.Fatalf("unmarshal roundtrip: %v", err)
+	}
+	if _, ok := roundtrip["json_schema"]; !ok {
+		t.Errorf("roundtrip lost json_schema field")
+	}
+}
+
+// --- CritiqueSchema tests ---
+
+func TestCritiqueSchema_Shape(t *testing.T) {
+	s := CritiqueSchema()
+	if got, _ := s["type"].(string); got != "object" {
+		t.Errorf("schema type = %q, want object", got)
+	}
+	props, _ := s["properties"].(map[string]any)
+	if _, ok := props["verdict"]; !ok {
+		t.Errorf("schema missing properties.verdict")
+	}
+	if _, ok := props["issues"]; !ok {
+		t.Errorf("schema missing properties.issues")
+	}
+	required, _ := s["required"].([]string)
+	if len(required) != 2 {
+		t.Errorf("schema required has %d fields, want 2 (verdict, issues)", len(required))
+	}
+	if addl, _ := s["additionalProperties"].(bool); addl {
+		t.Errorf("additionalProperties should be false (closed schema)")
+	}
+}
+
+func TestCritiqueSchema_VerdictEnum(t *testing.T) {
+	s := CritiqueSchema()
+	props, _ := s["properties"].(map[string]any)
+	verdict, _ := props["verdict"].(map[string]any)
+	enum, ok := verdict["enum"].([]string)
+	if !ok {
+		t.Fatalf("verdict.enum is not []string; got %T", verdict["enum"])
+	}
+	want := []string{"pass", "fail", "issues"}
+	if len(enum) != len(want) {
+		t.Fatalf("verdict.enum has %d values, want %d", len(enum), len(want))
+	}
+	for i, v := range want {
+		if enum[i] != v {
+			t.Errorf("verdict.enum[%d] = %q, want %q", i, enum[i], v)
+		}
+	}
+}
+
+func TestCritiqueSchema_MarshalsCleanJSON(t *testing.T) {
+	rf := AsResponseFormat("critique_response", CritiqueSchema())
+	body, err := json.Marshal(rf)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var roundtrip map[string]any
+	if err := json.Unmarshal(body, &roundtrip); err != nil {
+		t.Fatalf("unmarshal roundtrip: %v", err)
+	}
+	if _, ok := roundtrip["json_schema"]; !ok {
+		t.Errorf("roundtrip lost json_schema field")
+	}
+}
+
+// --- AllPlaybookFormats tests ---
+
+func TestAllPlaybookFormats_CoversAllPlaybooks(t *testing.T) {
+	m := AllPlaybookFormats()
+	expected := []session.Playbook{
+		session.PlaybookPlan,
+		session.PlaybookProcess,
+		session.PlaybookCritique,
+		session.PlaybookVerifyGrounded,
+		session.PlaybookCompose,
+	}
+	for _, pb := range expected {
+		rf, ok := m[pb]
+		if !ok {
+			t.Errorf("AllPlaybookFormats missing entry for %q", pb)
+			continue
+		}
+		// Each entry should be a valid AsResponseFormat wrapper.
+		if got, _ := rf["type"].(string); got != "json_schema" {
+			t.Errorf("AllPlaybookFormats[%q].type = %q, want json_schema", pb, got)
+		}
+	}
+	if len(m) != len(expected) {
+		t.Errorf("AllPlaybookFormats has %d entries, want %d", len(m), len(expected))
 	}
 }

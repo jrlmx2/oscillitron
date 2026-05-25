@@ -596,13 +596,17 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 		substrate = resolveSubstrate(role, model)
 	}
 	// When --structured-output is set (the default), the OpenAI-compat
-	// adapters constrain the model to the {response, confidence} JSON
-	// shape via the chat-completions `response_format` schema.
+	// adapters constrain model output via chat-completions `response_format`.
+	// schemaRF is the backward-compat fallback (process shape only);
+	// perPlaybookRF gives each playbook its own schema so Plan gets
+	// {sub_aps, recompose} and critique gets {verdict, issues}.
 	// Hermes uses /v1/runs and ignores this; Anthropic uses its own
 	// surface. Both pass through silently.
 	var schemaRF map[string]any
+	var perPlaybookRF map[session.Playbook]map[string]any
 	if structuredOutput {
 		schemaRF = minimal.AsResponseFormat("process_response", minimal.ProcessSchema())
+		perPlaybookRF = minimal.AllPlaybookFormats()
 	}
 	switch substrate {
 	case "hermes":
@@ -630,6 +634,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
 		cfg.ResponseFormat = schemaRF
+		cfg.ExecuteResponseFormats = perPlaybookRF
 		// v3.1: thread the notice Inspector if enabled. Only the
 		// ollama adapter consumes Inspector today; other substrates
 		// will gain parallel wiring in follow-up phases.
@@ -652,6 +657,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
 		cfg.ResponseFormat = schemaRF
+		cfg.ExecuteResponseFormats = perPlaybookRF
 		cfg.Thinking = thinkingPolicy
 		a, err := lmstudio.New(cfg)
 		if err != nil {
@@ -670,6 +676,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 			cfg.RawExecuteInstructions = minimalProcessOverride()
 		}
 		cfg.ResponseFormat = schemaRF
+		cfg.ExecuteResponseFormats = perPlaybookRF
 		cfg.Thinking = thinkingPolicy
 		a, err := vllm.New(cfg)
 		if err != nil {

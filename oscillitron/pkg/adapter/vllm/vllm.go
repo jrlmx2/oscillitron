@@ -141,6 +141,12 @@ type Config struct {
 	// nil = no constraint.
 	ResponseFormat map[string]any
 
+	// ExecuteResponseFormats provides per-playbook response_format
+	// schemas for Execute calls. When set, Execute looks up the
+	// playbook's schema here first; if missing, falls back to
+	// ResponseFormat. Evaluate always passes nil (prompt-only).
+	ExecuteResponseFormats map[session.Playbook]map[string]any
+
 	// Thinking decides whether reasoning/thinking-mode should be
 	// enabled per Execute call. See pkg/adapter/ollama.Config.Thinking
 	// for the full rationale; vLLM honors the same `"think"` field
@@ -261,7 +267,7 @@ func (a *Adapter) Evaluate(ctx context.Context, env session.Envelope) (session.E
 		instructions = renderEvaluateInstructions(env)
 	}
 	instructions = a.withPoolPreamble(ctx, instructions)
-	raw, _, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate")
+	raw, _, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate", nil)
 	if err != nil {
 		return env, err
 	}
@@ -320,7 +326,7 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 		instructions = renderExecuteInstructions(pb, env)
 	}
 	instructions = a.withPoolPreamble(ctx, instructions)
-	raw, reasoning, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute")
+	raw, reasoning, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute", a.executeResponseFormat(pb))
 	if err != nil {
 		return env, err
 	}
@@ -337,6 +343,13 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	env.Execute = execute
 	env.ExitReason = session.ExitDone
 	return env, nil
+}
+
+func (a *Adapter) executeResponseFormat(pb session.Playbook) map[string]any {
+	if rf, ok := a.cfg.ExecuteResponseFormats[pb]; ok {
+		return rf
+	}
+	return a.cfg.ResponseFormat
 }
 
 // boundContext applies the configured RunTimeout if the caller's
@@ -396,7 +409,7 @@ type chatResponse struct {
 // OpenAI-style finish_reason (stop|length|content_filter|tool_calls).
 // The finish_reason is also written to the trace so categorize can
 // read it.
-func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string) (string, string, tokenUsage, string, error) {
+func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope, instructions, phase string, responseFormat map[string]any) (string, string, tokenUsage, string, error) {
 	body := chatRequest{
 		Model: ep.Model,
 		Messages: []chatMessage{
@@ -405,7 +418,7 @@ func (a *Adapter) oneCall(ctx context.Context, ep Endpoint, env session.Envelope
 		},
 		Stream:         false,
 		Options:        ep.Options,
-		ResponseFormat: a.cfg.ResponseFormat,
+		ResponseFormat: responseFormat,
 	}
 	if a.cfg.Thinking != nil {
 		think := a.cfg.Thinking.ShouldThink(env)

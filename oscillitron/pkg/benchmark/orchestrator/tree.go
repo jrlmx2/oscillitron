@@ -92,22 +92,28 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		maxDepth = 10
 	}
 
+	goal, err := t.deriveGoal(ctx, c)
+	if err != nil {
+		goal = ""
+	}
+
+	outputSchema := goal
+	if outputSchema == "" {
+		outputSchema = "{answer}"
+	}
+
 	root := session.NewRoot(
 		session.ID(fmt.Sprintf("bench-tree-%s", c.ID)),
 		c.Prompt,
-		"{answer}",
+		outputSchema,
 		classification.Internal,
 		session.Budget{TokensRemaining: 64_000, DepthRemaining: maxDepth},
 	)
 	root.Stakes = c.Stakes
-	// PlaybookPlan is forced on the root via the forcePlanOnRoot
-	// wrapper below — pre-stamping env.Evaluate doesn't work because
-	// the runner always calls adapter.Evaluate, which routinely
-	// overrides any pre-stamp.
 
 	cfg := runner.Config{
 		Adapter:    forcePlanOnRoot{inner: t.Adapter},
-		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer},
+		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer, Goal: goal},
 		Tracer:     t.Tracer,
 		Governor:   t.Governor,
 		MaxDepth:   maxDepth,
@@ -133,6 +139,38 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		Confidence: res.ResolvedPayload.Confidence,
 	}, nil
 }
+
+// deriveGoal makes a cheap Process call to extract a freeform goal
+// statement from the input. The goal tells the tree and the
+// recomposer what the final output should look like — e.g., "state
+// a single letter A/B/C/D" for MCQ, "a boxed expression" for math.
+// Errors are non-fatal: caller falls back to a generic schema.
+func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) {
+	env := session.NewRoot(
+		session.ID(fmt.Sprintf("bench-tree-%s-goal", c.ID)),
+		goalExtractionPrompt+"\n\n"+c.Prompt,
+		"",
+		classification.Internal,
+		session.Budget{TokensRemaining: 2_000, DepthRemaining: 1},
+	)
+	env.Evaluate = &session.Evaluate{
+		Playbook:   session.PlaybookProcess,
+		Confidence: 1.0,
+	}
+	out, err := t.Adapter.Execute(ctx, env)
+	if err != nil {
+		return "", err
+	}
+	if out.Execute == nil || out.Execute.ReturnResult == nil {
+		return "", fmt.Errorf("goal extraction returned no result")
+	}
+	return out.Execute.ReturnResult.Result.Content, nil
+}
+
+const goalExtractionPrompt = `Read the task below and state in ONE sentence what the final output must look like. ` +
+	`Focus on the output format and content type (e.g., "a single letter A, B, C, or D", ` +
+	`"a numerical value in eV", "a short paragraph explaining the mechanism"). ` +
+	`Do not solve the task — only describe what a correct answer looks like.`
 
 // Compile-time check.
 var _ benchmark.Orchestrator = Tree{}

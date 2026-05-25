@@ -109,10 +109,9 @@ func renderAdapterSynthInput(preamble string, req SynthesizeRequest) string {
 	b.WriteString("\n\nRight:\n")
 	b.WriteString(req.Right.Result.Content)
 	b.WriteString("\n\nIntegrate Left and Right into a single best answer to the underlying task.")
-	// Format hint deliberately omitted here — the substrate adapter's
-	// ProcessInstructions already supplies the <response>/<confidence>
-	// tag format. Repeating it from inside the synthesis prompt
-	// produced conflicting signals to the model.
+	if req.Goal != "" {
+		fmt.Fprintf(&b, "\n\nYour output MUST satisfy this goal: %s", req.Goal)
+	}
 	return b.String()
 }
 

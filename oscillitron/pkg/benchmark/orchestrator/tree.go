@@ -261,7 +261,16 @@ func (a treeAdapter) Execute(ctx context.Context, env session.Envelope) (session
 	if a.originalTask != "" && env.ParentID != nil {
 		env.Input.Content = childPrompt(a.originalTask, env.Input.Content)
 	}
-	return a.inner.Execute(ctx, env)
+	out, err := a.inner.Execute(ctx, env)
+	if err != nil {
+		return out, err
+	}
+	if out.Execute != nil && out.Execute.EmitSubtree != nil &&
+		out.Execute.EmitSubtree.Recompose == session.RecomposeNone &&
+		len(out.Execute.EmitSubtree.SubAPs) > 0 {
+		out.Execute.EmitSubtree.Recompose = session.RecomposeSequential
+	}
+	return out, nil
 }
 
 const childPreamble = `You are working on a sub-part of a larger question. ` +

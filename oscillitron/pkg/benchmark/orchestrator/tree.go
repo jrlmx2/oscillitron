@@ -29,6 +29,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
@@ -119,7 +120,7 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	root.Stakes = c.Stakes
 
 	cfg := runner.Config{
-		Adapter:    forcePlanOnRoot{inner: t.Adapter},
+		Adapter:    treeAdapter{inner: t.Adapter, goal: goal},
 		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer, Goal: goal},
 		Tracer:     t.Tracer,
 		Governor:   t.Governor,
@@ -161,15 +162,42 @@ func (t Tree) emitTreeTrace(ctx context.Context, c benchmark.Case, goal string, 
 	}
 }
 
-// deriveGoal makes a cheap Process call to extract a freeform goal
-// statement from the input. The goal tells the tree and the
-// recomposer what the final output should look like — e.g., "state
-// a single letter A/B/C/D" for MCQ, "a boxed expression" for math.
-// Errors are non-fatal: caller falls back to a generic schema.
+// deriveGoal extracts a freeform goal statement from the input.
+// Mechanical patterns are tried first (cheap, reliable). LLM
+// fallback only when no pattern matches.
 func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) {
+	if g := extractGoalMechanical(c.Prompt); g != "" {
+		return g, nil
+	}
+	return t.deriveGoalLLM(ctx, c)
+}
+
+// extractGoalMechanical scans for common answer-instruction patterns.
+// Returns empty string when no pattern matches.
+func extractGoalMechanical(prompt string) string {
+	lower := strings.ToLower(prompt)
+	patterns := []struct {
+		contains string
+		goal     string
+	}{
+		{"answer with a single letter", "Your final answer must be exactly one letter: A, B, C, or D. Nothing else."},
+		{"answer with the letter", "Your final answer must be exactly one letter: A, B, C, or D. Nothing else."},
+		{"choose one of the following", "Your final answer must be exactly one letter: A, B, C, or D. Nothing else."},
+		{"\\boxed{", "Your final answer must be a mathematical expression inside \\boxed{}."},
+		{"what is the value", "Your final answer must be a single numerical value."},
+	}
+	for _, p := range patterns {
+		if strings.Contains(lower, p.contains) {
+			return p.goal
+		}
+	}
+	return ""
+}
+
+func (t Tree) deriveGoalLLM(ctx context.Context, c benchmark.Case) (string, error) {
 	env := session.NewRoot(
 		session.ID(fmt.Sprintf("bench-tree-%s-goal", c.ID)),
-		goalExtractionPrompt+"\n\n"+c.Prompt,
+		goalExtractionPrompt+"\n\n---\n\n"+c.Prompt,
 		"",
 		classification.Internal,
 		session.Budget{TokensRemaining: 2_000, DepthRemaining: 1},
@@ -188,31 +216,37 @@ func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) 
 	return out.Execute.ReturnResult.Result.Content, nil
 }
 
-const goalExtractionPrompt = `Read the task below and state in ONE sentence what the final output must look like. ` +
-	`Focus on the output format and content type (e.g., "a single letter A, B, C, or D", ` +
-	`"a numerical value in eV", "a short paragraph explaining the mechanism"). ` +
-	`Do not solve the task — only describe what a correct answer looks like.`
+const goalExtractionPrompt = `You are a FORMAT DETECTOR. You do NOT solve tasks.
+
+Given the task below, state in ONE sentence what FORMAT the final answer must be in.
+
+GOOD examples of format descriptions:
+- "The answer must be exactly one letter: A, B, C, or D."
+- "The answer must be a number in electron-volts."
+- "The answer must be a short paragraph."
+
+BAD examples (these solve the task — NEVER do this):
+- "A" (this is solving the MCQ)
+- "10^-4 eV" (this is computing the answer)
+- "The reaction produces 11 carbon atoms" (this is answering the question)
+
+Describe ONLY the format. Do NOT reason about the content.`
 
 // Compile-time check.
 var _ benchmark.Orchestrator = Tree{}
 
-// forcePlanOnRoot wraps an adapter so the root AP's Evaluate step
-// produces PlaybookPlan unconditionally. Pre-stamping env.Evaluate
-// on the root before runner.Run doesn't work — the runner always
-// calls adapter.Evaluate, and adapters routinely overwrite the
-// pre-stamp with their own playbook pick.
-//
-// This wrapper intercepts only the root's Evaluate (ParentID == nil)
-// and pins it to Plan. Child APs delegate to the inner adapter so
-// the inner Evaluator decides plan vs. process vs. compose etc.
-// naturally as the tree descends.
-type forcePlanOnRoot struct {
+// treeAdapter wraps an adapter with tree-specific behavior:
+//   - Forces PlaybookPlan on the root's Evaluate step.
+//   - Prepends the goal directive to every non-root AP's input
+//     so children can't miss what the final output must look like.
+type treeAdapter struct {
 	inner adapter.Adapter
+	goal  string
 }
 
-func (f forcePlanOnRoot) Name() string { return f.inner.Name() }
+func (a treeAdapter) Name() string { return a.inner.Name() }
 
-func (f forcePlanOnRoot) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
+func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	if env.ParentID == nil {
 		env.Evaluate = &session.Evaluate{
 			Playbook:   session.PlaybookPlan,
@@ -220,11 +254,14 @@ func (f forcePlanOnRoot) Evaluate(ctx context.Context, env session.Envelope) (se
 		}
 		return env, nil
 	}
-	return f.inner.Evaluate(ctx, env)
+	return a.inner.Evaluate(ctx, env)
 }
 
-func (f forcePlanOnRoot) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {
-	return f.inner.Execute(ctx, env)
+func (a treeAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {
+	if a.goal != "" && env.ParentID != nil {
+		env.Input.Content = "[GOAL: " + a.goal + "]\n\n" + env.Input.Content
+	}
+	return a.inner.Execute(ctx, env)
 }
 
-var _ adapter.Adapter = forcePlanOnRoot{}
+var _ adapter.Adapter = treeAdapter{}

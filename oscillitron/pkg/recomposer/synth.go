@@ -46,6 +46,12 @@ type SynthesizeRequest struct {
 	// is. For an N-child sequential fold, StepIndex runs 0..N-2; for
 	// pairwise it counts every individual pair across all rounds.
 	StepIndex int
+	// Goal is a freeform natural-language statement of what the
+	// tree's final output should look like. Derived from the input
+	// by the Tree orchestrator before planning. Synthesizers use
+	// this as the last directive so the recomposed output matches
+	// what the original prompt asked for.
+	Goal string
 }
 
 // SynthesizeResponse is the synthesizer's output. The recomposer
@@ -89,6 +95,10 @@ type Synthesizer interface {
 type Synth struct {
 	// Synthesizer performs each binary merge. Required.
 	Synthesizer Synthesizer
+	// Goal is threaded into every SynthesizeRequest so the
+	// synthesizer knows what the final output should look like.
+	// Set per-case by the Tree orchestrator.
+	Goal string
 }
 
 // ErrSynthesizerRequired is returned by Recompose when Synth has no
@@ -145,6 +155,7 @@ func (s Synth) fold(ctx context.Context, spec session.RecomposeSpec, children []
 			Right:         right,
 			RecomposeSpec: spec,
 			StepIndex:     step,
+			Goal:          s.Goal,
 		}
 		step++
 		resp, err := s.Synthesizer.Synthesize(ctx, req)

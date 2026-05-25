@@ -121,6 +121,9 @@ func renderSynthesizerUserMessage(req SynthesizeRequest) string {
 	b.WriteString("\n\nRight:\n")
 	b.WriteString(req.Right.Result.Content)
 	b.WriteString("\n\nIntegrate Left and Right. Reply with the JSON object only.")
+	if req.Goal != "" {
+		fmt.Fprintf(&b, "\n\nYour output MUST satisfy this goal: %s", req.Goal)
+	}
 	return b.String()
 }
 

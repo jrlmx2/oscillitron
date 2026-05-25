@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
@@ -46,6 +47,12 @@ type SynthesizeRequest struct {
 	// is. For an N-child sequential fold, StepIndex runs 0..N-2; for
 	// pairwise it counts every individual pair across all rounds.
 	StepIndex int
+	// Goal is a freeform natural-language statement of what the
+	// tree's final output should look like. Derived from the input
+	// by the Tree orchestrator before planning. Synthesizers use
+	// this as the last directive so the recomposed output matches
+	// what the original prompt asked for.
+	Goal string
 }
 
 // SynthesizeResponse is the synthesizer's output. The recomposer
@@ -89,6 +96,10 @@ type Synthesizer interface {
 type Synth struct {
 	// Synthesizer performs each binary merge. Required.
 	Synthesizer Synthesizer
+	// Goal is threaded into every SynthesizeRequest so the
+	// synthesizer knows what the final output should look like.
+	// Set per-case by the Tree orchestrator.
+	Goal string
 }
 
 // ErrSynthesizerRequired is returned by Recompose when Synth has no
@@ -124,10 +135,39 @@ func (s Synth) Recompose(ctx context.Context, spec session.RecomposeSpec, childr
 		if len(children) == 1 {
 			return children[0], nil
 		}
+		if s.allShort(children) {
+			return s.selectByConfidence(children), nil
+		}
 		return s.fold(ctx, spec, children)
 	default:
 		return session.ReturnResultPayload{}, fmt.Errorf("%w: %q", ErrUnknownSpec, spec)
 	}
+}
+
+// SelectionThreshold is the max content length (chars) for a child
+// to be considered a "short answer." When ALL children are short,
+// Synth switches from synthesis (merge content) to selection (pick
+// highest confidence). This avoids the nonsensical LLM fold when
+// children produce competing final answers like "A" vs "C".
+const SelectionThreshold = 50
+
+func (s Synth) allShort(children []session.ReturnResultPayload) bool {
+	for _, c := range children {
+		if len(strings.TrimSpace(c.Result.Content)) > SelectionThreshold {
+			return false
+		}
+	}
+	return true
+}
+
+func (s Synth) selectByConfidence(children []session.ReturnResultPayload) session.ReturnResultPayload {
+	best := 0
+	for i := 1; i < len(children); i++ {
+		if children[i].Confidence > children[best].Confidence {
+			best = i
+		}
+	}
+	return children[best]
 }
 
 // fold drives the synthesizer through the requested fold shape. We
@@ -145,6 +185,7 @@ func (s Synth) fold(ctx context.Context, spec session.RecomposeSpec, children []
 			Right:         right,
 			RecomposeSpec: spec,
 			StepIndex:     step,
+			Goal:          s.Goal,
 		}
 		step++
 		resp, err := s.Synthesizer.Synthesize(ctx, req)

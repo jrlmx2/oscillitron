@@ -115,12 +115,17 @@ func (s *AnthropicSynthesizer) Synthesize(ctx context.Context, req SynthesizeReq
 // Step index + recompose spec ride in case the model wants context.
 func renderSynthesizerUserMessage(req SynthesizeRequest) string {
 	var b strings.Builder
+	if req.OriginalTask != "" {
+		b.WriteString("[ORIGINAL QUESTION]\n")
+		b.WriteString(req.OriginalTask)
+		b.WriteString("\n\n")
+	}
 	fmt.Fprintf(&b, "Reduction step %d (spec=%s).\n\n", req.StepIndex, req.RecomposeSpec)
-	b.WriteString("Left:\n")
+	b.WriteString("Left reasoning:\n")
 	b.WriteString(req.Left.Result.Content)
-	b.WriteString("\n\nRight:\n")
+	b.WriteString("\n\nRight reasoning:\n")
 	b.WriteString(req.Right.Result.Content)
-	b.WriteString("\n\nIntegrate Left and Right. Reply with the JSON object only.")
+	b.WriteString("\n\nIntegrate the reasoning above into a single best answer to the original question. Reply with the JSON object only.")
 	if req.Goal != "" {
 		fmt.Fprintf(&b, "\n\nYour output MUST satisfy this goal: %s", req.Goal)
 	}

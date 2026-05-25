@@ -120,8 +120,8 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	root.Stakes = c.Stakes
 
 	cfg := runner.Config{
-		Adapter:    treeAdapter{inner: t.Adapter, goal: goal},
-		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer, Goal: goal},
+		Adapter:    treeAdapter{inner: t.Adapter, originalTask: c.Prompt},
+		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer, Goal: goal, OriginalTask: c.Prompt},
 		Tracer:     t.Tracer,
 		Governor:   t.Governor,
 		MaxDepth:   maxDepth,
@@ -237,11 +237,11 @@ var _ benchmark.Orchestrator = Tree{}
 
 // treeAdapter wraps an adapter with tree-specific behavior:
 //   - Forces PlaybookPlan on the root's Evaluate step.
-//   - Prepends the goal directive to every non-root AP's input
-//     so children can't miss what the final output must look like.
+//   - Gives every child AP lineage back to the original question
+//     so children reason in context rather than guessing in isolation.
 type treeAdapter struct {
-	inner adapter.Adapter
-	goal  string
+	inner        adapter.Adapter
+	originalTask string // the full original prompt
 }
 
 func (a treeAdapter) Name() string { return a.inner.Name() }
@@ -258,10 +258,23 @@ func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (sessio
 }
 
 func (a treeAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {
-	if a.goal != "" && env.ParentID != nil {
-		env.Input.Content = "[GOAL: " + a.goal + "]\n\n" + env.Input.Content
+	if a.originalTask != "" && env.ParentID != nil {
+		env.Input.Content = childPrompt(a.originalTask, env.Input.Content)
 	}
 	return a.inner.Execute(ctx, env)
+}
+
+const childPreamble = `You are working on a sub-part of a larger question. ` +
+	`Your job is to reason about your specific sub-task and explain your findings. ` +
+	`State what you concluded and WHY — show your work. ` +
+	`If your findings suggest an answer to the original question, say which and why.
+
+`
+
+func childPrompt(originalTask, subtask string) string {
+	return childPreamble +
+		"[ORIGINAL QUESTION]\n" + originalTask + "\n\n" +
+		"[YOUR SUB-TASK]\n" + subtask
 }
 
 var _ adapter.Adapter = treeAdapter{}

@@ -129,6 +129,7 @@ func run() error {
 		copeLow          = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
 		treeEnable       = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
 		treeMaxDepth     = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
+		treeTraceDir     = flag.String("tree-trace-dir", "", "v3.5+: write per-case tree trace files (<case-id>.tree.txt) to this directory. Shows the full prompt→response path through the tree for debugging.")
 		structuredOutput = flag.Bool("structured-output", true, "v3.5+: constrain the OpenAI-compat substrate (ollama/vllm/lmstudio) to the {response, confidence} JSON shape via response_format schema enforcement. On by default — required for any substrate at or above the capability floor (see references/model-capability-floor.md). Disable only to A/B-test the prompt-only path; expect substrate-dependent results.")
 		thinkingMode     = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
 
@@ -448,6 +449,7 @@ func run() error {
 			Governor:    governor,
 			Tracer:      tracer,
 			MaxDepth:    *treeMaxDepth,
+			TraceDir:    *treeTraceDir,
 		}
 		orchestrators = append(orchestrators, treeOrch)
 	}

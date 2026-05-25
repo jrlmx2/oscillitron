@@ -67,9 +67,10 @@ func TestTree_PlanDecomposeRecompose(t *testing.T) {
 			Input: session.Payload{Kind: "task", Content: "sub-task 2"},
 		},
 	)
+	longResult := "partial result A — " + strings.Repeat("detailed analysis ", 5)
 	a.WithReturnResult(
 		session.PlaybookProcess,
-		session.Payload{Kind: "result", Content: "partial result A"},
+		session.Payload{Kind: "result", Content: longResult},
 		0.9,
 	)
 	// Evaluator: route plan for root, process for children.

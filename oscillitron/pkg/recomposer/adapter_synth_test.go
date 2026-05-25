@@ -63,25 +63,22 @@ func TestAdapterSynth_Name(t *testing.T) {
 }
 
 func TestAdapterSynth_PluggableIntoSynthRecomposer(t *testing.T) {
-	// End-to-end: AdapterSynth plugged into Synth recomposer for a
-	// sequential fold. The stub returns a fixed merged content;
-	// per-step confidence drops in Synth via the weakest-link rule
-	// when adapter returns 0.
+	long := strings.Repeat("x", SelectionThreshold+1)
 	a := stub.New("test").
 		WithDefaultPlaybook(session.PlaybookProcess).
 		WithReturnResult(session.PlaybookProcess,
-			session.Payload{Kind: "result", Content: "M"}, 0.9)
+			session.Payload{Kind: "result", Content: "M" + long}, 0.9)
 	rec := Synth{Synthesizer: AdapterSynth{Adapter: a}}
 	got, err := rec.Recompose(context.Background(), session.RecomposeSequential,
 		[]session.ReturnResultPayload{
-			{Result: session.Payload{Content: "A"}, Confidence: 0.7},
-			{Result: session.Payload{Content: "B"}, Confidence: 0.6},
-			{Result: session.Payload{Content: "C"}, Confidence: 0.95},
+			{Result: session.Payload{Content: "A" + long}, Confidence: 0.7},
+			{Result: session.Payload{Content: "B" + long}, Confidence: 0.6},
+			{Result: session.Payload{Content: "C" + long}, Confidence: 0.95},
 		})
 	if err != nil {
 		t.Fatalf("Recompose: %v", err)
 	}
-	if got.Result.Content != "M" {
-		t.Errorf("content = %q, want M", got.Result.Content)
+	if got.Result.Content != "M"+long {
+		t.Errorf("content = %q, want M+padding", got.Result.Content[:10])
 	}
 }

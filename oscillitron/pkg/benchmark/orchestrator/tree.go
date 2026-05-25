@@ -26,6 +26,9 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
@@ -65,6 +68,10 @@ type Tree struct {
 	// decomposition; bench cases typically won't go that deep
 	// because the model decomposes 1-2 levels and stops.
 	MaxDepth int
+	// TraceDir, when non-empty, writes a per-case tree trace file
+	// to this directory. Each file is <case-id>.tree.txt and
+	// contains the full prompt→response path through the tree.
+	TraceDir string
 }
 
 // Name implements benchmark.Orchestrator.
@@ -125,12 +132,9 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 
 	rawContent := res.ResolvedPayload.Result.Content
 	extracted := t.Extractor.Extract(rawContent)
-
-	// Calls: Execute counts (one per AP execute) + Evaluate counts
-	// (one per AP evaluate). Token tally is harder — RunState doesn't
-	// aggregate it across the tree. v0 leaves TokensUsed at 0; cost
-	// tracker integration is a follow-up if we need exact accounting.
 	calls := res.State.ExecuteCount + res.State.EvaluateCount
+
+	t.emitTreeTrace(ctx, c, goal, res, extracted)
 
 	return benchmark.Answer{
 		Raw:        rawContent,
@@ -138,6 +142,23 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		Calls:      calls,
 		Confidence: res.ResolvedPayload.Confidence,
 	}, nil
+}
+
+func (t Tree) emitTreeTrace(ctx context.Context, c benchmark.Case, goal string, res runner.Result, extracted string) {
+	tt := BuildTreeTrace(c.ID, c.Expected, goal, res, extracted)
+	rendered := tt.RenderText()
+	tracer := t.Tracer
+	if tracer == nil {
+		tracer = trace.Discard{}
+	}
+	trace.Info(tracer, ctx, "tree.trace",
+		slog.String("case", c.ID),
+		slog.String("trace", rendered),
+	)
+	if t.TraceDir != "" {
+		path := filepath.Join(t.TraceDir, c.ID+".tree.txt")
+		_ = os.WriteFile(path, []byte(rendered), 0644)
+	}
 }
 
 // deriveGoal makes a cheap Process call to extract a freeform goal

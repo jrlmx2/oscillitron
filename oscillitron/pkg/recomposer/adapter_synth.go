@@ -103,12 +103,17 @@ func renderAdapterSynthInput(preamble string, req SynthesizeRequest) string {
 	var b strings.Builder
 	b.WriteString(preamble)
 	b.WriteString("\n\n")
+	if req.OriginalTask != "" {
+		b.WriteString("[ORIGINAL QUESTION]\n")
+		b.WriteString(req.OriginalTask)
+		b.WriteString("\n\n")
+	}
 	fmt.Fprintf(&b, "Reduction step %d (spec=%s).\n\n", req.StepIndex, req.RecomposeSpec)
-	b.WriteString("Left:\n")
+	b.WriteString("Left reasoning:\n")
 	b.WriteString(req.Left.Result.Content)
-	b.WriteString("\n\nRight:\n")
+	b.WriteString("\n\nRight reasoning:\n")
 	b.WriteString(req.Right.Result.Content)
-	b.WriteString("\n\nIntegrate Left and Right into a single best answer to the underlying task.")
+	b.WriteString("\n\nIntegrate the reasoning above into a single best answer to the original question.")
 	if req.Goal != "" {
 		fmt.Fprintf(&b, "\n\nYour output MUST satisfy this goal: %s", req.Goal)
 	}

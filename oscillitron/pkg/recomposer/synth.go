@@ -53,6 +53,10 @@ type SynthesizeRequest struct {
 	// this as the last directive so the recomposed output matches
 	// what the original prompt asked for.
 	Goal string
+	// OriginalTask is the full prompt that started the tree. Gives
+	// the synthesizer context for what the children's reasoning is
+	// contributing to.
+	OriginalTask string
 }
 
 // SynthesizeResponse is the synthesizer's output. The recomposer
@@ -100,6 +104,10 @@ type Synth struct {
 	// synthesizer knows what the final output should look like.
 	// Set per-case by the Tree orchestrator.
 	Goal string
+	// OriginalTask is the full original prompt that started the
+	// tree. Threaded into every SynthesizeRequest so the
+	// synthesizer can integrate children's reasoning in context.
+	OriginalTask string
 }
 
 // ErrSynthesizerRequired is returned by Recompose when Synth has no
@@ -186,6 +194,7 @@ func (s Synth) fold(ctx context.Context, spec session.RecomposeSpec, children []
 			RecomposeSpec: spec,
 			StepIndex:     step,
 			Goal:          s.Goal,
+			OriginalTask:  s.OriginalTask,
 		}
 		step++
 		resp, err := s.Synthesizer.Synthesize(ctx, req)

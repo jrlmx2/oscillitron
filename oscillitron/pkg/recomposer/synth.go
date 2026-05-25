@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
@@ -134,10 +135,39 @@ func (s Synth) Recompose(ctx context.Context, spec session.RecomposeSpec, childr
 		if len(children) == 1 {
 			return children[0], nil
 		}
+		if s.allShort(children) {
+			return s.selectByConfidence(children), nil
+		}
 		return s.fold(ctx, spec, children)
 	default:
 		return session.ReturnResultPayload{}, fmt.Errorf("%w: %q", ErrUnknownSpec, spec)
 	}
+}
+
+// SelectionThreshold is the max content length (chars) for a child
+// to be considered a "short answer." When ALL children are short,
+// Synth switches from synthesis (merge content) to selection (pick
+// highest confidence). This avoids the nonsensical LLM fold when
+// children produce competing final answers like "A" vs "C".
+const SelectionThreshold = 50
+
+func (s Synth) allShort(children []session.ReturnResultPayload) bool {
+	for _, c := range children {
+		if len(strings.TrimSpace(c.Result.Content)) > SelectionThreshold {
+			return false
+		}
+	}
+	return true
+}
+
+func (s Synth) selectByConfidence(children []session.ReturnResultPayload) session.ReturnResultPayload {
+	best := 0
+	for i := 1; i < len(children); i++ {
+		if children[i].Confidence > children[best].Confidence {
+			best = i
+		}
+	}
+	return children[best]
 }
 
 // fold drives the synthesizer through the requested fold shape. We

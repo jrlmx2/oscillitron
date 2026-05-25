@@ -113,12 +113,13 @@ func TestAnthropicSynthesizer_PluggableIntoSynthRecomposer(t *testing.T) {
 	// pkg/recomposer.Synth using a sequential fold.
 	srv, _ := anthropicMockServer(t, `{"content":"merged","confidence":0.9}`)
 	s, _ := NewAnthropic(AnthropicConfig{APIKey: "sk-x", BaseURL: srv.URL})
+	long := strings.Repeat("x", SelectionThreshold+1)
 	rec := Synth{Synthesizer: s}
 	got, err := rec.Recompose(context.Background(), session.RecomposeSequential,
 		[]session.ReturnResultPayload{
-			{Result: session.Payload{Content: "A"}, Confidence: 0.8},
-			{Result: session.Payload{Content: "B"}, Confidence: 0.7},
-			{Result: session.Payload{Content: "C"}, Confidence: 0.95},
+			{Result: session.Payload{Content: "A" + long}, Confidence: 0.8},
+			{Result: session.Payload{Content: "B" + long}, Confidence: 0.7},
+			{Result: session.Payload{Content: "C" + long}, Confidence: 0.95},
 		})
 	if err != nil {
 		t.Fatalf("Recompose: %v", err)

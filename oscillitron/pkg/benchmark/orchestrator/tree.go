@@ -26,11 +26,6 @@ package orchestrator
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
-	"path/filepath"
-	"strings"
-
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
@@ -39,6 +34,9 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/vram"
+	"log/slog"
+	"os"
+	"path/filepath"
 )
 
 // Tree is the call-tree orchestrator. See package doc.
@@ -162,39 +160,10 @@ func (t Tree) emitTreeTrace(ctx context.Context, c benchmark.Case, goal string, 
 	}
 }
 
-// deriveGoal extracts a freeform goal statement from the input.
-// Mechanical patterns are tried first (cheap, reliable). LLM
-// fallback only when no pattern matches.
+// deriveGoal makes an LLM call to extract a freeform goal statement
+// from the input. The model reads the prompt and describes what the
+// final output should look like — not solving, just format detection.
 func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) {
-	if g := extractGoalMechanical(c.Prompt); g != "" {
-		return g, nil
-	}
-	return t.deriveGoalLLM(ctx, c)
-}
-
-// extractGoalMechanical scans for common answer-instruction patterns.
-// Returns empty string when no pattern matches.
-func extractGoalMechanical(prompt string) string {
-	lower := strings.ToLower(prompt)
-	patterns := []struct {
-		contains string
-		goal     string
-	}{
-		{"answer with a single letter", "Your final answer must be exactly one letter: A, B, C, or D. Nothing else."},
-		{"answer with the letter", "Your final answer must be exactly one letter: A, B, C, or D. Nothing else."},
-		{"choose one of the following", "Your final answer must be exactly one letter: A, B, C, or D. Nothing else."},
-		{"\\boxed{", "Your final answer must be a mathematical expression inside \\boxed{}."},
-		{"what is the value", "Your final answer must be a single numerical value."},
-	}
-	for _, p := range patterns {
-		if strings.Contains(lower, p.contains) {
-			return p.goal
-		}
-	}
-	return ""
-}
-
-func (t Tree) deriveGoalLLM(ctx context.Context, c benchmark.Case) (string, error) {
 	env := session.NewRoot(
 		session.ID(fmt.Sprintf("bench-tree-%s-goal", c.ID)),
 		goalExtractionPrompt+"\n\n---\n\n"+c.Prompt,

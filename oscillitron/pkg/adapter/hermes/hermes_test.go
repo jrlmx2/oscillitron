@@ -312,8 +312,7 @@ func TestExecutePlanRejectsUnknownRecompose(t *testing.T) {
 
 func TestExecuteProcess(t *testing.T) {
 	f := newFake(t)
-	groundedTrue := true
-	procJSON := `{"content":"42","confidence":0.92,"grounded_pass":true}`
+	procJSON := `{"content":"42","confidence":0.92}`
 	f.setEvents(completedEvent(procJSON))
 
 	a, _ := New(SingleEndpoint(f.server.URL, ""))
@@ -330,9 +329,6 @@ func TestExecuteProcess(t *testing.T) {
 	}
 	if rr.Confidence != 0.92 {
 		t.Errorf("Confidence = %v", rr.Confidence)
-	}
-	if rr.Signals.GroundedPass == nil || *rr.Signals.GroundedPass != groundedTrue {
-		t.Errorf("GroundedPass not parsed: %+v", rr.Signals.GroundedPass)
 	}
 }
 

@@ -38,7 +38,7 @@ func TestSingle_HappyPath_NoExtractor(t *testing.T) {
 
 func TestSingle_AppliesExtractor(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"Reasoning... therefore the answer is B."}}
-	ext := ExtractorFunc(func(raw string) string {
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string {
 		// Trivial extractor for the test.
 		if len(raw) > 0 {
 			return string(raw[len(raw)-2])

@@ -14,7 +14,7 @@ import (
 // letterExtractor pulls the last [A-D] letter from a string.
 // (Mirrors what cmd/bench wires in real runs via grader.ExtractLetter.)
 func letterExtractor() Extractor {
-	return ExtractorFunc(func(raw string) string {
+	return ExtractorFunc(func(_ context.Context, _, raw string) string {
 		for i := len(raw) - 1; i >= 0; i-- {
 			c := raw[i]
 			if c >= 'A' && c <= 'D' {

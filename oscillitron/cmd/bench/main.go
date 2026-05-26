@@ -778,7 +778,7 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 		return benchmarkConfig{
 			Loader: gpqa.Loader{Path: path, Limit: limit},
 			Grader: grader.Multichoice{}, // default Letters = "ABCD"
-			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
 				return grader.ExtractLetter(raw, grader.MultichoiceLetters)
 			}),
 		}, nil
@@ -787,7 +787,7 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 		return benchmarkConfig{
 			Loader: mmlu_pro.Loader{Path: path, Limit: limit},
 			Grader: grader.Multichoice{Letters: letters},
-			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
 				return grader.ExtractLetter(raw, letters)
 			}),
 		}, nil
@@ -795,7 +795,7 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 		return benchmarkConfig{
 			Loader: math500.Loader{Path: path, Limit: limit},
 			Grader: grader.BoxedAnswer{},
-			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
 				return grader.ExtractBoxed(raw)
 			}),
 		}, nil

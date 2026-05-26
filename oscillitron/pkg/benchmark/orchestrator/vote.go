@@ -150,7 +150,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			results[i].raw = out.Execute.ReturnResult.Result.Content
 			results[i].tokens = out.Execute.TokensUsed
 			results[i].confidence = out.Execute.ReturnResult.Confidence
-			extracted := v.Extractor.Extract(results[i].raw)
+			extracted := v.Extractor.Extract(aCtx, c.Goal, results[i].raw)
 			trace.Info(tracer, aCtx, "vote.attempt_done",
 				slog.String("extracted", extracted),
 				slog.Int("tokens", results[i].tokens),
@@ -179,7 +179,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			}
 			continue
 		}
-		extracted := v.Extractor.Extract(r.raw)
+		extracted := v.Extractor.Extract(ctx, c.Goal, r.raw)
 		rawParts = append(rawParts, r.raw)
 		totalTokens += r.tokens
 		successes++

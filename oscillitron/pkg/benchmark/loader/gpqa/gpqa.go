@@ -116,17 +116,17 @@ func buildCase(r rawCase) (benchmark.Case, error) {
 	if r.CorrectAnswer == "" {
 		return benchmark.Case{}, fmt.Errorf("missing correct_answer")
 	}
-	if len(r.IncorrectAnswers) != 3 {
-		return benchmark.Case{}, fmt.Errorf("expected 3 incorrect answers, got %d", len(r.IncorrectAnswers))
+	if len(r.IncorrectAnswers) == 0 {
+		return benchmark.Case{}, fmt.Errorf("need at least 1 incorrect answer, got 0")
 	}
 
-	// Place the correct answer at one of A/B/C/D deterministically.
-	correctIdx := deterministicLetterIndex(r.ID, 4)
-	options := make([]string, 4)
+	nOptions := len(r.IncorrectAnswers) + 1
+	correctIdx := deterministicLetterIndex(r.ID, nOptions)
+	options := make([]string, nOptions)
 	options[correctIdx] = r.CorrectAnswer
 	wrong := r.IncorrectAnswers
 	w := 0
-	for i := 0; i < 4; i++ {
+	for i := 0; i < nOptions; i++ {
 		if i == correctIdx {
 			continue
 		}
@@ -135,6 +135,7 @@ func buildCase(r rawCase) (benchmark.Case, error) {
 	}
 
 	correctLetter := string(rune('A' + correctIdx))
+	lastLetter := string(rune('A' + nOptions - 1))
 
 	var b strings.Builder
 	b.WriteString("Question: ")
@@ -143,7 +144,7 @@ func buildCase(r rawCase) (benchmark.Case, error) {
 	for i, opt := range options {
 		fmt.Fprintf(&b, "%s) %s\n", string(rune('A'+i)), opt)
 	}
-	b.WriteString("\nAnswer with a single letter: A, B, C, or D.")
+	fmt.Fprintf(&b, "\nAnswer with a single letter: A through %s.", lastLetter)
 
 	md := map[string]string{}
 	if r.Subdomain != "" {

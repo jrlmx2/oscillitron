@@ -460,6 +460,9 @@ func applyEffectiveConfidence(exec *session.Execute, raw string, inspector *noti
 	if conf, ok := notice.EffectiveConfidenceFromRaw(raw, inspector); ok {
 		exec.ReturnResult.Confidence = conf
 	}
+	// Strip the confidence annotation from Content so downstream
+	// consumers (extractors, graders) see only the answer.
+	exec.ReturnResult.Result.Content = notice.StripConfidenceLine(exec.ReturnResult.Result.Content)
 }
 
 // boundContext applies the configured RunTimeout if the caller's

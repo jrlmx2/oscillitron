@@ -98,10 +98,7 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		maxDepth = 10
 	}
 
-	goal, err := t.deriveGoal(ctx, c)
-	if err != nil {
-		goal = ""
-	}
+	goal := c.Goal
 
 	outputSchema := goal
 	if outputSchema == "" {
@@ -159,34 +156,6 @@ func (t Tree) emitTreeTrace(ctx context.Context, c benchmark.Case, goal string, 
 		_ = os.WriteFile(path, []byte(rendered), 0644)
 	}
 }
-
-// deriveGoal makes an LLM call to extract a freeform goal statement
-// from the input. The model reads the prompt and describes what the
-// final output should look like — not solving, just format detection.
-func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) {
-	env := session.NewRoot(
-		session.ID(fmt.Sprintf("bench-tree-%s-goal", c.ID)),
-		goalExtractionPrompt+"\n\n---\n\n"+c.Prompt,
-		"",
-		classification.Internal,
-		session.Budget{TokensRemaining: 2_000, DepthRemaining: 1},
-	)
-	env.Evaluate = &session.Evaluate{
-		Playbook:   session.PlaybookProcess,
-		Confidence: 1.0,
-	}
-	out, err := t.Adapter.Execute(ctx, env)
-	if err != nil {
-		return "", err
-	}
-	if out.Execute == nil || out.Execute.ReturnResult == nil {
-		return "", fmt.Errorf("goal extraction returned no result")
-	}
-	return out.Execute.ReturnResult.Result.Content, nil
-}
-
-// goalExtractionPrompt is defined in extract.go — shared by
-// Tree.deriveGoal (this file) and DeriveGoal (extract.go).
 
 // Compile-time check.
 var _ benchmark.Orchestrator = Tree{}

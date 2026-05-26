@@ -1,0 +1,2202 @@
+[
+  {
+    "id": "hellaswag-001",
+    "question": "Complete the following:\n\nA man is sitting on a roof. he\n\nWhich ending best continues the text?",
+    "correct_answer": "starts pulling up roofing on a roof.",
+    "incorrect_answers": [
+      "is using wrap to wrap a pair of skis.",
+      "is ripping level tiles off.",
+      "is holding a rubik's cube."
+    ],
+    "subdomain": "Roof shingle removal"
+  },
+  {
+    "id": "hellaswag-002",
+    "question": "Complete the following:\n\nA lady walks to a barbell. She bends down and grabs the pole. the lady\n\nWhich ending best continues the text?",
+    "correct_answer": "stands and lifts the weight over her head.",
+    "incorrect_answers": [
+      "swings and lands in her arms.",
+      "pulls the barbell forward.",
+      "pulls a rope attached to the barbell."
+    ],
+    "subdomain": "Clean and jerk"
+  },
+  {
+    "id": "hellaswag-003",
+    "question": "Complete the following:\n\nTwo women in a child are shown in a canoe while a man pulls the canoe while standing in the water, with other individuals visible in the background. the child and a different man\n\nWhich ending best continues the text?",
+    "correct_answer": "sit in a canoe while the man paddles.",
+    "incorrect_answers": [
+      "are then shown paddling down a river in a boat while a woman talks.",
+      "are driving the canoe, they go down the river flowing side to side.",
+      "walking go down the rapids, while the man in his helicopter almost falls and goes out of canoehood."
+    ],
+    "subdomain": "Canoeing"
+  },
+  {
+    "id": "hellaswag-004",
+    "question": "Complete the following:\n\nA boy is running down a track. the boy\n\nWhich ending best continues the text?",
+    "correct_answer": "lifts his body above the height of a pole.",
+    "incorrect_answers": [
+      "runs into a car.",
+      "gets in a mat.",
+      "stands on his hands and springs."
+    ],
+    "subdomain": "High jump"
+  },
+  {
+    "id": "hellaswag-005",
+    "question": "Complete the following:\n\nThe boy lifts his body above the height of a pole. The boy lands on his back on to a red mat. the boy\n\nWhich ending best continues the text?",
+    "correct_answer": "gets up from the mat.",
+    "incorrect_answers": [
+      "turns his body around on the mat.",
+      "continues to lift his body over the pole.",
+      "wiggles out of the mat."
+    ],
+    "subdomain": "High jump"
+  },
+  {
+    "id": "hellaswag-006",
+    "question": "Complete the following:\n\nThe boy lands on his back on to a red mat. The boy gets up from the mat. the boy\n\nWhich ending best continues the text?",
+    "correct_answer": "celebrates by clapping and flexing both arms.",
+    "incorrect_answers": [
+      "starts doing spins.",
+      "is dancing on the mat.",
+      "does jump jacks on his stick."
+    ],
+    "subdomain": "High jump"
+  },
+  {
+    "id": "hellaswag-007",
+    "question": "Complete the following:\n\nA man is standing in front of a camera. He starts playing a harmonica for the camera. he\n\nWhich ending best continues the text?",
+    "correct_answer": "rocks back and forth to the music as he goes.",
+    "incorrect_answers": [
+      "begins to play the harmonica with his body while looking at the camera.",
+      "seems to be singing while playing the harmonica.",
+      "painted a fence in front of the camera."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-008",
+    "question": "Complete the following:\n\nA cartoon animation video is shown with people wandering around and rockets being shot. two men\n\nWhich ending best continues the text?",
+    "correct_answer": "fight robots of evil and ends with a to be continued.",
+    "incorrect_answers": [
+      "are then shown in closeups shooting a shot put.",
+      "push a child in a speedboat in the water.",
+      "look in the cameraman's eye and smile."
+    ],
+    "subdomain": "Sumo"
+  },
+  {
+    "id": "hellaswag-009",
+    "question": "Complete the following:\n\nA man is holding a pocket knife while sitting on some rocks in the wilderness. then he\n\nWhich ending best continues the text?",
+    "correct_answer": "takes a small stone from the flowing river and smashes it on another stone.",
+    "incorrect_answers": [
+      "opens a can of oil put oil on the knife, and puts oil on a knife and press it through a can filled with oil then cuts several pieces from the sandwiches.",
+      "uses the knife to shave his leg.",
+      "sand the rocks and tops them by using strong pressure."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-010",
+    "question": "Complete the following:\n\nThen he takes a small stone from the flowing river and smashes it on another stone. He starts to crush the small stone to smaller pieces. he\n\nWhich ending best continues the text?",
+    "correct_answer": "grind it hard to make the pieces smaller.",
+    "incorrect_answers": [
+      "cuts the center stone in half and blow it on to make it bigger.",
+      "eventually brings it back into view and adds it to the smaller ones to make a small triangular shaped piece.",
+      "starts to party with them and throw the pieces by hand while they celebrate."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-011",
+    "question": "Complete the following:\n\nThen he takes a piece of bark and rubs the powered stone pieces onto it. The stone particles stick to the wet piece of wood. he\n\nWhich ending best continues the text?",
+    "correct_answer": "then takes the knife and sharpens it against the wood piece.",
+    "incorrect_answers": [
+      "uses a small brush to polish one of the stone pieces.",
+      "then uses a strip of sealing tape to seal the board and then smooths the bottom of the board.",
+      "walks towards the camera."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-012",
+    "question": "Complete the following:\n\nThe stone particles stick to the wet piece of wood. He then takes the knife and sharpens it against the wood piece. he\n\nWhich ending best continues the text?",
+    "correct_answer": "then notices a little black and green poisonous frog sitting next to him.",
+    "incorrect_answers": [
+      "then cuts off the excess hair of the wood.",
+      "scrapes the wood with a broom in the cutting tool used in sharpening the instrument.",
+      "writes on the board again."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-013",
+    "question": "Complete the following:\n\nHe then takes the knife and sharpens it against the wood piece. He then notices a little black and green poisonous frog sitting next to him. the frog\n\nWhich ending best continues the text?",
+    "correct_answer": "then escapes and jumps away.",
+    "incorrect_answers": [
+      "eventually gets to get up and marches out of the room waving its body about.",
+      "then starts to get up from the chair and begins walking towards the camera.",
+      "is acting crazy and attacking him while he is cooking."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-014",
+    "question": "Complete the following:\n\nHe then notices a little black and green poisonous frog sitting next to him. The frog then escapes and jumps away. he\n\nWhich ending best continues the text?",
+    "correct_answer": "explains how the frog secretes a poisonous fluid that can be extremely harmful.",
+    "incorrect_answers": [
+      "sits and hugs another man and also adjusts his camera.",
+      "then sits there staring at his text machine as if he has actually been given a gift from god.",
+      "takes the frog on his hand and tickles the back of it."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-015",
+    "question": "Complete the following:\n\nA person is playing bagpipes out in a park. A man and two boys watching from a far. the camera\n\nWhich ending best continues the text?",
+    "correct_answer": "shoots areas all around the park while the bagpipes play.",
+    "incorrect_answers": [
+      "is covered to the boy that is playing there.",
+      "then goes black and we see a black opening scene.",
+      "watching the boy and boy as they play a game of drums."
+    ],
+    "subdomain": "Playing bagpipes"
+  },
+  {
+    "id": "hellaswag-016",
+    "question": "Complete the following:\n\nTwo people are seen passing a ball back and fourth in a pool and leads into one speaking to the camera. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "demonstrates how to properly throw the ball with his hands while still speaking to the camera.",
+    "incorrect_answers": [
+      "dips the ball and walks back with the boy and pours detergent into a cup again.",
+      "then throws the ball into the pool and begins running around with a sail in his hand while a group of men watch.",
+      "then takes a drink having a conversation with another man and another man leads into him throwing balls in the water and laughing to the camera."
+    ],
+    "subdomain": "Playing water polo"
+  },
+  {
+    "id": "hellaswag-017",
+    "question": "Complete the following:\n\nA woman is sitting at a table in a fast food restaurant while eating. She continually speaks to nobody as she eats. she\n\nWhich ending best continues the text?",
+    "correct_answer": "stands up and grabs her purse, continuing to talk and laugh as she leaves.",
+    "incorrect_answers": [
+      "is then seen sitting alone as she eats a cold brown ice cream.",
+      "pauses in the process of eating to enjoy her food.",
+      "picks up another chocolate bar and chews it as she talks."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-018",
+    "question": "Complete the following:\n\nA group of cheerleaders run onto a stage before a cheering audience. they\n\nWhich ending best continues the text?",
+    "correct_answer": "get into formation, then begin dancing and flipping as male cheerleaders join them.",
+    "incorrect_answers": [
+      "perform a cheer routine before the girls, along with makeup artists, spread out and pose.",
+      "take turns jumping on each other like they are performing karate.",
+      "are then shown performing the type of cheerleading dance, using batons and pole vaults."
+    ],
+    "subdomain": "Cheerleading"
+  },
+  {
+    "id": "hellaswag-019",
+    "question": "Complete the following:\n\nA group of cheerleaders run onto a stage before a cheering audience. They get into formation, then begin dancing and flipping as male cheerleaders join them. they all\n\nWhich ending best continues the text?",
+    "correct_answer": "continue dancing and flipping, doing hand springs.",
+    "incorrect_answers": [
+      "dance and flip on stage while hanging their hats on the sides.",
+      "dance together with flip up their sleeves.",
+      "perform their routines as the studio rashes to a halt with cheerleaders in the audience."
+    ],
+    "subdomain": "Cheerleading"
+  },
+  {
+    "id": "hellaswag-020",
+    "question": "Complete the following:\n\nThey get into formation, then begin dancing and flipping as male cheerleaders join them. They all continue dancing and flipping, doing hand springs. when they\n\nWhich ending best continues the text?",
+    "correct_answer": "are finished, they jump up and down happily and walk off the stage, exhausted.",
+    "incorrect_answers": [
+      "are done, they shake hands and walk away, but cheers are heard all around as they're finished.",
+      "are done, a male cheerleader is crowned and an instant replay is shown.",
+      "come down from their workout, they all stop to bow and applaud, then they continue dancing."
+    ],
+    "subdomain": "Cheerleading"
+  },
+  {
+    "id": "hellaswag-021",
+    "question": "Complete the following:\n\nA woman is reading a newspaper nearby while he speaks to her and shows her something in his hand. The man sharpens his knives using an electric tool. he\n\nWhich ending best continues the text?",
+    "correct_answer": "then continues cutting his onion.",
+    "incorrect_answers": [
+      "sharpens and cuts something on a knife board using an electric tool.",
+      "travels with his knife under the table and uses it also in his shoe.",
+      "then shows her a spare knife that he has also used on a knife sharpener and drills into a side of the table."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-022",
+    "question": "Complete the following:\n\nA man is outside of a building. He is using commercial lawn mowing equipment. he\n\nWhich ending best continues the text?",
+    "correct_answer": "walks back and forth as he mows the grass.",
+    "incorrect_answers": [
+      "is animated as he does the task.",
+      "relaxes, making sure his lawn is pristine.",
+      "runs from one side of the building to the other."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-023",
+    "question": "Complete the following:\n\nChildren bring desert out for their family member. the family\n\nWhich ending best continues the text?",
+    "correct_answer": "enjoys eating the desert together.",
+    "incorrect_answers": [
+      "floats in a river.",
+      "member stands looking into a hut and then handing people photographs.",
+      "member cuts a piece of sunscreen."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-024",
+    "question": "Complete the following:\n\nThe family enjoys eating the desert together. The people in the restaurant laugh at the man and he wonders what they are doing. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "gets up and walks away to the other room.",
+    "incorrect_answers": [
+      "goes to the bathroom and isn't able to get very far.",
+      "puts the glass aside and a fourth person walks in and walks away.",
+      "plays the bagpipe and smiles and laughs as he enjoys the hospitality."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-025",
+    "question": "Complete the following:\n\nA black female is shown in a room with a black scarf around her head. black spots on her faced\n\nWhich ending best continues the text?",
+    "correct_answer": "are then zoomed in on and she begins to apply something on it.",
+    "incorrect_answers": [
+      "are shown and she misses a little bit of her swing.",
+      "are shown and one finger is seen poking through.",
+      "are shown as she continues to dance around on the hardwood and every move makes a lash on her face."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-026",
+    "question": "Complete the following:\n\nA black female is shown in a room with a black scarf around her head. Black spots on her faced are then zoomed in on and she begins to apply something on it. next\n\nWhich ending best continues the text?",
+    "correct_answer": ", she takes some spray and it makes her skin extremely oily and she continues to talk until the video is over.",
+    "incorrect_answers": [
+      ", she begins to brush her lips and make painted lips look just like a lipstick to the camera and ends with her closing gift and instruction showing her off at the end.",
+      "she is shown in various different locations and gets extremely close to a wall.",
+      ", she is shown making multiple moans and sprays some kind of liquid down her face before hanging up."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-027",
+    "question": "Complete the following:\n\nA helicopter flies in some people who then start playing paintball. they\n\nWhich ending best continues the text?",
+    "correct_answer": "run around obstacles and have a great time.",
+    "incorrect_answers": [
+      "lose their shirt during the fight and run back the others.",
+      "shoot at each other while the helicopter drone who am looking on.",
+      "chase a bird in the sky while others walk around."
+    ],
+    "subdomain": "Paintball"
+  },
+  {
+    "id": "hellaswag-028",
+    "question": "Complete the following:\n\nA young boy and girl are standing over a sink with their mother talking. the mother\n\nWhich ending best continues the text?",
+    "correct_answer": "instructs them on how to brush their teeth while laughing.",
+    "incorrect_answers": [
+      "is now putting lipstick on the boy's mouth and he tries to stop her but only gets a little bit stuck.",
+      "washes the boy while the child grabs shampoo.",
+      "shows some shaving cream on the boy who is scrubbing her brushes."
+    ],
+    "subdomain": "Gargling mouthwash"
+  },
+  {
+    "id": "hellaswag-029",
+    "question": "Complete the following:\n\nA young boy and girl are standing over a sink with their mother talking. The mother instructs them on how to brush their teeth while laughing. the boy\n\nWhich ending best continues the text?",
+    "correct_answer": "helps his younger sister brush his teeth.",
+    "incorrect_answers": [
+      "puts a shirt on and rubs his mouth.",
+      "walks with an empty mouthwash cup on a sink floor.",
+      "and girl then begin working out."
+    ],
+    "subdomain": "Gargling mouthwash"
+  },
+  {
+    "id": "hellaswag-030",
+    "question": "Complete the following:\n\nThe mother instructs them on how to brush their teeth while laughing. The boy helps his younger sister brush his teeth. she\n\nWhich ending best continues the text?",
+    "correct_answer": "gets them some water to gargle in their mouths.",
+    "incorrect_answers": [
+      "shows how to hit the mom and then kiss his dad as well.",
+      "brushes past the camera, looking better soon after.",
+      "glows from the center of the camera as a reaction."
+    ],
+    "subdomain": "Gargling mouthwash"
+  },
+  {
+    "id": "hellaswag-031",
+    "question": "Complete the following:\n\nShe gets them some water to gargle in their mouths. The boy and girl begin playing in the sink. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "laughs at the children dribbling water.",
+    "incorrect_answers": [
+      "shakes her head in disbelief and waves at her.",
+      "comes back and talks to the boys.",
+      "gets some food out of the fridge and they continue playing together."
+    ],
+    "subdomain": "Gargling mouthwash"
+  },
+  {
+    "id": "hellaswag-032",
+    "question": "Complete the following:\n\nA cat is sitting in a cat bed. It is licking its paw. it\n\nWhich ending best continues the text?",
+    "correct_answer": "then wipes its paw on its ear.",
+    "incorrect_answers": [
+      "crawls to the door.",
+      "'s laying down about six inches away from the camera.",
+      "crawls on one foot to get closer to the camera."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-033",
+    "question": "Complete the following:\n\nA man in brown jacket is pulling out an arrow from the target board, then he was talking to the camera, then he pull out his bow and started to use it with his bow to hit the target board, he fired his bows several times. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "went to the target board and talked to the camera.",
+    "incorrect_answers": [
+      "played paper if and shoot the arrows to hit the target, then he hang from the board with his bow and arrow.",
+      "eventually throw the arrow, but it flew into the gravel is near the targets.",
+      "have his bow as he talk to the camera, he pulled it out to show how to put with its flex, tighten, and notch that was attached to his bow."
+    ],
+    "subdomain": "Archery"
+  },
+  {
+    "id": "hellaswag-034",
+    "question": "Complete the following:\n\nA man walks outside plugs his lawn mower in and gets ready to mow. he\n\nWhich ending best continues the text?",
+    "correct_answer": "starts mowing his lawn casually going over all the grass.",
+    "incorrect_answers": [
+      "drives through the grass while drinking from a large cup of water and carrying his lawn mower.",
+      "walks off the porch and goes back inside.",
+      "does this multiple times until a pale orange moon appears overhead."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-035",
+    "question": "Complete the following:\n\nA man walks outside plugs his lawn mower in and gets ready to mow. He starts mowing his lawn casually going over all the grass. his dog\n\nWhich ending best continues the text?",
+    "correct_answer": "comes outside and starts to follow him a little while he's closer to the house.",
+    "incorrect_answers": [
+      "comes outside and takes a closer look at the man mowing, after he picks up the mower.",
+      "runs loose and feeds on his movements.",
+      "is having a seizure and starts to hop all over the lawn as he walks around."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-036",
+    "question": "Complete the following:\n\nHe starts mowing his lawn casually going over all the grass. His dog comes outside and starts to follow him a little while he's closer to the house. the yard\n\nWhich ending best continues the text?",
+    "correct_answer": "is slowly starting to look really really nice, once he is completely finished the yard looks great, nice and smooth.",
+    "incorrect_answers": [
+      "is very neat and clean and very active under the circumstances.",
+      "gets mowed quicker by the dog.",
+      "eventually looks happy on the outside and appears to be going pretty happily."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-037",
+    "question": "Complete the following:\n\nA sea is shown with a green forest on seashore. Blond man is standing in seashore and talking to the camera and surfing big waves on the sea. man\n\nWhich ending best continues the text?",
+    "correct_answer": "is walking on seashore through a lot of people and talking to the camera and holding an award and talking about surfing the seashore.",
+    "incorrect_answers": [
+      "is on ocean and swimming in white water snapping his head.",
+      "is snowboarding up in the sea.",
+      "is doing flips in the waters and on the rocks and he be water surfing."
+    ],
+    "subdomain": "Surfing"
+  },
+  {
+    "id": "hellaswag-038",
+    "question": "Complete the following:\n\nWe see a bottle of face wash. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see a person holding face wash then putting it on their face.",
+    "incorrect_answers": [
+      "see a newspaper story.",
+      "see four cookies in a pan.",
+      "see a tool on a table."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-039",
+    "question": "Complete the following:\n\nWe see a person holding face wash then putting it on their face. They rinse the face and add the face wash with a brush. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see an illustration on how to add the wash using a brush.",
+    "incorrect_answers": [
+      "see a closing title screen.",
+      "see a black screen with the credits.",
+      "then see a replay then the person putting the face wash on."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-040",
+    "question": "Complete the following:\n\nA person is seen throwing plaster onto a wall while the camera follows the person close behind. the person\n\nWhich ending best continues the text?",
+    "correct_answer": "gradually throws more and more onto the wall and the camera pans over the finished product.",
+    "incorrect_answers": [
+      "continues throwing ingredients down and leads into a person kicking a dirty toilet.",
+      "then uses paper to spread it all over the wall followed by others putting paper through with the plaster.",
+      "is now seen putting wax all along the wall while still looking back to the camera."
+    ],
+    "subdomain": "Plastering"
+  },
+  {
+    "id": "hellaswag-041",
+    "question": "Complete the following:\n\nMore and more people begin talking and each of them has a bottle of sun screen and starts to squirt it on their arms in effort to protect their skin. a small blue bottle of the sun screen\n\nWhich ending best continues the text?",
+    "correct_answer": "is then shown and several more people begin talking about the product.",
+    "incorrect_answers": [
+      "appears and then different people carry it to a table where they mix the liquid with a straw with a straw and take turns squirting the liquid into their skin.",
+      "appears near each of their hair as they continue to talk but no bottle at all appear.",
+      "zooms in on sheers that they have on the floor."
+    ],
+    "subdomain": "Applying sunscreen"
+  },
+  {
+    "id": "hellaswag-042",
+    "question": "Complete the following:\n\nA group of boys are standing in a room with many clear cups of beer on a table they are all standing around. the boys\n\nWhich ending best continues the text?",
+    "correct_answer": "talk, laugh and tease each other before beginning a game of beer pong across a long table using a triangle shaped array of clear cups.",
+    "incorrect_answers": [
+      "take a flute together and then begin to play the harmonica using it to play the tune.",
+      "begin to wrap red bow around the plastic cups, put bows on the bottoms _start_various objects on the foam covers and belongings to the floor.",
+      "all grab one and chug their contents of the cans."
+    ],
+    "subdomain": "Beer pong"
+  },
+  {
+    "id": "hellaswag-043",
+    "question": "Complete the following:\n\nThe boys talk, laugh and tease each other before beginning a game of beer pong across a long table using a triangle shaped array of clear cups. one of the ping pongs\n\nWhich ending best continues the text?",
+    "correct_answer": "lands in the cup and one of the boys begins to drink the beer.",
+    "incorrect_answers": [
+      "is knocked upside down, which causes the other teens to give each other high fives.",
+      "tries to rise but dikes instead.",
+      "rush walks up in front of the boys, removes a small piece of paper from the bottom of the table, puts a hand on the machine and wrestles with buttons, turns the machine off and pushes a button inside to turn the game back on."
+    ],
+    "subdomain": "Beer pong"
+  },
+  {
+    "id": "hellaswag-044",
+    "question": "Complete the following:\n\nOne of the ping pongs lands in the cup and one of the boys begins to drink the beer. the group\n\nWhich ending best continues the text?",
+    "correct_answer": "continue to play beer pong when one final player is able to throw and land a ping pong ball while standing with his back to the cups at which point the boys celebrate, and laugh.",
+    "incorrect_answers": [
+      "of teens is sailing down the river with others sailing in the background.",
+      "gets up together and poses with their vests to celebrate.",
+      "does a trick and the liquid is poured on a second table."
+    ],
+    "subdomain": "Beer pong"
+  },
+  {
+    "id": "hellaswag-045",
+    "question": "Complete the following:\n\nThere's a nbc news reporter wearing a red sweater and white shirt talking about dog grooming by scissor wizard a grooming company. the representative from the company\n\nWhich ending best continues the text?",
+    "correct_answer": "is talking about the services they offer and how those dogs participate in dog shows.",
+    "incorrect_answers": [
+      "speaks to a woman sitting on a colorful conference room chair next to a brown dog kennel in front of them.",
+      "tells viewers about a dog grooming company, itv with a website.",
+      "in grey sweater and black pants talks about the procedures on grooming dogs in life and techniques."
+    ],
+    "subdomain": "Grooming dog"
+  },
+  {
+    "id": "hellaswag-046",
+    "question": "Complete the following:\n\nThe representative from the company is talking about the services they offer and how those dogs participate in dog shows. a groomer\n\nWhich ending best continues the text?",
+    "correct_answer": "is seen using shears to creatively trim the dog's hair and even dye it in colorful shades of red, green, yellow and blue.",
+    "incorrect_answers": [
+      "is presenting cookies to the room with a loaf of bread.",
+      "shows crowd opinion for use as their garden service representative.",
+      "speaks to an older man about snow cleaning dogs and showing how it is flectious."
+    ],
+    "subdomain": "Grooming dog"
+  },
+  {
+    "id": "hellaswag-047",
+    "question": "Complete the following:\n\nA woman tries to eat ice cream to a child, but the child refuses to eat the ice cream, then the woman eats the ice cream in the spoon. after\n\nWhich ending best continues the text?",
+    "correct_answer": ", the woman gives ice cream to the child, and then the woman cleans the child's mouth.",
+    "incorrect_answers": [
+      ", the child takes out the fork the other child takes out the spoon and eats the ice cream.",
+      ", the child and the woman tries to eat food without ice cream, then they sit and talk with adults in the room.",
+      ", two people wearing red shirts pass through the store's door and inside the market and besides a man and a chimpanzee wearing silver uniforms are watching the woman and child."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-048",
+    "question": "Complete the following:\n\nAfter, the woman gives ice cream to the child, and then the woman cleans the child's mouth. an old woman\n\nWhich ending best continues the text?",
+    "correct_answer": "feeds a boy ice cream.",
+    "incorrect_answers": [
+      "hold the child and eats the ice cream, after the woman is giving baby ice cream to the child.",
+      "tries to stop the mother pray while giving a baby something else.",
+      "is standing using a white blower to blow snow."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-049",
+    "question": "Complete the following:\n\nMen are lifting heavy weights over their head several times. A man in a blue shirt is watching one of the men. a man in a gray shirt\n\nWhich ending best continues the text?",
+    "correct_answer": "is mimicking the person lifting the weight.",
+    "incorrect_answers": [
+      "is watching the men on the ground.",
+      "hits a big weight in slow motion.",
+      "is talking to one of the men in the middle of the gym."
+    ],
+    "subdomain": "Clean and jerk"
+  },
+  {
+    "id": "hellaswag-050",
+    "question": "Complete the following:\n\nIn home pet groomers demonstrate how to groom a pet. the person\n\nWhich ending best continues the text?",
+    "correct_answer": "is demonstrating how the dog's hair is trimmed with electric shears at their grooming salon.",
+    "incorrect_answers": [
+      "puts a setting engage on the pets tongue and leash.",
+      "starts at their butt rise, combing out the hair with a brush from a red.",
+      "installs and interacts with a sleeping pet before moving away."
+    ],
+    "subdomain": "Grooming dog"
+  },
+  {
+    "id": "hellaswag-051",
+    "question": "Complete the following:\n\nA person polish a shoe with a wrapped finger. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", the person grabs polish paste and water to polish the shoe.",
+    "incorrect_answers": [
+      ", the person remove the wrapping paper to expose a shoe.",
+      ", the person removes the heel heel from the shoe and polish.",
+      ", a person polish the fingers, then the person puts a black polish."
+    ],
+    "subdomain": "Polishing shoes"
+  },
+  {
+    "id": "hellaswag-052",
+    "question": "Complete the following:\n\nEight people are standing at the studio, one woman walked at the back of the group. the group\n\nWhich ending best continues the text?",
+    "correct_answer": "started dancing, swirling, shaking their hips, rotating, their arms and hands are moving from side to side, in front.",
+    "incorrect_answers": [
+      "then begins marching down a fitness track, demonstrating steps, going forward and backward, in between takes several breaks to lift their feet.",
+      "is gathered around a long table into a dance routine.",
+      "continue to discuss the topic of volleyball."
+    ],
+    "subdomain": "Zumba"
+  },
+  {
+    "id": "hellaswag-053",
+    "question": "Complete the following:\n\nA man is seen talking to the camera and presents his knife and sharpener. He then glides the knife down the sharpener and shows how other knives work with different sharpeners. he\n\nWhich ending best continues the text?",
+    "correct_answer": "presents the knife one last time while still speaking to the camera.",
+    "incorrect_answers": [
+      "then repeats his advice and using more wax.",
+      "shows the using the sharpener on a piece of wood.",
+      "uses scissors to cut the blade as well as metal and talk to the camera at the end."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-054",
+    "question": "Complete the following:\n\nA man walks onto the stage to join a band. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "plays up front of a band with a harmonica.",
+    "incorrect_answers": [
+      "plays harp and flute while two other people play instruments next to him.",
+      "and woman dance around together on the stage.",
+      "dance on the ropes attached to the stage."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-055",
+    "question": "Complete the following:\n\nA man walks onto the stage to join a band. A man plays up front of a band with a harmonica. the keyboardist\n\nWhich ending best continues the text?",
+    "correct_answer": "plays a spirited solo during the song.",
+    "incorrect_answers": [
+      "plays the hip hop and dance moves with the band.",
+      "plays his guitar while moving his body around in front of the band.",
+      "sings with the band, twirling his violin as he walks."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-056",
+    "question": "Complete the following:\n\nA camera pans away from a road and shows a person's feet moving around. several shots\n\nWhich ending best continues the text?",
+    "correct_answer": "are shown of people tying their shoes, hitting a button, and checking a watch.",
+    "incorrect_answers": [
+      "are shown of people riding up a mountain on skis while being pulled down by a rope.",
+      "are shown of people wake boarding.",
+      "are then shown of people riding on snowboards over mountains."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-057",
+    "question": "Complete the following:\n\nA camera pans away from a road and shows a person's feet moving around. Several shots are shown of people tying their shoes, hitting a button, and checking a watch. people\n\nWhich ending best continues the text?",
+    "correct_answer": "are then seen running down the road one at a time followed by many more following.",
+    "incorrect_answers": [
+      "march around a room wearing funny hats, hats, and shoes.",
+      "then are shown washing a car.",
+      "walk along a road, using bicycles and bagpipes."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-058",
+    "question": "Complete the following:\n\nA gymnast put power chalk power on his hands and stands near the pommel horse. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", the gymnast approach the pommel horse to spin around many times.",
+    "incorrect_answers": [
+      ", the gymnast put strength and power item on his body and falls.",
+      ", the gymnast blade the board and stands in position facing the pommel horse doing blade moves.",
+      ", the gymnast moves around and flips the chalk power to full weight and continues gymnastics for the next competition, after he turns and stands near the pommel horse."
+    ],
+    "subdomain": "Using the pommel horse"
+  },
+  {
+    "id": "hellaswag-059",
+    "question": "Complete the following:\n\nA gymnast put power chalk power on his hands and stands near the pommel horse. Then, the gymnast approach the pommel horse to spin around many times. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", the gymnast stand on his hand and jumps to land on the floor, while people applaud.",
+    "incorrect_answers": [
+      ", the gymnast put the star light on his hands and jumps high using strength.",
+      ", the gymnast puts fluid on the pommel horse and sit on it to rise the body while position it.",
+      ", the gymnast cross the pommel horse with the long rope while performing handsprings."
+    ],
+    "subdomain": "Using the pommel horse"
+  },
+  {
+    "id": "hellaswag-060",
+    "question": "Complete the following:\n\nA logo shows that this video is presented by expert village. a man in a small blue boat\n\nWhich ending best continues the text?",
+    "correct_answer": "discusses the topic of hand surfing in a hole and gives hints on how to perform this activity.",
+    "incorrect_answers": [
+      "is pushing a kress of water in a lake while instructing his boarder.",
+      ", in the middle of a lake, is skiing.",
+      "is in the water pushing a boat with a sail."
+    ],
+    "subdomain": "Kayaking"
+  },
+  {
+    "id": "hellaswag-061",
+    "question": "Complete the following:\n\nA man in a small blue boat discusses the topic of hand surfing in a hole and gives hints on how to perform this activity. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "demonstrates tricks that can be done while performing this activity.",
+    "incorrect_answers": [
+      "demonstrates how to properly back up a hand surf by requiring an anchor.",
+      "in the small blue boat holds a fish in his hands and then holds the fish while talking about the technique needed to perform this activity.",
+      "is omic on the water as he's riding the speedo on the aerobic machine still pointing down at the water."
+    ],
+    "subdomain": "Kayaking"
+  },
+  {
+    "id": "hellaswag-062",
+    "question": "Complete the following:\n\nThe camera pans to show a man playing a harmonica while sitting on a log beside a river. A woman walks near the train tracks while a train drives by. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "sees the harmonica playing man in the distance.",
+    "incorrect_answers": [
+      "continues just playing with the tunes she made.",
+      "taps a horn intermittently as the camera pans right.",
+      "plays a song on her harmonica while walking away from the train."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-063",
+    "question": "Complete the following:\n\nA woman walks near the train tracks while a train drives by. The woman sees the harmonica playing man in the distance. she\n\nWhich ending best continues the text?",
+    "correct_answer": "watches him and listens to him playing.",
+    "incorrect_answers": [
+      "comes back to the train and continues walking on the subway.",
+      "walks around the rail of the tracks and watches the scenery and the crowds of people.",
+      "begins playing with the harmonica and stops."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-064",
+    "question": "Complete the following:\n\nThe woman sees the harmonica playing man in the distance. She watches him and listens to him playing. She walks away leaving the man. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "finishes playing and remains seated.",
+    "incorrect_answers": [
+      "takes out a wall show from his guitar.",
+      "jumps over a barrier and lands on the sandy beach.",
+      "plays in a house while the woman looks on."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-065",
+    "question": "Complete the following:\n\nA person is shown looking around a city and begins washing windows with his tools. he\n\nWhich ending best continues the text?",
+    "correct_answer": "goes up and down the windows at a rapid pace and continues filming himself through the glass.",
+    "incorrect_answers": [
+      "then brushes right through the window and cleans it off.",
+      "uses a large block cutter to remove smaller blocks until he has the whole of the window covered.",
+      "puts water on a hose and begins cleaning the windows."
+    ],
+    "subdomain": "Cleaning windows"
+  },
+  {
+    "id": "hellaswag-066",
+    "question": "Complete the following:\n\nA person is shown looking around a city and begins washing windows with his tools. He goes up and down the windows at a rapid pace and continues filming himself through the glass. he\n\nWhich ending best continues the text?",
+    "correct_answer": "finishes the glass in record time and turns off the camera.",
+    "incorrect_answers": [
+      "continues to work by scrubbing the windows and then by pouring water out.",
+      "takes his clothes off and hangs them up before throwing his plaid shirt into the laundry.",
+      "spins around to show the different angles of the board and shows pictures of the house in the end."
+    ],
+    "subdomain": "Cleaning windows"
+  },
+  {
+    "id": "hellaswag-067",
+    "question": "Complete the following:\n\nA man dressed in yellow and black winter clothes ice fishes on a a frozen lake. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "is reeling in a fish for a long time.",
+    "incorrect_answers": [
+      "spins with his fishing pole in the air.",
+      "does a trick on his dirty ice fishing line.",
+      "does numerous tricks as he goes through these beauty course courses of ice covered lakes."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-068",
+    "question": "Complete the following:\n\nA man dressed in yellow and black winter clothes ice fishes on a a frozen lake. The man is reeling in a fish for a long time. the mans catch\n\nWhich ending best continues the text?",
+    "correct_answer": "finally reaches the surface.",
+    "incorrect_answers": [
+      "more fish and throws them to the side.",
+      "a fish for dinner by making a wish with his mouth.",
+      "one and puts it on a fishing pole in the lake."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-069",
+    "question": "Complete the following:\n\nTwo children are seen sitting in a tub rubbing their faces and another person's hands interacting. the boy\n\nWhich ending best continues the text?",
+    "correct_answer": "continues to rub water all over his face as well as play with toys and smile at the cameraman.",
+    "incorrect_answers": [
+      "walks out of the bathroom laughing to the camera and the girl stands up to rinse her face off.",
+      "then begins washing the other child and ends by copulating with him.",
+      "is now seen pointing down by himself and leads into him holding a comb and blow dryer and speaking to others."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-070",
+    "question": "Complete the following:\n\nA woman hands a young boy a stick with a little girl grabbing for her attention. the pinata\n\nWhich ending best continues the text?",
+    "correct_answer": "is lifted and the boy begins swinging at the object.",
+    "incorrect_answers": [
+      "pops, and a child in white attempts to hit the pinata, but fails.",
+      "pops out of the playground.",
+      "is hit one after the other, and the girl lets go her hold."
+    ],
+    "subdomain": "Hitting a pinata"
+  },
+  {
+    "id": "hellaswag-071",
+    "question": "Complete the following:\n\nA woman hands a young boy a stick with a little girl grabbing for her attention. The pinata is lifted and the boy begins swinging at the object. the camera\n\nWhich ending best continues the text?",
+    "correct_answer": "pans around people watching while he hits the pinata and a little boy is seen clapping behind him.",
+    "incorrect_answers": [
+      "zooms in on the pinata and then the girl.",
+      "is upside down so everyone else can't see the object.",
+      "zooms in on the boy's head and he looks at the pinata person in the background."
+    ],
+    "subdomain": "Hitting a pinata"
+  },
+  {
+    "id": "hellaswag-072",
+    "question": "Complete the following:\n\nA woman is playing a violin on the street while various people walk around here and behind her. she\n\nWhich ending best continues the text?",
+    "correct_answer": "smiles into the camera while playing and continues playing the song while several people bend down to tip her and walk around her.",
+    "incorrect_answers": [
+      "continues to play violin while people pass by her.",
+      "continues playing the violin and beginning to intermittently move the sticks up and down.",
+      "finishes and walks off, leaving the violin lying on the ground."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-073",
+    "question": "Complete the following:\n\nVarious pictures of food are shown followed by a person cutting up vegetables and mixing various ingredients into a pot. he\n\nWhich ending best continues the text?",
+    "correct_answer": "then cuts up a piece of bread, scoops out the insides, and fries up some meat.",
+    "incorrect_answers": [
+      "shows how the vegetables are chopped for seasoning and then sprinkled into broth and shown with the water boiling.",
+      "cooks up a meal and each are shown eating inside the pot.",
+      "boils food into a bowl and then adds some part of a salad into the bowl."
+    ],
+    "subdomain": "Making a sandwich"
+  },
+  {
+    "id": "hellaswag-074",
+    "question": "Complete the following:\n\nIngredients are sitting on a wooden block. a person\n\nWhich ending best continues the text?",
+    "correct_answer": "starts mixing the ingredients together.",
+    "incorrect_answers": [
+      "adds flour to a baking pan.",
+      "puts salt, lemon juice in a pot, then adds eggs, cheese, ham, and some other hoagies.",
+      "is mixing the ingredients in an iron."
+    ],
+    "subdomain": "Making a lemonade"
+  },
+  {
+    "id": "hellaswag-075",
+    "question": "Complete the following:\n\nA man is seen walking closer to a pinata while a large group of people stand around him. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "misses the pinata and hits a person behind him, shown again in slow motion.",
+    "incorrect_answers": [
+      "shows off various tapers while swinging at the pinata and throwing them out to the crowd.",
+      "then throws the pin while others watch on the sides.",
+      "spins around several times and throws the stick."
+    ],
+    "subdomain": "Hitting a pinata"
+  },
+  {
+    "id": "hellaswag-076",
+    "question": "Complete the following:\n\nA pair of female hands uses an iron on a piece of baby clothing. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "sets the iron aside and flips the clothing.",
+    "incorrect_answers": [
+      "wets the garment and scrubs it with a cloth.",
+      "peels the old clothing off the piece and replaces it with dry material.",
+      "wraps the garment on top of the blouse, then irons it."
+    ],
+    "subdomain": "Ironing clothes"
+  },
+  {
+    "id": "hellaswag-077",
+    "question": "Complete the following:\n\nA pair of female hands uses an iron on a piece of baby clothing. The woman sets the iron aside and flips the clothing. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "uses the iron on the other side of the clothing.",
+    "incorrect_answers": [
+      "then undresses and irons the shirt.",
+      "places a pair of pants into a bucket.",
+      "shows how to iron a sock correctly."
+    ],
+    "subdomain": "Ironing clothes"
+  },
+  {
+    "id": "hellaswag-078",
+    "question": "Complete the following:\n\nThe woman sets the iron aside and flips the clothing. The woman uses the iron on the other side of the clothing. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "sets the iron aside.",
+    "incorrect_answers": [
+      "scrubs the clothing with her hands.",
+      "quickly picks up and irons, flames dancing over the clothing.",
+      "crosses her arms in front of her and it's gone."
+    ],
+    "subdomain": "Ironing clothes"
+  },
+  {
+    "id": "hellaswag-079",
+    "question": "Complete the following:\n\nWe see a chair with a pillow on it. a man holding a cat\n\nWhich ending best continues the text?",
+    "correct_answer": "sits down on the chair.",
+    "incorrect_answers": [
+      "does curling.",
+      "starts hitting objects on an item.",
+      "is wrapping a box."
+    ],
+    "subdomain": "Clipping cat claws"
+  },
+  {
+    "id": "hellaswag-080",
+    "question": "Complete the following:\n\nWe see a chair with a pillow on it. A man holding a cat sits down on the chair. The man clips the cats fingernails. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "strokes the cat's head.",
+    "incorrect_answers": [
+      "then clips the cat nails.",
+      "puts the cat down and boxes it with paper.",
+      "gives the cats ears."
+    ],
+    "subdomain": "Clipping cat claws"
+  },
+  {
+    "id": "hellaswag-081",
+    "question": "Complete the following:\n\nA man holding a cat sits down on the chair. The man clips the cats fingernails. The man strokes the cat's head. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "plays with the cat rocking it back and forth.",
+    "incorrect_answers": [
+      "sits back down on the chair.",
+      "takes the cat to the other room.",
+      "stands up and walks down the sidewalk."
+    ],
+    "subdomain": "Clipping cat claws"
+  },
+  {
+    "id": "hellaswag-082",
+    "question": "Complete the following:\n\nA young girl in a green leotard begins twirling a baton and doing tricks. the girl\n\nWhich ending best continues the text?",
+    "correct_answer": "begins to incorporate her arms and does a flip and continues to flip the baton over her hands and arms.",
+    "incorrect_answers": [
+      "does this in the beginning while using her foot and one hand to move around her body.",
+      "begins to do some of her routine and does a few hip spins.",
+      "puts their hands together, and twirl together like a ballet dancer."
+    ],
+    "subdomain": "Baton twirling"
+  },
+  {
+    "id": "hellaswag-083",
+    "question": "Complete the following:\n\nThe girl begins to incorporate her arms and does a flip and continues to flip the baton over her hands and arms. as the young lady\n\nWhich ending best continues the text?",
+    "correct_answer": "continues her performance, she twirls the baton between her legs and over her head, catches it and does a gallop.",
+    "incorrect_answers": [
+      "is still serving the baton, she places the extension on her left hand and does a full 180 degree spin in one flip.",
+      "becomes more involved in the ballet, she does a final dismount to bring her elbows down and her upper body straight.",
+      "is zapping her arms and is practicing her baton twirling technique, she grabs the baton from the ground and shows herself victorious while her coach claps."
+    ],
+    "subdomain": "Baton twirling"
+  },
+  {
+    "id": "hellaswag-084",
+    "question": "Complete the following:\n\nAs the young lady continues her performance, she twirls the baton between her legs and over her head, catches it and does a gallop. the rest of the young girl's performance\n\nWhich ending best continues the text?",
+    "correct_answer": "is a set of twirls and twist and then she runs off the floor to finish her performance.",
+    "incorrect_answers": [
+      "is replayed in slow motion.",
+      "is shown several times and ends by showcasing her back to the both the camera and a final focus of her performance.",
+      "is replayed, ending with the young lady clapping her hands joyfully."
+    ],
+    "subdomain": "Baton twirling"
+  },
+  {
+    "id": "hellaswag-085",
+    "question": "Complete the following:\n\nWe see a man in a driveway cleaning snow from his car. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "cleans the snow under his windshield wipers.",
+    "incorrect_answers": [
+      "wet his car and wipes it down.",
+      "moves the snow out of the front bumper of his car and pours gasoline on it.",
+      "removes the pieces of the line off his windshield."
+    ],
+    "subdomain": "Removing ice from car"
+  },
+  {
+    "id": "hellaswag-086",
+    "question": "Complete the following:\n\nWe see a man in a driveway cleaning snow from his car. The man cleans the snow under his windshield wipers. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see the building behind the car.",
+    "incorrect_answers": [
+      "see the old man's garage and what looks like a boat in the water.",
+      "zoom in on the cabin.",
+      "see the mans silver car gliding by in the background."
+    ],
+    "subdomain": "Removing ice from car"
+  },
+  {
+    "id": "hellaswag-087",
+    "question": "Complete the following:\n\nThe man cleans the snow under his windshield wipers. We see the building behind the car. We do a 360 spin to see the parking lot. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "opens the doors on his car and gets in.",
+    "incorrect_answers": [
+      "finishes and turns off the wipers.",
+      "finishes and slides out of the car.",
+      "puts up the camera."
+    ],
+    "subdomain": "Removing ice from car"
+  },
+  {
+    "id": "hellaswag-088",
+    "question": "Complete the following:\n\nA man in a blue shirt and shorts lifts a large weight over his head. Another man is filming it. The same man comes back and lifts the weight over his head again. he\n\nWhich ending best continues the text?",
+    "correct_answer": "drops it on the ground and walks away.",
+    "incorrect_answers": [
+      "again lifts the weight over his head.",
+      "drops it and runs towards the camera.",
+      "drops it onto the floor where it gets stuck."
+    ],
+    "subdomain": "Clean and jerk"
+  },
+  {
+    "id": "hellaswag-089",
+    "question": "Complete the following:\n\nA man is seen throwing a dart onto a board and leads into a woman speaking. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "throws several more darts while taking the time to speak to the woman.",
+    "incorrect_answers": [
+      "tosses darts into the water while people measure the distance and run after them.",
+      "gives her several tips and she continues creating darts.",
+      "holds behind him and the woman continues speaking."
+    ],
+    "subdomain": "Throwing darts"
+  },
+  {
+    "id": "hellaswag-090",
+    "question": "Complete the following:\n\nA group of people are standing in the middle of a forest with a trail of pebbles separating them from a beautiful crystal clear body of water. the camera\n\nWhich ending best continues the text?",
+    "correct_answer": "moves across the water and several people on boats and jet-skis are moving in the water near a large wave.",
+    "incorrect_answers": [
+      "then goes right side up and shows a lot of scenery on the left side.",
+      "follows the couple kayaking behind the group on the trail moving back and fourth on the murky water in the forest.",
+      "zooms in on the foamy waters as well as the nearby cliffs and forest surrounding it."
+    ],
+    "subdomain": "Surfing"
+  },
+  {
+    "id": "hellaswag-091",
+    "question": "Complete the following:\n\nThe camera moves across the water and several people on boats and jet-skis are moving in the water near a large wave. More large waves begin to surface and a man begins surfing the waves. the forest\n\nWhich ending best continues the text?",
+    "correct_answer": "is then shown and surf boards appear that are washed up against the banks of the water.",
+    "incorrect_answers": [
+      "is then shown clearly under a large wide wave.",
+      "starts to get darker and darker as the large wave picks up and men continue to sail around it.",
+      "of trees quickly moves over the trailing wave and they follow suit as well."
+    ],
+    "subdomain": "Surfing"
+  },
+  {
+    "id": "hellaswag-092",
+    "question": "Complete the following:\n\nA large patch of grass is shown. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "is mowing the yard next to the bushes.",
+    "incorrect_answers": [
+      "belly flops on some grass before a newscaster announces the story.",
+      "stretches in front of it.",
+      "is shown inside while a machine is working."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-093",
+    "question": "Complete the following:\n\nA pilates instructor on skates explains how to strap your risk protectors tight and shows that you need knee pads to protect your knees. the lady\n\nWhich ending best continues the text?",
+    "correct_answer": "then explains the skates movement and how to use the breaks that is in the back of the skates.",
+    "incorrect_answers": [
+      "starts with two small straps and it puts her into a squatting position with feet fully placed over her knee and her hands suspended and ready.",
+      "then puts lotion in both of her hands and rubs them along your knees while the instructor washes them.",
+      "shows how to harness and strap your weight on properly and she moves away from the mounting as she reaches for her left knee."
+    ],
+    "subdomain": "Rollerblading"
+  },
+  {
+    "id": "hellaswag-094",
+    "question": "Complete the following:\n\nA woman wearing a tan apron is holding a knife and talking. She then shows an appliance on the table and tilts it upwards. she\n\nWhich ending best continues the text?",
+    "correct_answer": "turns a dial on the appliance and sets it back down.",
+    "incorrect_answers": [
+      "continues sliding the blade over the appliance.",
+      "takes a quarter of an inch of the device and holds it against a piece of cake.",
+      "removes a lemon from a jar and places it into a pot."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-095",
+    "question": "Complete the following:\n\nShe then shows an appliance on the table and tilts it upwards. She turns a dial on the appliance and sets it back down. she\n\nWhich ending best continues the text?",
+    "correct_answer": "picks the knife back up and places it on the appliance.",
+    "incorrect_answers": [
+      "shows several shots of the chair in the end.",
+      "pokes the vacuum nozzle in the top seam of the vacuum cleaner and adds fuel to it while still keeping the vacuum nozzle up.",
+      "also shows how to use tubing no a string is attached to it and she explaining the use of the tubing."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-096",
+    "question": "Complete the following:\n\nShe turns a dial on the appliance and sets it back down. She picks the knife back up and places it on the appliance. she\n\nWhich ending best continues the text?",
+    "correct_answer": "turns the dial again on the appliance.",
+    "incorrect_answers": [
+      "gets up and starts brushing the blade.",
+      "uses a tool to pinch the wax off of the knife.",
+      "jumps up and throws something into a container shaped like a snowboard."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-097",
+    "question": "Complete the following:\n\nShe picks the knife back up and places it in the appliance and slowly draws it back several times. she\n\nWhich ending best continues the text?",
+    "correct_answer": "slices a tomato on a wood block with the knife.",
+    "incorrect_answers": [
+      "removes the rubber band off of the knife and gets it across the blade.",
+      "continues using the appliance to put the fancy knife on the box.",
+      "stands up from the chair and walks towards the stairs before finally leaving the room."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-098",
+    "question": "Complete the following:\n\nShe picks the knife back up and places it in the appliance and slowly draws it back several times. She slices a tomato on a wood block with the knife. she\n\nWhich ending best continues the text?",
+    "correct_answer": "grabs a second knife and puts it in the appliance.",
+    "incorrect_answers": [
+      "decorates the knife with green and red maracas.",
+      "positions the knife front and back and finishes by pushing it straight across the square board.",
+      "then demonstrates how to sharpen the knife and finishes by putting a metal rod in front of the plate of spaghetti that she just sharpened."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-099",
+    "question": "Complete the following:\n\nA man wearing a black clothes is sharpening the knife on a stone. The man beside him on blue long sleeves drawing something on the table with his finger. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "turn the knife to sharpen the other side and then wipe it with paper towel.",
+    "incorrect_answers": [
+      "continues sharpening the knife and standing on the middle of the stone.",
+      "stops sharpening the knife and draws on the stone again.",
+      "down retracts from the knife and starts sharpening the knife back up again."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-100",
+    "question": "Complete the following:\n\nA man is seen speaking to the camera while a shot of a person playing basketball shows behind. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "continues speaking as more shots are shown of the boy playing basketball.",
+    "incorrect_answers": [
+      "continues going around the basket while the camera is sitting in the back.",
+      "continues to speak and leads into more clips of him playing tennis.",
+      "pulls the ball up on the court while still speaking to the camera."
+    ],
+    "subdomain": "Layup drill in basketball"
+  },
+  {
+    "id": "hellaswag-101",
+    "question": "Complete the following:\n\nA bottle of deep cleansing gel is shown. a woman\n\nWhich ending best continues the text?",
+    "correct_answer": "holds up the bottle, then is shown using several different solutions that she lines up together on the counter.",
+    "incorrect_answers": [
+      "reading a book demonstrates how to use the bottle in the bathroom.",
+      "kneels down on a mat while holds up an aerosol can.",
+      "then begins applying the liquid to his body."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-102",
+    "question": "Complete the following:\n\nThe male athlete is standing by the two poles, raised his arms up, then jumped on the poles with his arms, while under him, a man pull out a red beam. the athlete\n\nWhich ending best continues the text?",
+    "correct_answer": "perform his exhibition on the poles, he stand on his arms while his feet and legs are extended straight up in the air, he turns around, swirl, jumped and twist around then jumped on the mat, standing straight.",
+    "incorrect_answers": [
+      "crosses parallel, then stand on all fours above, and on his arms then jump.",
+      "placed his feet on the pole and then hold it, then jumped from the pole on the poles stop and put his hands on his knees, bend down, and begin swinging on the pole.",
+      "looked behind him, then and continue walking to the pole."
+    ],
+    "subdomain": "Using parallel bars"
+  },
+  {
+    "id": "hellaswag-103",
+    "question": "Complete the following:\n\nA man is in the gym in tight he bends over picks up a weight over his head and drops it back down. he\n\nWhich ending best continues the text?",
+    "correct_answer": "walks back and loosens up before walking back up and doing it again adding more weight.",
+    "incorrect_answers": [
+      "lifts his legs and pulls the bar up on his body and lifts the weight above his head.",
+      "lifts it again lifts it over his head and drops it this time and he loosens his way to the top and grabs it again.",
+      "raises the bar over his head followed by another."
+    ],
+    "subdomain": "Clean and jerk"
+  },
+  {
+    "id": "hellaswag-104",
+    "question": "Complete the following:\n\nA man is in the gym in tight he bends over picks up a weight over his head and drops it back down. He walks back and loosens up before walking back up and doing it again adding more weight. he\n\nWhich ending best continues the text?",
+    "correct_answer": "does this multiple times adding more and more weight to the rack.",
+    "incorrect_answers": [
+      "finally lifts the weight over his head over his own head.",
+      "turns his back towards the camera and continues talking to the camera adding more weight along with more weight on the end.",
+      "walks back up and drops the weights back down."
+    ],
+    "subdomain": "Clean and jerk"
+  },
+  {
+    "id": "hellaswag-105",
+    "question": "Complete the following:\n\nTwo other men gets in the ring and are wresting the man in the center. People are around the ring wtching the wrest. three journalists\n\nWhich ending best continues the text?",
+    "correct_answer": "are standing wearing suits and watch the men in the ring.",
+    "incorrect_answers": [
+      "came in and started talking to the reporter.",
+      "gets in front of them tugging and pushing the man.",
+      "are wrestling at the ring as people are seeing them."
+    ],
+    "subdomain": "Doing a powerbomb"
+  },
+  {
+    "id": "hellaswag-106",
+    "question": "Complete the following:\n\nA shot of a sunset set is shown followed by peaking smoking and walking around a paint ball pit. the men\n\nWhich ending best continues the text?",
+    "correct_answer": "speak to one another and lead into running around and playing paint ball.",
+    "incorrect_answers": [
+      "then heat paint and paint more followed by smoke and zzing.",
+      "use firearms and films to shoot at a target while the owner smiles in the end.",
+      "play a game of indoor water volleyball and end by handing the ball to someone outside the net and presenting it to the camera."
+    ],
+    "subdomain": "Paintball"
+  },
+  {
+    "id": "hellaswag-107",
+    "question": "Complete the following:\n\nA shot of a sunset set is shown followed by peaking smoking and walking around a paint ball pit. The men speak to one another and lead into running around and playing paint ball. they\n\nWhich ending best continues the text?",
+    "correct_answer": "pauses for a few moments to speak to one another and the camera captures the shooters from different angles.",
+    "incorrect_answers": [
+      "are seen outside again with one man speaking and dancing in the same spot.",
+      "jump and skydive into the water at various speeds, tossing each other around.",
+      "finish and walk into each other holding a pose and cheering."
+    ],
+    "subdomain": "Paintball"
+  },
+  {
+    "id": "hellaswag-108",
+    "question": "Complete the following:\n\nWe see the underwater sea floor. two people\n\nWhich ending best continues the text?",
+    "correct_answer": "swim in front of the camera.",
+    "incorrect_answers": [
+      "push the cups of at the sea floor and the sea floor begins to rise.",
+      "are sitting in a kayak behind the water.",
+      "engage in a game of water polo."
+    ],
+    "subdomain": "Scuba diving"
+  },
+  {
+    "id": "hellaswag-109",
+    "question": "Complete the following:\n\nWe see the underwater sea floor. Two people swim in front of the camera. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see a man holding a camera.",
+    "incorrect_answers": [
+      "see a sea turtle in a grey body bag.",
+      "see a blue wedge and see a boy wearing a cap underwater.",
+      "see men wearing water fogs."
+    ],
+    "subdomain": "Scuba diving"
+  },
+  {
+    "id": "hellaswag-110",
+    "question": "Complete the following:\n\nWe see the underwater sea floor. Two people swim in front of the camera. We see a man holding a camera. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see a fin enter the camera.",
+    "incorrect_answers": [
+      "see a person kitesurfing the ocean floor.",
+      "see the man turn off the camera.",
+      "see divers and a man talking."
+    ],
+    "subdomain": "Scuba diving"
+  },
+  {
+    "id": "hellaswag-111",
+    "question": "Complete the following:\n\nWe see a fin enter the camera. The camera is spinning wildly. Bubbles rise out of a tube. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "hands another person the mouthpiece.",
+    "incorrect_answers": [
+      "bottoms out in the pool.",
+      "walks into the camera frame.",
+      "flours out of the tube."
+    ],
+    "subdomain": "Scuba diving"
+  },
+  {
+    "id": "hellaswag-112",
+    "question": "Complete the following:\n\nA man is seen standing behind a counter speaking to the camera and holding up cleaning products. He puts the products into a sink and begins scrubbing around the sides. he\n\nWhich ending best continues the text?",
+    "correct_answer": "wipes down the counter and shows off the finished sink.",
+    "incorrect_answers": [
+      "sprays down all the surfaces and flips over to show the just cleaned sink.",
+      "moves to one side of the sink and slowly replaces the tile while also speaking to the camera.",
+      "puts a pants and a shirt into the sink and dries off."
+    ],
+    "subdomain": "Cleaning sink"
+  },
+  {
+    "id": "hellaswag-113",
+    "question": "Complete the following:\n\nA group of men on donkeys play a form of polo on a dirt field. the\n\nWhich ending best continues the text?",
+    "correct_answer": "camera pans to people watching the game.",
+    "incorrect_answers": [
+      "camera follows the pack as they chase a dirt bucker.",
+      "men fall to the ground.",
+      "group of players are shown riding horses by goalie during a competition without nets strapped around them."
+    ],
+    "subdomain": "Playing polo"
+  },
+  {
+    "id": "hellaswag-114",
+    "question": "Complete the following:\n\nA group of men on donkeys play a form of polo on a dirt field. The camera pans to people watching the game. the camera\n\nWhich ending best continues the text?",
+    "correct_answer": "returns to the people riding the donkeys.",
+    "incorrect_answers": [
+      "moves to the women playing.",
+      "pans between the playing couples.",
+      "cuts to people riding horses on a dirt track."
+    ],
+    "subdomain": "Playing polo"
+  },
+  {
+    "id": "hellaswag-115",
+    "question": "Complete the following:\n\nTwo men are on a platform, fencing. they\n\nWhich ending best continues the text?",
+    "correct_answer": "jab at each other with their swords.",
+    "incorrect_answers": [
+      "are slipping and sliding between two beams.",
+      "pick up sticks and start the match, alternating back and forth.",
+      "are in a par four olympics match."
+    ],
+    "subdomain": "Doing fencing"
+  },
+  {
+    "id": "hellaswag-116",
+    "question": "Complete the following:\n\nTwo men are on a platform, fencing. They jab at each other with their swords. a woman\n\nWhich ending best continues the text?",
+    "correct_answer": "watches as they parlay back and forth.",
+    "incorrect_answers": [
+      "approaches, instructing them.",
+      "is shown on the side.",
+      "grabs them and whips them apart."
+    ],
+    "subdomain": "Doing fencing"
+  },
+  {
+    "id": "hellaswag-117",
+    "question": "Complete the following:\n\nThere are two men in the water wearing wetsuits and laying on their surfboards as they ride a wave. the camera man\n\nWhich ending best continues the text?",
+    "correct_answer": "is in a fast moving boat and he continues to video the surfers who are still riding the wave but now they are standing up.",
+    "incorrect_answers": [
+      "is shorter than the men and has a shorter range.",
+      "catches one of the surfers as he slips into the goop.",
+      "is surfing as fast as he can on the water as the waves crescendo."
+    ],
+    "subdomain": "Surfing"
+  },
+  {
+    "id": "hellaswag-118",
+    "question": "Complete the following:\n\nThe surfer who is in front is happy to riding the wave for so long that he raises his two arms up in the air and then lowers it back down. the surfer in the back\n\nWhich ending best continues the text?",
+    "correct_answer": "begins to lose balance and falls off of his board while the man in the front is still standing up.",
+    "incorrect_answers": [
+      "kept one arm raised up and the surfer in front of him raise his left arm.",
+      "wave has a big wave almost bigger than he is paddling, and this makes it pretty fun because it causes the surfer riding the wave to put up a lot of resistance so he just does it and crash onto the waves making the wave even bigger then it was.",
+      "does not have to go as far as he needed to to go as he is ready to go."
+    ],
+    "subdomain": "Surfing"
+  },
+  {
+    "id": "hellaswag-119",
+    "question": "Complete the following:\n\nSeveral people are seen drilling holes into the ice while looking down and speaking to the camera. Many pictures are shown of the people fishing as well as pulling fish out of a hole. more people\n\nWhich ending best continues the text?",
+    "correct_answer": "sit by the holes and continue to pull out fish.",
+    "incorrect_answers": [
+      "are seen swimming around in the lake and the men speak to the camera.",
+      "are seen having their pictures taken and speaking to the camera while water flows all around them.",
+      "are seen drilling holes as well as swimming around in the water."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-120",
+    "question": "Complete the following:\n\nAn older women is shown sitting on a front step putting socks on with a small dog standing near her. she\n\nWhich ending best continues the text?",
+    "correct_answer": "then puts her shoe on the foot and the dog looks off into the distance.",
+    "incorrect_answers": [
+      "goes back and forth putting on socks near the dog.",
+      "jumps up and down grabbing her socks rubbing on the dog from time to time.",
+      "brushes and walks with the dog very close."
+    ],
+    "subdomain": "Putting on shoes"
+  },
+  {
+    "id": "hellaswag-121",
+    "question": "Complete the following:\n\nA young man plays violin while wearing headsets. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", the young man finish playing and take off the headsets.",
+    "incorrect_answers": [
+      ", the male hits the violin just once, get the pitch.",
+      ", the young man stops playing and pass on front a row of drummers.",
+      ", the young man stands up to demonstrate how to play, after he plays in stairs."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-122",
+    "question": "Complete the following:\n\nA female basketball coach is seen instructing a group of girl basketball players who are standing in line on a basketball court. the first girl\n\nWhich ending best continues the text?",
+    "correct_answer": "passes to another coach and then runs to the net and takes a layup.",
+    "incorrect_answers": [
+      "walks across the court with the ball and keeps walking then pulling the girls to the other side of the court and the girls begin playing volleyball rhythmically rolling on the floor as the coach helps them follow how to properly do things.",
+      "line up and stand behind a dummy dummy.",
+      "trying to get the ball to go far past the basket and hit it back towards the basket while her coach continues teaching her."
+    ],
+    "subdomain": "Layup drill in basketball"
+  },
+  {
+    "id": "hellaswag-123",
+    "question": "Complete the following:\n\nA group of people are in a house. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "is mopping the floor with a mop.",
+    "incorrect_answers": [
+      "is holding cored soap in his hand as he washes with a bottle.",
+      "is shown wearing skis as he talks about areas he will like to ski on.",
+      "uses a paintball gun on his child."
+    ],
+    "subdomain": "Mooping floor"
+  },
+  {
+    "id": "hellaswag-124",
+    "question": "Complete the following:\n\nA group of people are in a house. A man is mopping the floor with a mop. another boy\n\nWhich ending best continues the text?",
+    "correct_answer": "attempts to walk through where he is mopping.",
+    "incorrect_answers": [
+      "is mopping a floor while blindfolded.",
+      "is standing next to a man scrubbing the floor.",
+      "walks behind him and sets the mop down."
+    ],
+    "subdomain": "Mooping floor"
+  },
+  {
+    "id": "hellaswag-125",
+    "question": "Complete the following:\n\nA man is mopping the floor with a mop. Another boy attempts to walk through where he is mopping. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "takes a drink of beer and complains to the camera.",
+    "incorrect_answers": [
+      "takes a bucket, large hose and goes in the sink with it.",
+      "puts his foot down and walks away.",
+      "walks around the mopping area."
+    ],
+    "subdomain": "Mooping floor"
+  },
+  {
+    "id": "hellaswag-126",
+    "question": "Complete the following:\n\nAnother boy attempts to walk through where he is mopping. The man takes a drink of beer and complains to the camera. he\n\nWhich ending best continues the text?",
+    "correct_answer": "mops through the room in between the people.",
+    "incorrect_answers": [
+      "gets back in the raft to go back to the store.",
+      "continues to mop mopping the floor.",
+      "continues scrubbing the mop with another spray and the boy walks back."
+    ],
+    "subdomain": "Mooping floor"
+  },
+  {
+    "id": "hellaswag-127",
+    "question": "Complete the following:\n\nA small boy wearing a blue and yellow hoodie and gray sweat pants in standing in an outdoor tennis court. he\n\nWhich ending best continues the text?",
+    "correct_answer": "is holding a blue racket as he bounces the yellow and orange tennis ball on the court.",
+    "incorrect_answers": [
+      "then jumps onto a tennis ball that is positioned in between a set of net and a larger setting of tables on which are arranged various rackets and vegetables as well as various sticks.",
+      "is lifting a ball over his head to throw it at a birdie on a long wooden table in front of him.",
+      "lobs the ball back and forth onto the court then puts his hand down to record between his legs to record more practice kicks."
+    ],
+    "subdomain": "Tennis serve with ball bouncing"
+  },
+  {
+    "id": "hellaswag-128",
+    "question": "Complete the following:\n\nA small boy wearing a blue and yellow hoodie and gray sweat pants in standing in an outdoor tennis court. He is holding a blue racket as he bounces the yellow and orange tennis ball on the court. he\n\nWhich ending best continues the text?",
+    "correct_answer": "starts with his first serve where the ball hits the net.",
+    "incorrect_answers": [
+      "continues bouncing the yellow haired ball back and forth while looking out over the court passing the ball to one of the players.",
+      "bounces and throws the ball evenly evenly to continue the game of tennis against the two balls.",
+      "bounces it and does several different things to hit it."
+    ],
+    "subdomain": "Tennis serve with ball bouncing"
+  },
+  {
+    "id": "hellaswag-129",
+    "question": "Complete the following:\n\nHe starts with his first serve where the ball hits the net. Then he takes another ball, bounces it and serves again. the ball\n\nWhich ending best continues the text?",
+    "correct_answer": "goes over the net and falls on the other side of the court.",
+    "incorrect_answers": [
+      "returns with a third serve.",
+      "bounces again and hits the net multiple times.",
+      "comes back to him without touching the net."
+    ],
+    "subdomain": "Tennis serve with ball bouncing"
+  },
+  {
+    "id": "hellaswag-130",
+    "question": "Complete the following:\n\nWe see a golden title on a black screen. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "is playing a harmonica as arrows point to numbers above him.",
+    "incorrect_answers": [
+      "is waxing a small black horse as rolls his croquet stick.",
+      "is wearing scuba gear in a hole in the ice at lake hriton.",
+      "is on a slack line and is pushed down it."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-131",
+    "question": "Complete the following:\n\nA shot of a cyclist is shown and then it cuts back to the same man in white speaking. a woman\n\nWhich ending best continues the text?",
+    "correct_answer": "is shown running and the man continues speaking about fitness tips.",
+    "incorrect_answers": [
+      "shows a strap on and checks it out.",
+      "is now seen riding beside the cyclist and taking pictures as well.",
+      "is then seen riding in on a horse with another man and they start riding together across the track."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-132",
+    "question": "Complete the following:\n\nA runner is running on a track in front of a crowd of people. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "is shown talking to the camera.",
+    "incorrect_answers": [
+      "is not running when he jumps into a sand pit.",
+      "gives a brief introduction before continuing and competing against the man in black.",
+      "is throwing a ball for his dog to catch."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-133",
+    "question": "Complete the following:\n\nRunners are running down a track with crowds on both sides and one of the runners stumbles. Another runner is shown and a man is shown talking to the camera. a runner\n\nWhich ending best continues the text?",
+    "correct_answer": "is crawling across a finish line while other runners are running through the finish line.",
+    "incorrect_answers": [
+      "is walking through a huge forest and ends up climbing up the aplus over a fence and crashing into other person who subsequently falls too.",
+      "triumphant throws up his arms and walks off alone.",
+      "is shown again multiple times."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-134",
+    "question": "Complete the following:\n\nThe distressed runner is carried away. Runners in distress are shown. A man is talking to the camera. various runners\n\nWhich ending best continues the text?",
+    "correct_answer": "are shown in distress and talking to the camera.",
+    "incorrect_answers": [
+      "arrive from various countries.",
+      "came into the camera.",
+      "are shown putting on before a competition."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-135",
+    "question": "Complete the following:\n\nA person is seen standing off in the distance with another standing around a hole. the person\n\nWhich ending best continues the text?",
+    "correct_answer": "uses a fishing pole on the hole and attempts to pull out a fish.",
+    "incorrect_answers": [
+      "then pitches a ball down a long slide and walks away looking triumphant.",
+      "then lights a match and starts throwing the wood to the other.",
+      "then throws a ball down the snow and another person stands on a ladder and catches the ball."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-136",
+    "question": "Complete the following:\n\nA cooker talks in a kitchen and shows the inside of a sharpener knife that has discs inside. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", the man puts a knife in the sharpener knife to sharpen.",
+    "incorrect_answers": [
+      ", the cooker put the discs in a tray made of zesty and sliced them on each side of a chopped banana, then slice them and add them to the lemon slice and add a glass of lemonade.",
+      ", the cooker add black ingredient and block.",
+      ", the cooker prods the discs to make some dough inside while demonstrating while painted the floor."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-137",
+    "question": "Complete the following:\n\nA cooker talks in a kitchen and shows the inside of a sharpener knife that has discs inside. Then, the man puts a knife in the sharpener knife to sharpen. after\n\nWhich ending best continues the text?",
+    "correct_answer": ", the man wash and dry the knife.",
+    "incorrect_answers": [
+      ", the man then paints the knife with the discs.",
+      ", the man measures the sharpener and cut the discs on its knife, then sews the discs and carve them.",
+      ", he cuts a slice in two and put them in a pan."
+    ],
+    "subdomain": "Sharpening knives"
+  },
+  {
+    "id": "hellaswag-138",
+    "question": "Complete the following:\n\nA pile of trees are shown blowing outside on a cobblestone path outside of a building. as the leaves\n\nWhich ending best continues the text?",
+    "correct_answer": "continue to blow a young boy walks into the scene clearing the path with his leaf blower.",
+    "incorrect_answers": [
+      "fall, others are shown as well.",
+      "blow, flour is poured into a pan and laid out.",
+      "fall, a large dog wearing a blue cape covers his face."
+    ],
+    "subdomain": "Blowing leaves"
+  },
+  {
+    "id": "hellaswag-139",
+    "question": "Complete the following:\n\nA man does a barbecue in a yard while singing with people showing drinks in cans and cups. Then people walk to a bar and sing inside drinking beer. Women serves drinks from a fountain. a man\n\nWhich ending best continues the text?",
+    "correct_answer": "talks on front a microphone and people continue singing and showing beer.",
+    "incorrect_answers": [
+      "films the men drinking beers through a can and eat.",
+      "then weld and a bartender gives an alcoholic beverage to the worker.",
+      "gives a kiss to a man and then look at a table a woman is using, then a woman shows something white on an tin."
+    ],
+    "subdomain": "Drinking beer"
+  },
+  {
+    "id": "hellaswag-140",
+    "question": "Complete the following:\n\nWomen serves drinks from a fountain. A man talks on front a microphone and people continue singing and showing beer. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", people are again singing, drinking and dancing outdoors.",
+    "incorrect_answers": [
+      ", people play soccer, ripping each other's hair.",
+      ", people sit and play foosball and are shown during the show.",
+      ", two men fight sand with an accordion while a man help him pretend."
+    ],
+    "subdomain": "Drinking beer"
+  },
+  {
+    "id": "hellaswag-141",
+    "question": "Complete the following:\n\nThere are people standing on a frozen body of water and are looking into a small hole that has a fishing wire in it and they watch it as it bobs up and down. the standing man\n\nWhich ending best continues the text?",
+    "correct_answer": "pulls the pole and wire up higher and the man kneeling on the ice pulls the fish out of the ice water and puts it onto the ice.",
+    "incorrect_answers": [
+      "gets a brush that is attached to a pole and starts to move and gets a zip line out of that hole.",
+      "in red shirt starts to swing on the line and tries hard to get it to catch something and pulls on the wire several times and hangs from it like a seal.",
+      "is on the floating device and is swimming deep under the water, digging around with the pole, while spectators are standing nearby and he extends the fishing wire up to the hole he made before getting pulled under."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-142",
+    "question": "Complete the following:\n\nThe standing man pulls the pole and wire up higher and the man kneeling on the ice pulls the fish out of the ice water and puts it onto the ice. another man\n\nWhich ending best continues the text?",
+    "correct_answer": "takes a picture of the fish, the kneeling man unhooks it and the standing man picks it up, holds it by its gills and poses with it.",
+    "incorrect_answers": [
+      "in three suits throws the fish down the lake onto the water while the other man at the lower depth touches the fish.",
+      "lays out the fish on the ice while the audience can't make out a face from their turn.",
+      "is then kneeling on the ice and the men fly up and fly as far as possible."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-143",
+    "question": "Complete the following:\n\nSome boys are in the pools playing with volleyballs. there\n\nWhich ending best continues the text?",
+    "correct_answer": "is a large swimming team swimming and throwing the ball around to their team mates, scoring.",
+    "incorrect_answers": [
+      "is a boy carrying a metal ball and a black net on the back of his back.",
+      "is a man in a blue suit standing in front of them with a thick rope around his neck.",
+      "is a game going on called soccer being played."
+    ],
+    "subdomain": "Playing water polo"
+  },
+  {
+    "id": "hellaswag-144",
+    "question": "Complete the following:\n\nA young man sits on a bed. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "starts playing an acoustic guitar.",
+    "incorrect_answers": [
+      "then wipes his face.",
+      "gets up and walks towards the camera.",
+      "lifts a shoe to his mouth."
+    ],
+    "subdomain": "Playing guitarra"
+  },
+  {
+    "id": "hellaswag-145",
+    "question": "Complete the following:\n\nTwo men do maneuvers on a canoe pivoting the canoe helping with the paddlers. Then, the men pivot the canoe away from the bow paddlers while paddling fast the oars. after\n\nWhich ending best continues the text?",
+    "correct_answer": ", the men slides the canoe forward using the oars to advance.",
+    "incorrect_answers": [
+      ", one man misses the paddle while paddling.",
+      ", a man sits and maneuver the canoe while other men sit.",
+      ", a man performs different zumba moves in different circumstances."
+    ],
+    "subdomain": "Canoeing"
+  },
+  {
+    "id": "hellaswag-146",
+    "question": "Complete the following:\n\nThen, the men pivot the canoe away from the bow paddlers while paddling fast the oars. After, the men slides the canoe forward using the oars to advance. next\n\nWhich ending best continues the text?",
+    "correct_answer": ", the men sail on the river until arrive to the bank of the river.",
+    "incorrect_answers": [
+      ", the men flip the canoe and stops at the bow paddlers.",
+      ", the men turn in the air, then they followed the bow paddlers.",
+      ", the men throw the canoe into the water, while one of them holds the paddle with his right hand."
+    ],
+    "subdomain": "Canoeing"
+  },
+  {
+    "id": "hellaswag-147",
+    "question": "Complete the following:\n\nPeople are standing on a hill of snow. people\n\nWhich ending best continues the text?",
+    "correct_answer": "are snowboarding down a hill of snow.",
+    "incorrect_answers": [
+      "are working inside a building.",
+      "are sitting in buckets on a blanket on the hill.",
+      "are shoveling snow from the foot of the hill."
+    ],
+    "subdomain": "Skiing"
+  },
+  {
+    "id": "hellaswag-148",
+    "question": "Complete the following:\n\nPeople are standing on a hill of snow. People are snowboarding down a hill of snow. people\n\nWhich ending best continues the text?",
+    "correct_answer": "are skiing down a hill.",
+    "incorrect_answers": [
+      "are pouring snowballs into tubes as they go down the hill.",
+      "are skiing down a roof of a house.",
+      "are standing on a hill holding stick."
+    ],
+    "subdomain": "Skiing"
+  },
+  {
+    "id": "hellaswag-149",
+    "question": "Complete the following:\n\nPeople are standing on a hill of snow. People are snowboarding down a hill of snow. People are skiing down a hill. the skiiers\n\nWhich ending best continues the text?",
+    "correct_answer": "stop at the bottom and talk.",
+    "incorrect_answers": [
+      "are skiing down a snowy hill.",
+      "are holding on to ladders.",
+      "comes to a stop on a hill of snow."
+    ],
+    "subdomain": "Skiing"
+  },
+  {
+    "id": "hellaswag-150",
+    "question": "Complete the following:\n\nA man in an outdoor basketball court explains how to do layup drills with both arms, over hand, underhand, right and left hand layup with two steps. he\n\nWhich ending best continues the text?",
+    "correct_answer": "then goes to the hash marks on the court and shows various variations of a layup from various distances and how to do the drills for practice.",
+    "incorrect_answers": [
+      "then demonstrates reading what, by how, you can do the layup over and under hand move with your hands.",
+      "explains about techniques to correct your back and legs rotation on the course and game.",
+      "shows the components of gym holing, how to use the constant need for exercise to renew strength and safety, and explains how to stand before parti balanced positions as the man demonstrates proper use of such suspension."
+    ],
+    "subdomain": "Layup drill in basketball"
+  },
+  {
+    "id": "hellaswag-151",
+    "question": "Complete the following:\n\nHe then goes to the hash marks on the court and shows various variations of a layup from various distances and how to do the drills for practice. he\n\nWhich ending best continues the text?",
+    "correct_answer": "then comes back to the camera and explains what he did.",
+    "incorrect_answers": [
+      "shows how to put a hole in a wall using a drill.",
+      "once again changes course and takes a break before continuing to talk to the camera.",
+      "explains this one more time as he walks towards the game area."
+    ],
+    "subdomain": "Layup drill in basketball"
+  },
+  {
+    "id": "hellaswag-152",
+    "question": "Complete the following:\n\nThe man in brown shirt is standing next to a pile of tennis ball while he is talking to the camera. he\n\nWhich ending best continues the text?",
+    "correct_answer": "played tennis ball with another person.",
+    "incorrect_answers": [
+      "walked along a beach, talking with people, trying to court a ball.",
+      "started hitting the ball with his racket on his gloved hand.",
+      "pulled out two tennis rackets and toss one to the man and the other's dropped the racket in the air."
+    ],
+    "subdomain": "Tennis serve with ball bouncing"
+  },
+  {
+    "id": "hellaswag-153",
+    "question": "Complete the following:\n\nThe man in brown shirt is standing next to a pile of tennis ball while he is talking to the camera. He played tennis ball with another person. the man in purple shirt\n\nWhich ending best continues the text?",
+    "correct_answer": "serve the ball while the black man hit the ball back.",
+    "incorrect_answers": [
+      "fell on the ground, the man put the ball down, pull the ball and set it on the ground, he ball fell, but remain upright.",
+      "finally dressed in a black shirt walked over and joined the men talking about the tennis racket.",
+      "is playing racket ball while talking to the camera."
+    ],
+    "subdomain": "Tennis serve with ball bouncing"
+  },
+  {
+    "id": "hellaswag-154",
+    "question": "Complete the following:\n\nA group of people are sitting in a sauna fully clothed. One guy stands up with a violin. The guy begins playing the violin and dancing. the guy\n\nWhich ending best continues the text?",
+    "correct_answer": "kicks his shoe off while dancing.",
+    "incorrect_answers": [
+      "demonstrates how to cut the strings with the violin.",
+      "plays behind a camera.",
+      "finishes and gets up."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-155",
+    "question": "Complete the following:\n\nOne guy stands up with a violin. The guy begins playing the violin and dancing. The guy kicks his shoe off while dancing. the guy\n\nWhich ending best continues the text?",
+    "correct_answer": "sits down and plays the violin.",
+    "incorrect_answers": [
+      "resumes playing the violin.",
+      "stops playing and drops the violin.",
+      "taps his shoe while playing the violin."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-156",
+    "question": "Complete the following:\n\nThe harmonica is held up and shown. a person\n\nWhich ending best continues the text?",
+    "correct_answer": "holds a harmonica between his hands a plays a song.",
+    "incorrect_answers": [
+      "is flying through the sky.",
+      "runs up and grabs the guitar, then begins strumming.",
+      "is strumming an electric guitar."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-157",
+    "question": "Complete the following:\n\nThe harmonica is held up and shown. A person holds a harmonica between his hands a plays a song. the person\n\nWhich ending best continues the text?",
+    "correct_answer": "finishes the song and holds up the harmonica.",
+    "incorrect_answers": [
+      "plays a painting on front a chair.",
+      "takes the harmonica out of their mouth and begins playing the piece.",
+      "folds the the harmonica between their legs."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-158",
+    "question": "Complete the following:\n\nA young man plays the violin on a sidewalk for people passing by in downtown area. two students\n\nWhich ending best continues the text?",
+    "correct_answer": "walk by behind the musician while he plays.",
+    "incorrect_answers": [
+      "of swimming are in the swimming pool watching him play the violin.",
+      "play the violin on front people who pass by in street, looking at the violin.",
+      "are playing drums in a park while other people walk past on sidewalk."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-159",
+    "question": "Complete the following:\n\nThe camera zooms in to show the car's front right wheel. The camera zooms out to show the man spraying the car with soap. the camera\n\nWhich ending best continues the text?",
+    "correct_answer": "zooms in again to show the soap running down the back of the car, then the camera moves to show the left side of the car.",
+    "incorrect_answers": [
+      "zooms in to the driver side wheel and mimics it.",
+      "shows the man cleaning the car with the brooms.",
+      "zooms back out to show the well laid tires."
+    ],
+    "subdomain": "Hand car wash"
+  },
+  {
+    "id": "hellaswag-160",
+    "question": "Complete the following:\n\nThe camera zooms in again to show the soap running down the back of the car, then the camera moves to show the left side of the car. then two men\n\nWhich ending best continues the text?",
+    "correct_answer": "spray water on the car to wash the soap off.",
+    "incorrect_answers": [
+      "appear and one stands next to the car and the other follows behind.",
+      "in the background release, spray paint, cloth, and long sleeves from a car cover.",
+      "are shown standing next to a woman with fish on a wheel, laughing."
+    ],
+    "subdomain": "Hand car wash"
+  },
+  {
+    "id": "hellaswag-161",
+    "question": "Complete the following:\n\nA woman in an orange shirt is sitting on an exercise machine. she\n\nWhich ending best continues the text?",
+    "correct_answer": "begins working out on the exercise machine.",
+    "incorrect_answers": [
+      "gets on the machine and starts riding it.",
+      "engages in some form of mount.",
+      "is using a dodgeball machine."
+    ],
+    "subdomain": "Using the rowing machine"
+  },
+  {
+    "id": "hellaswag-162",
+    "question": "Complete the following:\n\nA person hangs onto the handles of a kite flying overhead. the kite\n\nWhich ending best continues the text?",
+    "correct_answer": "falls as the wind lessens.",
+    "incorrect_answers": [
+      "is flying in the air waving to the camera.",
+      "takes off on a bright course.",
+      "moves away as the man is pushed back up by the water."
+    ],
+    "subdomain": "Kite flying"
+  },
+  {
+    "id": "hellaswag-163",
+    "question": "Complete the following:\n\nPeople are rowing down a body of water. a guy\n\nWhich ending best continues the text?",
+    "correct_answer": "rinses his face with water from the body of water.",
+    "incorrect_answers": [
+      "uses a big paddle to pull people that fall.",
+      "is standing on a rowing machine.",
+      "falls out of his back."
+    ],
+    "subdomain": "Washing face"
+  },
+  {
+    "id": "hellaswag-164",
+    "question": "Complete the following:\n\nA graphic introduces the hand car wash video. the car\n\nWhich ending best continues the text?",
+    "correct_answer": "is washed first gently with soap.",
+    "incorrect_answers": [
+      "washes persons hands and wipes them with a blue cloth.",
+      "washes game is displayed.",
+      "washes and a man wearing a blue shirt speaks to the camera."
+    ],
+    "subdomain": "Hand car wash"
+  },
+  {
+    "id": "hellaswag-165",
+    "question": "Complete the following:\n\nA graphic introduces the hand car wash video. The car is washed first gently with soap. next\n\nWhich ending best continues the text?",
+    "correct_answer": ", the tires are soaped and washed thoroughly.",
+    "incorrect_answers": [
+      "is a clean car wash video.",
+      ", two cars slowly drive by.",
+      ", it is shown from behind."
+    ],
+    "subdomain": "Hand car wash"
+  },
+  {
+    "id": "hellaswag-166",
+    "question": "Complete the following:\n\nNext, the tires are soaped and washed thoroughly. After that, the car's engine is steam cleaned. a final spot free rinse\n\nWhich ending best continues the text?",
+    "correct_answer": "is applied and the car is dried.",
+    "incorrect_answers": [
+      "is shown and a young female is sucking on a cigarette.",
+      "is taken from under the hood.",
+      "washer is applied and the wash sheet is spread out on the floor."
+    ],
+    "subdomain": "Hand car wash"
+  },
+  {
+    "id": "hellaswag-167",
+    "question": "Complete the following:\n\nA woman is seen putting makeup on her face and leads into several pictures of makeup. Many more pictures of products are shown with text across the screen. more pictures of products\n\nWhich ending best continues the text?",
+    "correct_answer": "are shown that end with more text and a woman pushing away makeup.",
+    "incorrect_answers": [
+      "are shown on the screen leads into a woman putting makeup on herself.",
+      "are shown and ends with the camera shining off into the distance and the woman walking away.",
+      "are shown and ends with a woman hula hooping with herself."
+    ],
+    "subdomain": "Putting on makeup"
+  },
+  {
+    "id": "hellaswag-168",
+    "question": "Complete the following:\n\nThere is a woman eating ice cream from a tub and talking to the camera man. and he\n\nWhich ending best continues the text?",
+    "correct_answer": "tries to look into the tub, but she pulls it away.",
+    "incorrect_answers": [
+      "tells her about some sticky potatoes and she eats them also.",
+      "is gone doing this all with a in a getting ice cream, while a man else with a stick is also eating from a tub and eating ice cream.",
+      "is holding a baby zumba as they begin dancing around twirling their legs and dancing in tight formation."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-169",
+    "question": "Complete the following:\n\nThere is a woman eating ice cream from a tub and talking to the camera man. And he tries to look into the tub, but she pulls it away. the camera person\n\nWhich ending best continues the text?",
+    "correct_answer": "sits down to continue talking to the woman.",
+    "incorrect_answers": [
+      "continues talking to the social media to find a rich husband in that world.",
+      "is sitting in the bushes watching the woman.",
+      "stops at a jar of liquid in the sink."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-170",
+    "question": "Complete the following:\n\nA man is shown standing in front of a blue background as many harmonicas are shown and he starts playing them. He is then shown speaking into the camera and going into detail with regards to the products features. he\n\nWhich ending best continues the text?",
+    "correct_answer": "shows off how many he has in his coat and continues talking.",
+    "incorrect_answers": [
+      "continues talking about the machine while smoking a cigarette in front of the camera.",
+      "continues playing the stereo while detail is shown on the side as the scenes continue to pan in focus and ends with a blow by blow image.",
+      "is 6'6 \" and continues to play with the device throughout the video as well as cutting it back to a man playing polls."
+    ],
+    "subdomain": "Playing harmonica"
+  },
+  {
+    "id": "hellaswag-171",
+    "question": "Complete the following:\n\nA violinist is playing the violin in a music room. she\n\nWhich ending best continues the text?",
+    "correct_answer": "adjusts the violin under her chin as she reads the music.",
+    "incorrect_answers": [
+      "stops playing the violin and starts to sit up.",
+      "takes a cloth in her hand and prints the sheet music.",
+      "explains the song she is about to play."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-172",
+    "question": "Complete the following:\n\nA woman in a suit is talking to a camera. a woman\n\nWhich ending best continues the text?",
+    "correct_answer": "is putting contact lenses into her eyes.",
+    "incorrect_answers": [
+      "takes an earring into her nostril.",
+      "puts on hair gel and brushes on her face.",
+      "is giving a tattoo to a man on a bed."
+    ],
+    "subdomain": "Putting in contact lenses"
+  },
+  {
+    "id": "hellaswag-173",
+    "question": "Complete the following:\n\nA woman in a suit is talking to a camera. A woman is putting contact lenses into her eyes. contact lenses\n\nWhich ending best continues the text?",
+    "correct_answer": "are shown on a hand.",
+    "incorrect_answers": [
+      "are shown inside a case onto her nose, inside and outside.",
+      "are being put into elongated pupil holes.",
+      "are made and put in."
+    ],
+    "subdomain": "Putting in contact lenses"
+  },
+  {
+    "id": "hellaswag-174",
+    "question": "Complete the following:\n\nA crowd watches as several runners in a race jog past. they all\n\nWhich ending best continues the text?",
+    "correct_answer": "keep jogging, coming in at the end of the race.",
+    "incorrect_answers": [
+      "are interviewed by microphones outside.",
+      "stop and change positions as the race starts.",
+      "fall down as they attempt to make the jump."
+    ],
+    "subdomain": "Running a marathon"
+  },
+  {
+    "id": "hellaswag-175",
+    "question": "Complete the following:\n\nA small child seated at a table eats ice cream with a spoon while people walk by in the background. a pair of adult hands\n\nWhich ending best continues the text?",
+    "correct_answer": "briefly enter the camera frame in the foreground.",
+    "incorrect_answers": [
+      "somebody else time.",
+      "them a carton of milk, estes laughs and their mom feeds the boy.",
+      "him the ice cream cone as the child claps."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-176",
+    "question": "Complete the following:\n\nA small child seated at a table eats ice cream with a spoon while people walk by in the background. A pair of adult hands briefly enter the camera frame in the foreground. the child\n\nWhich ending best continues the text?",
+    "correct_answer": "inserts her spoon into her ice cream container on the table.",
+    "incorrect_answers": [
+      "departs from the camera frame, holding a spoon and shakes it in the air.",
+      "lifts the spoon without touching the liquid on the spoon.",
+      "eats with gusto while dancing and smiling to the camera."
+    ],
+    "subdomain": "Having an ice cream"
+  },
+  {
+    "id": "hellaswag-177",
+    "question": "Complete the following:\n\nThere's a woman with red colored hair wearing a black tank top and printed black tights skating on roller blades through the streets of a city. the streets\n\nWhich ending best continues the text?",
+    "correct_answer": "don't have any cars but people are riding bikes or skateboarding.",
+    "incorrect_answers": [
+      "showed various advertisements advertised for skate skating.",
+      "are covered hip hop and dressed in purple and red leotards as the individual rhythmically spins around.",
+      "are filled with crowds, people and cars, and she is wearing a white and orange outfit."
+    ],
+    "subdomain": "Rollerblading"
+  },
+  {
+    "id": "hellaswag-178",
+    "question": "Complete the following:\n\nThere's a woman with red colored hair wearing a black tank top and printed black tights skating on roller blades through the streets of a city. The streets don't have any cars but people are riding bikes or skateboarding. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "swiftly skates through the crowded streets as she passes by several tourists walking leisurely.",
+    "incorrect_answers": [
+      "walks past teens riding bmx bikes.",
+      "on the skateboards takes one final turn and then climbs the stairs of a building.",
+      "stops skateboarding and gets out of the skate park and opens a door behind her and takes a cigarette out of her purse."
+    ],
+    "subdomain": "Rollerblading"
+  },
+  {
+    "id": "hellaswag-179",
+    "question": "Complete the following:\n\nThe bikers are biking on the ramp, while on the starting line the group of bikers are in positioned. The small fence was put down the the bikers went bike racing over the big ramps. the spectators\n\nWhich ending best continues the text?",
+    "correct_answer": "are on the side of the tracks.",
+    "incorrect_answers": [
+      "flowed around the ends of the ramp, while the people observe and applaud.",
+      "all congratulated the bikers onto the racetrack win.",
+      "are in the crowd so the bike races is continued."
+    ],
+    "subdomain": "BMX"
+  },
+  {
+    "id": "hellaswag-180",
+    "question": "Complete the following:\n\nA man is kneeling on the ice with another beside hide pulling string out of a hole. they\n\nWhich ending best continues the text?",
+    "correct_answer": "continue to pull the string while the man beside him grabs a hook.",
+    "incorrect_answers": [
+      "then open the hole with a rod and let the ice out into the ocean.",
+      "use the string to create a sled as they begin sledding through the streets of paris.",
+      "march the sled back and forth creating holes as they go."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-181",
+    "question": "Complete the following:\n\nThey continue to pull the string while the man beside him grabs a hook. He places the hook near the hole but the man grabs a fish on a string. the fish\n\nWhich ending best continues the text?",
+    "correct_answer": "flops around and the man grabs the fish and holds him up.",
+    "incorrect_answers": [
+      "fizzles and the man drops the hook.",
+      "splashes into the hole bigger and bigger as the others continue to pull the string one by one.",
+      "crawls out and the man catches it."
+    ],
+    "subdomain": "Ice fishing"
+  },
+  {
+    "id": "hellaswag-182",
+    "question": "Complete the following:\n\nA group of people wearing swim caps move around a pool and toss a ball around with a man on the sides waving a flag. they\n\nWhich ending best continues the text?",
+    "correct_answer": "play a game of water polo and throw the ball around to each other.",
+    "incorrect_answers": [
+      "dive backward into the pool causing it to crest and swim to the edge of the pool.",
+      "continue to throw the object around while holding the hold the fish.",
+      "continue playing with one another in the water and join stand by to watch the game."
+    ],
+    "subdomain": "Playing water polo"
+  },
+  {
+    "id": "hellaswag-183",
+    "question": "Complete the following:\n\nA group of people wearing swim caps move around a pool and toss a ball around with a man on the sides waving a flag. They play a game of water polo and throw the ball around to each other. one\n\nWhich ending best continues the text?",
+    "correct_answer": "throws the ball into the net and causes the people on the side to jump and cheer.",
+    "incorrect_answers": [
+      "person wins the game knocking the other one into the water.",
+      "person keeps score and pretends to make a goal.",
+      "jumps through the net and makes it all the way to the other side."
+    ],
+    "subdomain": "Playing water polo"
+  },
+  {
+    "id": "hellaswag-184",
+    "question": "Complete the following:\n\nWe see an image and a title card. We see a man playing basketball. The shot he made is seen in reverse. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see a gym with teenagers shooting basketball.",
+    "incorrect_answers": [
+      "see a title and the man appears, shirtless.",
+      "see a stick in the finished basket.",
+      "see the man make his shot and see a title card."
+    ],
+    "subdomain": "Layup drill in basketball"
+  },
+  {
+    "id": "hellaswag-185",
+    "question": "Complete the following:\n\nWe see a title card on black. A man is shooting basketball in a gym. We see a man dunk the ball twice. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see the ending title card on black.",
+    "incorrect_answers": [
+      "see a man flip and throw the ball.",
+      "see man pull back the cup and drop a dart down the grass.",
+      "see a yellow screen and title screen."
+    ],
+    "subdomain": "Layup drill in basketball"
+  },
+  {
+    "id": "hellaswag-186",
+    "question": "Complete the following:\n\nA woman in a dress holding a violin addresses an audience. The woman plays the violin as other musicians look on. the woman\n\nWhich ending best continues the text?",
+    "correct_answer": "finishes her playing and everyone applauds.",
+    "incorrect_answers": [
+      "finishes playing and sits back.",
+      "finishes playing directly and the audience applauds.",
+      "pauses to face the audience."
+    ],
+    "subdomain": "Playing violin"
+  },
+  {
+    "id": "hellaswag-187",
+    "question": "Complete the following:\n\nA boy skateboard on a road jumping and flipping the skateboard in the street. a skateboard\n\nWhich ending best continues the text?",
+    "correct_answer": "leans on a tree.",
+    "incorrect_answers": [
+      "lands on the road where construction workers are spraying it down, and a boy with sunglasses runs towards the skateboard like a robot.",
+      "is riding on the road on its belly.",
+      "is two of the boys skateboard together."
+    ],
+    "subdomain": "Longboarding"
+  },
+  {
+    "id": "hellaswag-188",
+    "question": "Complete the following:\n\nA boy skateboard on a road jumping and flipping the skateboard in the street. A skateboard leans on a tree. then\n\nWhich ending best continues the text?",
+    "correct_answer": ", the boy skateboard on small ramps and then continues skateboarding in the street.",
+    "incorrect_answers": [
+      ", the boy slides on the street with his skateboard sticking in the air.",
+      ", gopro jumps, then skateboard on a road.",
+      ", the boy rides on the skateboard with turned legs."
+    ],
+    "subdomain": "Longboarding"
+  },
+  {
+    "id": "hellaswag-189",
+    "question": "Complete the following:\n\nA girl is seen laying on a table with a man piercing her belly button below her. the girl\n\nWhich ending best continues the text?",
+    "correct_answer": "screams in pain and the man finishes her piercing while she looks to the camera.",
+    "incorrect_answers": [
+      "laughs at the camera while holding a can of herself and the man.",
+      "holds up a bottle of fluid and puts it on an iv.",
+      "under the belly's cycle begins to milk the tube from the bottle that is in her stomach and pans over to the man piercing her belly button."
+    ],
+    "subdomain": "Getting a piercing"
+  },
+  {
+    "id": "hellaswag-190",
+    "question": "Complete the following:\n\nA young man is washing clothes inside a bathroom sink as he talks to the camera. initially he\n\nWhich ending best continues the text?",
+    "correct_answer": "starts to wash the clothes with both hands.",
+    "incorrect_answers": [
+      "shows several different ways to clean a sink during a wash and is seen staring into the camera.",
+      "is demonstrating using two hoses to wash the clothes as he will talk to the camera.",
+      "is going to his locker but resumes washing the shirt."
+    ],
+    "subdomain": "Hand washing clothes"
+  },
+  {
+    "id": "hellaswag-191",
+    "question": "Complete the following:\n\nA young man is washing clothes inside a bathroom sink as he talks to the camera. Initially he starts to wash the clothes with both hands. afterwards he\n\nWhich ending best continues the text?",
+    "correct_answer": "adds more soap using two different bottles to the sink.",
+    "incorrect_answers": [
+      "washes the other clothes in the sink and several more people walk by.",
+      "shows his face by grimacing due to the stiff air stream and looks in the mirror to change something for his face.",
+      "goes back to using his hands to wash the clothes gradually."
+    ],
+    "subdomain": "Hand washing clothes"
+  },
+  {
+    "id": "hellaswag-192",
+    "question": "Complete the following:\n\nInitially he starts to wash the clothes with both hands. Afterwards he adds more soap using two different bottles to the sink. subsequently he\n\nWhich ending best continues the text?",
+    "correct_answer": "keeps washing the clothes as he talks to the camera.",
+    "incorrect_answers": [
+      "adds more soap to the washing machine and then proceeds to swirl and rinse the clothes.",
+      "ends by miming drinking the water in the sink.",
+      "grabs fabric to dry the clothes and shows how they fit him comfortably."
+    ],
+    "subdomain": "Hand washing clothes"
+  },
+  {
+    "id": "hellaswag-193",
+    "question": "Complete the following:\n\nA man touches his faces and waves. the man\n\nWhich ending best continues the text?",
+    "correct_answer": "walks a mower across very tall growing grass.",
+    "incorrect_answers": [
+      "motions for someone in a suit to come and gray their hair.",
+      "in black puts a medal medal around his neck.",
+      "runs and claps his hands together."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-194",
+    "question": "Complete the following:\n\nWe see the title introducing us to jesse. jesse the dog\n\nWhich ending best continues the text?",
+    "correct_answer": "runs and catches frisbee.",
+    "incorrect_answers": [
+      "owner shows us how he walks and how he breathes.",
+      "runs in circles where the dog is his mate.",
+      "is shown from a shampoo advertisement one last time."
+    ],
+    "subdomain": "Disc dog"
+  },
+  {
+    "id": "hellaswag-195",
+    "question": "Complete the following:\n\nWe see the title introducing us to jesse. Jesse the dog runs and catches frisbee. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see jesse close up in the camera.",
+    "incorrect_answers": [
+      "see an opening title screen.",
+      "see a guy hold a blue frisbee in the air and tell that the dog has a pink frisbee and we see its pink feet.",
+      "see a violinist doing a piano clip."
+    ],
+    "subdomain": "Disc dog"
+  },
+  {
+    "id": "hellaswag-196",
+    "question": "Complete the following:\n\nWe see the title introducing us to jesse. Jesse the dog runs and catches frisbee. We see jesse close up in the camera. jesse\n\nWhich ending best continues the text?",
+    "correct_answer": "is running around catching the frisbee the lady throws.",
+    "incorrect_answers": [
+      "gives instructions on how to clean a window in a home.",
+      "throws the frisbee and a dog catches it.",
+      "gives us the dog and we see the ending title screen."
+    ],
+    "subdomain": "Disc dog"
+  },
+  {
+    "id": "hellaswag-197",
+    "question": "Complete the following:\n\nJesse the dog runs and catches frisbee. We see jesse close up in the camera. Jesse is running around catching the frisbee the lady throws. we\n\nWhich ending best continues the text?",
+    "correct_answer": "see five still shots of jesse jumping in the air.",
+    "incorrect_answers": [
+      "see a fish landing into the water.",
+      "see a house in the distance and on the left.",
+      "see the ground in a white screen."
+    ],
+    "subdomain": "Disc dog"
+  },
+  {
+    "id": "hellaswag-198",
+    "question": "Complete the following:\n\nJesse is running around catching the frisbee the lady throws. We see five still shots of jesse jumping in the air. jesse\n\nWhich ending best continues the text?",
+    "correct_answer": "continues to run around with his frisbee.",
+    "incorrect_answers": [
+      "is then shown jumping again and we see the men giving each other high fives.",
+      "kicks after the dog while the lady helps.",
+      "immediately shits in pain while having a hard time catching the frisbee."
+    ],
+    "subdomain": "Disc dog"
+  },
+  {
+    "id": "hellaswag-199",
+    "question": "Complete the following:\n\nA first person view is seen of a man riding a riding lawn mower. he\n\nWhich ending best continues the text?",
+    "correct_answer": "takes turns quickly, mowing the lawn.",
+    "incorrect_answers": [
+      "creates a large puddle of water and a high rush of water around him as he heads back and forth back and forth.",
+      "moves all around while there is a crowd watching.",
+      "talks about how to properly ride an object while another man climbs up on the back of him."
+    ],
+    "subdomain": "Cutting the grass"
+  },
+  {
+    "id": "hellaswag-200",
+    "question": "Complete the following:\n\nA first person view is seen of a man riding a riding lawn mower. He takes turns quickly, mowing the lawn. he\n\nWhich ending best continues the text?",
+    "correct_answer": "continues until the entire yard is mown.",
+    "incorrect_answers": [
+      "never stops, trampling the grass and clipping it back.",
+      "moves back and fourth doing several other tasks while looking to the camera.",
+      "backs up slowly to cut the lawn."
+    ],
+    "subdomain": "Cutting the grass"
+  }
+]

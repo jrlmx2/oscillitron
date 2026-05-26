@@ -254,6 +254,11 @@ type RunnerConfig struct {
 	// the "what would the frontier model have cost?" column.
 	// Zero value = no counterfactual.
 	FrontierPricing Pricing
+	// GoalDeriver, when set, is called once per case before
+	// orchestrators run. It derives a format-description goal from
+	// the case prompt and returns it. The runner stores the result
+	// in Case.Goal. When nil, Case.Goal stays empty.
+	GoalDeriver func(ctx context.Context, c Case) string
 }
 
 // Run loads cases, runs each through every orchestrator + grader,
@@ -312,6 +317,10 @@ func Run(ctx context.Context, cfg RunnerConfig) (Report, error) {
 		// Stamp the case ID for every event emitted by downstream
 		// orchestrators, graders, runners, governors, and adapters.
 		caseCtx := trace.WithCorrelation(ctx, "case", c.ID)
+		if cfg.GoalDeriver != nil {
+			c.Goal = cfg.GoalDeriver(caseCtx, c)
+			cr.Case = c
+		}
 		for _, o := range cfg.Orchestrators {
 			or := OrchestratorResult{OrchestratorName: o.Name()}
 			// Stamp the orchestrator name so events from inside

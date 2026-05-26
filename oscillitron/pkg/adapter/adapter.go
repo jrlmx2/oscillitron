@@ -44,3 +44,12 @@ type Adapter interface {
 	// Execute populated. Category drives the runner's next move.
 	Execute(ctx context.Context, env session.Envelope) (session.Envelope, error)
 }
+
+// RawCaller is an optional interface an Adapter may implement to
+// support freeform prompts that bypass the playbook machinery
+// (no playbook instructions, no response_format enforcement).
+// Used by meta-tasks like goal extraction and answer extraction
+// that need natural text in, natural text out.
+type RawCaller interface {
+	RawCall(ctx context.Context, prompt string) (string, error)
+}

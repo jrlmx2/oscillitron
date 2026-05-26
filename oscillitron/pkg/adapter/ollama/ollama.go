@@ -367,6 +367,52 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	return env, nil
 }
 
+// RawCall implements adapter.RawCaller. Sends a single prompt to the
+// substrate with no playbook instructions, no response_format, no
+// structured output enforcement. Returns the model's natural text.
+func (a *Adapter) RawCall(ctx context.Context, prompt string) (string, error) {
+	ctx, cancel := a.boundContext(ctx)
+	if cancel != nil {
+		defer cancel()
+	}
+	ep := a.cfg.EvaluateEndpoint
+	body := chatRequest{
+		Model: ep.Model,
+		Messages: []chatMessage{
+			{Role: "user", Content: prompt},
+		},
+		Stream:  false,
+		Options: ep.Options,
+	}
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return "", fmt.Errorf("ollama: marshal raw call: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, ep.BaseURL+"/v1/chat/completions", bytes.NewReader(buf))
+	if err != nil {
+		return "", fmt.Errorf("ollama: build raw call: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := a.cfg.HTTPClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("ollama: raw call POST: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return "", fmt.Errorf("ollama: raw call status %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+	}
+	var parsed chatResponse
+	if err := json.NewDecoder(resp.Body).Decode(&parsed); err != nil {
+		return "", fmt.Errorf("ollama: decode raw call response: %w", err)
+	}
+	if len(parsed.Choices) == 0 {
+		return "", errors.New("ollama: raw call had no choices")
+	}
+	return strings.TrimSpace(parsed.Choices[0].Message.Content), nil
+}
+
 // executeResponseFormat returns the per-playbook response_format
 // schema when one is configured, falling back to the adapter-wide
 // ResponseFormat. Evaluate bypasses this entirely (passes nil).

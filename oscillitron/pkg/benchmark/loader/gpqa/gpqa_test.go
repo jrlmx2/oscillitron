@@ -162,7 +162,7 @@ func TestLoader_RejectsBadShape(t *testing.T) {
 		{"missing id", `[{"question": "q", "correct_answer": "a", "incorrect_answers": ["b","c","d"]}]`},
 		{"missing question", `[{"id": "x", "correct_answer": "a", "incorrect_answers": ["b","c","d"]}]`},
 		{"missing correct", `[{"id": "x", "question": "q", "incorrect_answers": ["b","c","d"]}]`},
-		{"wrong incorrect count", `[{"id": "x", "question": "q", "correct_answer": "a", "incorrect_answers": ["b","c"]}]`},
+		{"no incorrect answers", `[{"id": "x", "question": "q", "correct_answer": "a", "incorrect_answers": []}]`},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

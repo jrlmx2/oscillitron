@@ -1,0 +1,222 @@
+[
+  {
+    "id": "sb-001",
+    "question": "A regular client emails you: \"Hi, I noticed my last invoice was $200 more than usual. Can you clarify?\" You review your records and find you accidentally billed them for a project that was actually for a different client. Which response is most appropriate?\n\nContext: Your company has a policy of correcting billing errors within 24 hours. The client's total annual spend with you is around $40,000.",
+    "correct_answer": "Apologize directly, explain the specific error (wrong project billed), issue a corrected invoice immediately, and thank them for flagging it.",
+    "incorrect_answers": [
+      "Reply that you will investigate and get back to them within 3-5 business days once you've reviewed all relevant records.",
+      "Apologize, issue a $200 credit on their next invoice instead of a corrected invoice, and note the error was due to a system glitch.",
+      "Explain that the charge is valid because of scope changes on their project, and offer to schedule a call to walk through the line items."
+    ],
+    "subdomain": "customer_communication"
+  },
+  {
+    "id": "sb-002",
+    "question": "A customer writes a public Google review: \"Order arrived 4 days late and the packaging was damaged. No one called me back when I left a voicemail.\" You investigate and find the delay was caused by a carrier error, and the voicemail was missed because of a staffing gap that week. What is the best response to post publicly?\n\nContext: You have verified the carrier was at fault for the delay. The customer has ordered from you three times before.",
+    "correct_answer": "Acknowledge the frustrating experience, apologize for the missed callback (your responsibility regardless of cause), explain the carrier delay without deflecting blame, and invite them to contact you directly to make it right.",
+    "incorrect_answers": [
+      "Explain that the carrier caused the delay, which is outside your control, and that voicemails are returned within 48 hours per your stated policy.",
+      "Thank them for the feedback, note that your team is looking into it, and ask them to email you privately with their order number.",
+      "Apologize fully, offer a full refund publicly, and say you've fired the employee responsible for missing the callback."
+    ],
+    "subdomain": "customer_communication"
+  },
+  {
+    "id": "sb-003",
+    "question": "A prospective client emails asking for a discount: \"We love your proposal but your rate is 15% above our budget. Can you come down?\" Your current rate reflects your full scope. Which reply best balances winning the work without devaluing your services?\n\nContext: You have capacity this month. Your margin on this project type is typically 30%. The project is $20,000.",
+    "correct_answer": "Respond by asking which deliverables they could reduce to fit their budget, or offer a phased approach — full scope at your rate or reduced scope at their budget — putting choice in their hands.",
+    "incorrect_answers": [
+      "Agree to the 15% discount to win the work, noting you'll make it up in volume if they refer other clients.",
+      "Hold firm on price and explain your rates reflect market value, offering to send them case studies to justify the cost.",
+      "Counter at 7% below your rate without changing scope, framing it as a one-time new-client discount."
+    ],
+    "subdomain": "customer_communication"
+  },
+  {
+    "id": "sb-004",
+    "question": "A long-standing client of 5 years emails saying they're moving to a competitor who offered a significantly lower price. They say they appreciate your relationship but the savings are too large to ignore. What is the most professionally sound response?\n\nContext: The client represents 12% of your annual revenue. You cannot match the competitor's price without operating at a loss.",
+    "correct_answer": "Thank them sincerely for the five-year relationship, wish them well, ask for a brief exit conversation to understand what you could improve, and leave the door open for future work without making a counteroffer you can't sustain.",
+    "incorrect_answers": [
+      "Offer a temporary 20% discount for one year to retain them, betting you can improve efficiency to cover the margin gap during that period.",
+      "Reply that you understand the decision and will send a final invoice, then move on without further conversation to avoid appearing desperate.",
+      "Ask them to reconsider by listing your service advantages over the competitor and requesting a meeting to review the competitor's proposal."
+    ],
+    "subdomain": "customer_communication"
+  },
+  {
+    "id": "sb-005",
+    "question": "You need to hire a part-time bookkeeper. A candidate with 8 years of QuickBooks experience asks for $28/hr. Another candidate has 2 years of experience and asks for $18/hr. Your books are straightforward (monthly reconciliations, AR/AP, payroll for 6 employees), and you estimate the role requires 10 hours/week. Over a full year, what is the total cost difference between the two candidates?\n\nContext: Assume 52 weeks/year and no additional benefits costs.",
+    "correct_answer": "$5,200 — the senior candidate costs $14,560/year vs. $9,360/year for the junior candidate ($10 × 10 hrs × 52 weeks = $5,200 difference).",
+    "incorrect_answers": [
+      "$2,600 — the difference is $10/hr × 5 hours/week × 52 weeks, since only half the hours involve complex tasks the senior handles.",
+      "$10,400 — the difference is $10/hr × 20 hours/week × 52 weeks, accounting for overtime and catch-up work during tax season.",
+      "$5,720 — the difference is $11/hr after factoring in a standard 10% employment overhead on the wage gap."
+    ],
+    "subdomain": "financial_analysis"
+  },
+  {
+    "id": "sb-006",
+    "question": "Your café buys coffee beans from a supplier at $8/lb and brews 40 cups per pound. You sell each cup for $3.50. Your fixed overhead (rent, utilities, staff) is $4,200/month. You currently sell 1,800 cups/month. Are you profitable, and by how much?\n\nContext: Ignore all other variable costs for this calculation.",
+    "correct_answer": "Profitable by $1,740/month. Revenue = 1,800 × $3.50 = $6,300. Bean cost = 1,800 ÷ 40 × $8 = 45 lbs × $8 = $360. Net profit = $6,300 − $360 − $4,200 = $1,740.",
+    "incorrect_answers": [
+      "Profitable by $870/month — the correct formula halves bean cost because bulk purchasing reduces effective cost per cup to $4/lb at this volume.",
+      "Not profitable — losing $60/month. Revenue = $6,300, but total costs (beans + overhead + 10% shrinkage factor) = $6,360.",
+      "Profitable by $2,100/month. Revenue = $6,300, bean cost = $0 (already sunk), net after overhead = $2,100."
+    ],
+    "subdomain": "financial_analysis"
+  },
+  {
+    "id": "sb-007",
+    "question": "A supplier offers a 2% discount if you pay invoices within 10 days instead of the standard 30 days. Your average invoice is $15,000 and you currently pay on day 28. Should you take the early-payment discount, assuming you can borrow short-term funds at 8% annual interest if needed?\n\nContext: The discount applies to the full invoice amount. Evaluate purely on financial terms.",
+    "correct_answer": "Yes — take the discount. The 2% discount over 20 days translates to an annualized rate of approximately 36% (2 / 98 × 365 / 20), which far exceeds your 8% borrowing cost.",
+    "incorrect_answers": [
+      "No — the savings of $300 per invoice don't justify tying up $14,700 in cash 20 days early when you could earn returns elsewhere.",
+      "Yes — but only if you already have the cash on hand; borrowing at 8% makes the discount unprofitable once you net the interest cost.",
+      "It depends entirely on your current cash balance; the decision cannot be made on financial terms alone without a full cash-flow projection."
+    ],
+    "subdomain": "financial_analysis"
+  },
+  {
+    "id": "sb-008",
+    "question": "You are pricing a new service package. Your direct costs per client are $400/month (labor + tools). You want a 40% gross margin. Competitors charge between $750 and $900/month for comparable services. What price should you set?\n\nContext: Your target market is small businesses who are price-sensitive but value reliability.",
+    "correct_answer": "~$667/month achieves the 40% gross margin ($400 / (1 − 0.40) = $666.67), but this is below the competitive range. Price at $750 to stay competitive while exceeding your margin target — the extra margin improves sustainability.",
+    "incorrect_answers": [
+      "$560/month — apply the 40% markup on direct costs ($400 × 1.40 = $560) to stay accessible to price-sensitive customers.",
+      "$900/month — match the top of the competitive range to signal premium quality and let the market correct downward via negotiation.",
+      "$667/month — this is the exact price that hits 40% gross margin and you should not deviate from it based on competitor pricing."
+    ],
+    "subdomain": "financial_analysis"
+  },
+  {
+    "id": "sb-009",
+    "question": "Your retail store has three product lines: A (revenue $50K, COGS $30K), B (revenue $80K, COGS $65K), and C (revenue $40K, COGS $20K). You have limited shelf space and can only expand two of the three lines next quarter. Which two should you expand?\n\nContext: All three lines have similar demand elasticity and shelf-space requirements.",
+    "correct_answer": "Lines A and C. Gross margins: A = 40% ($20K/$50K), B = 18.75% ($15K/$80K), C = 50% ($20K/$40K). A and C have significantly better margins; expanding B's high revenue but thin margin yields less profit per dollar of shelf space.",
+    "incorrect_answers": [
+      "Lines A and B — B generates the highest absolute gross profit ($15K) and combined with A ($20K) maximizes total gross profit dollars from two lines.",
+      "Lines B and C — B's high revenue anchors the product mix while C's margins provide profitability balance.",
+      "Lines A and C are correct, but only because B is the lowest-revenue line; margin percentages alone don't determine expansion decisions without volume data."
+    ],
+    "subdomain": "financial_analysis"
+  },
+  {
+    "id": "sb-010",
+    "question": "You run a 6-person marketing agency. A freelancer you use regularly has told you she wants to go full-time somewhere and will leave your contractor pool in 60 days. She currently handles 30% of your billable work at $65/hr. What is the best operational response?\n\nContext: Hiring a full-time employee would cost ~$75K/year in salary plus 25% benefits. Your current revenue is $600K/year and she bills ~180 hours/month.",
+    "correct_answer": "Start recruiting now and simultaneously identify 1-2 backup freelancers to bridge the 60-day gap. Evaluate whether converting her role to a full-time hire is financially justified given the $93,750 all-in cost vs. ~$140,400/year at her current rate.",
+    "incorrect_answers": [
+      "Offer her a full-time role immediately — at $65/hr she's billing nearly $140K/year, so a $75K salary plus benefits saves you money while retaining institutional knowledge.",
+      "Redistribute her work across existing staff immediately and don't replace her — 30% of billable work spread across 6 people is manageable if each person absorbs a 5% increase.",
+      "Wait until the 60-day mark to begin recruiting to avoid the awkwardness of interviewing while she's still working for you."
+    ],
+    "subdomain": "operations"
+  },
+  {
+    "id": "sb-011",
+    "question": "A vendor sends you a counter-offer on a 12-month supply contract. Their original quote was $48,000/year. They've revised to $44,500/year but added a 90-day termination notice clause (up from 30 days) and removed the price-lock guarantee. Should you accept?\n\nContext: The service is operationally critical. Switching cost if you need to leave is estimated at $8,000 in migration time. Market alternatives are priced at $43,000-$47,000/year.",
+    "correct_answer": "Decline and counter. The $3,500/year savings is real, but removing the price-lock exposes you to mid-contract increases on a critical service. The 90-day notice clause adds $8,000+ switching friction. The net risk exceeds the savings unless you negotiate price-lock back in.",
+    "incorrect_answers": [
+      "Accept — $3,500/year in savings on a critical service is material, and the 90-day notice only matters if you plan to switch, which you don't if the service is critical.",
+      "Decline and go to market — alternatives start at $43,000 so you can likely get a better deal with price-lock and a shorter notice clause from a competitor.",
+      "Accept the counter, but add a side letter requiring 30 days' notice for price changes; this preserves savings while protecting against sudden increases."
+    ],
+    "subdomain": "operations"
+  },
+  {
+    "id": "sb-012",
+    "question": "You manage a small landscaping crew (4 workers). A residential client wants their large garden project completed in 2 days. Your realistic estimate is 3 days for your crew. A competitor could do it in 2 days by adding a subcontractor, but your subcontractor relationships are thin. What should you tell the client?\n\nContext: This is the client's first project with you. Your project margin is 35%.",
+    "correct_answer": "Be honest: tell the client your best completion is 3 days and explain why (crew size, quality standards). Offer a realistic schedule rather than overpromising and underdelivering on a first engagement.",
+    "incorrect_answers": [
+      "Commit to 2 days and figure out the subcontractor logistics after securing the job — it's better to have the work and solve the problem than to lose the client on a timeline issue.",
+      "Quote 2 days but build in a one-day buffer by starting earlier in the morning; your crew can do it with overtime if motivated.",
+      "Tell the client 2.5 days and see if they accept — splitting the difference signals flexibility while keeping expectations close to reality."
+    ],
+    "subdomain": "operations"
+  },
+  {
+    "id": "sb-013",
+    "question": "You need to post a job for a part-time customer support role (20 hrs/week, $18-$22/hr, remote, flexible schedule). You have the following bullet points from your notes: must handle email + chat, familiarity with Zendesk preferred, patient with frustrated customers, strong written English, reliable internet, available Mon-Fri 10am-2pm core hours. Which job posting opening paragraph best converts these into an effective listing?",
+    "correct_answer": "\"We're looking for a part-time Customer Support Specialist (20 hrs/week, remote, $18-$22/hr) who loves helping people solve problems. You'll handle email and chat inquiries Mon-Fri, 10am-2pm, with flexibility around those core hours. Zendesk experience is a plus but not required.\"",
+    "incorrect_answers": [
+      "\"Seeking a detail-oriented individual for a customer-facing role requiring excellent communication skills. Responsibilities include managing inbound customer inquiries via multiple channels. Must be available during standard business hours.\"",
+      "\"Part-time support rep needed. Requirements: Zendesk, written English, reliable internet, Mon-Fri 10-2. Pay $18-22/hr. Apply with resume.\"",
+      "\"Are you passionate about customer success? We need a driven self-starter to champion our customer experience across email and chat platforms in a dynamic fast-paced environment.\""
+    ],
+    "subdomain": "operations"
+  },
+  {
+    "id": "sb-014",
+    "question": "You have meeting notes from a 45-minute team meeting. Key items discussed: Q3 revenue missed target by 8%, the new website launch is delayed 2 weeks because the developer needs final copy, Sarah will lead the trade show booth in September, the team agreed to a Monday morning 9am standup going forward, and there's an unresolved debate about whether to raise prices in Q4. What are the correct action items from this meeting?\n\nContext: Action items should be specific, assigned, and actionable.",
+    "correct_answer": "1) Provide final copy to developer by [deadline] — owner: [copy owner]. 2) Sarah to coordinate trade show logistics for September booth. 3) Schedule recurring Monday 9am standup (calendar invite). 4) Assign someone to prepare a Q4 pricing analysis for a future decision meeting — the debate was unresolved, not decided.",
+    "incorrect_answers": [
+      "1) Investigate Q3 revenue miss — whole team. 2) Developer to launch website by new deadline. 3) Sarah: trade show. 4) Raise prices in Q4.",
+      "1) Fix Q3 revenue gap. 2) Website: 2-week delay noted. 3) Sarah: trade show in September. 4) Monday standups starting next week. 5) Raise prices Q4.",
+      "1) Final copy to developer ASAP. 2) Sarah: trade show. 3) Monday standups confirmed. 4) Table price discussion permanently — team couldn't agree."
+    ],
+    "subdomain": "operations"
+  },
+  {
+    "id": "sb-015",
+    "question": "You run a 3-year-old specialty food company with $800K in annual revenue. A contract clause from your primary distributor reads: \"Distributor may adjust payment terms from Net-30 to Net-60 with 14 days written notice during periods of market disruption, as determined solely by Distributor.\" What is the primary risk this clause creates for your business?\n\nContext: You currently operate on thin working capital with approximately 45 days of cash runway.",
+    "correct_answer": "The clause gives the distributor unilateral, vaguely defined power to double your payment wait time with minimal notice, which could immediately push your 45-day cash runway into insolvency territory. \"As determined solely by Distributor\" removes your ability to contest the trigger.",
+    "incorrect_answers": [
+      "The risk is moderate — Net-60 is industry-standard and the 14-day notice gives you time to arrange a short-term credit line to bridge the gap.",
+      "The primary risk is that the clause is unenforceable — courts rarely uphold unilateral payment-term changes without mutual agreement, so you can likely dispute any invocation.",
+      "The risk is reputational: if the distributor invokes this clause, it signals they distrust your creditworthiness and could lead other partners to tighten terms as well."
+    ],
+    "subdomain": "operations"
+  },
+  {
+    "id": "sb-016",
+    "question": "Your small software consultancy is choosing between three marketing strategies for Q3. Option 1: $3,000 LinkedIn ad campaign targeting CTOs at companies 50-200 employees, expected 15 qualified leads. Option 2: Sponsor a local tech meetup series for $1,500, expected 8 qualified leads but higher-quality relationships. Option 3: Invest $2,000 in content marketing (2 technical blog posts + SEO), expected 5 leads in Q3 but compounding returns over 12 months. Your pipeline currently has a 20% close rate and average deal size is $18,000. Which strategy has the best immediate ROI?\n\nContext: Evaluate Q3 returns only for this question.",
+    "correct_answer": "Option 2. Q3 ROI: $28,800 return on $1,500 = 19.2:1. Option 1 returns $54,000 on $3,000 = 18:1. On a cost-efficiency basis, Option 2's meetup spend returns more per dollar in Q3, even though Option 1 generates more absolute revenue.",
+    "incorrect_answers": [
+      "Option 1 — it generates the most absolute revenue in Q3 ($54,000 expected) which matters more than ROI ratio when you need to fill pipeline quickly.",
+      "Option 3 — content marketing has the highest long-term return and a consultancy should always prioritize durable assets over one-time campaigns.",
+      "Option 1 and Option 2 have identical ROI so the decision should be made on strategic fit, not financial analysis."
+    ],
+    "subdomain": "strategy"
+  },
+  {
+    "id": "sb-017",
+    "question": "Your boutique fitness studio has 200 active members at $80/month. You're considering raising prices to $95/month. Your fixed monthly costs are $10,000 and variable costs per member are $15/month. If 15% of members cancel due to the price increase, is the price increase financially beneficial?\n\nContext: Evaluate purely on net profit impact.",
+    "correct_answer": "Yes. Before: 200 members × ($80 - $15) = $13,000 contribution, minus $10,000 fixed = $3,000 profit. After: 170 members × ($95 - $15) = $13,600 contribution, minus $10,000 fixed = $3,600 profit. Net gain: $600/month despite 30 members lost.",
+    "incorrect_answers": [
+      "No — losing 30 members (30 × $95 = $2,850 in lost revenue) outweighs the $15/member revenue gain on the 170 remaining members ($15 × 170 = $2,550).",
+      "Yes, but the math shows only a $50/month improvement — barely worth the member relations risk of a price increase.",
+      "It depends on whether the 15% churn estimate is accurate; without certainty, the risk of underestimating churn makes the price increase inadvisable."
+    ],
+    "subdomain": "strategy"
+  },
+  {
+    "id": "sb-018",
+    "question": "You're a 2-person accounting firm considering hiring a third staff accountant to allow you to take on more clients. Your current capacity is 40 clients. Adding one person would allow 60 clients. Your average client pays $3,500/year. A staff accountant costs $65,000/year in salary and benefits. At what minimum client count does the hire break even in Year 1?\n\nContext: Assume all new clients are acquired instantly (no ramp time) and no other costs change.",
+    "correct_answer": "Approximately 59 clients. The hire costs $65,000. Each new client above 40 generates $3,500 in revenue. You need $65,000 / $3,500 ≈ 18.6 additional clients, so 40 + 19 = 59 clients to break even (19 × $3,500 = $66,500 covers the salary).",
+    "incorrect_answers": [
+      "Approximately 19 clients total — the hire pays for itself once you sign 19 new clients ($3,500 × 19 = $66,500), regardless of your starting base.",
+      "60 clients — you need full capacity utilization before the hire is financially justified; anything below maximum capacity represents an underperforming investment.",
+      "Approximately 49 clients — the hire breaks even when the 9 new clients you gain (at $3,500 each) plus the productivity improvement on existing clients equals $65,000."
+    ],
+    "subdomain": "strategy"
+  },
+  {
+    "id": "sb-019",
+    "question": "Your e-commerce store is considering two growth strategies. Strategy A: expand to a second product category (estimated $40K investment, $25K annual profit increase in Year 1, growing 15% annually). Strategy B: double down on paid acquisition for your current category (estimated $20K investment, $18K annual profit increase in Year 1, growing 8% annually). After 3 years, which strategy has generated more cumulative profit increase?\n\nContext: Ignore time-value of money for this calculation.",
+    "correct_answer": "Strategy A: Year 1 = $25K, Year 2 = $28.75K, Year 3 = $33.06K; cumulative = $86.81K on $40K investment. Strategy B: Year 1 = $18K, Year 2 = $19.44K, Year 3 = $20.99K; cumulative = $58.43K on $20K investment. Strategy A generates more cumulative profit ($86.81K vs $58.43K) despite the larger upfront investment.",
+    "incorrect_answers": [
+      "Strategy B — it requires half the investment and generates a better return on capital over 3 years ($58.43K on $20K vs $86.81K on $40K — both ~2.9x, but B is lower risk).",
+      "Strategy A — and it also has a better ROI: $86.81K / $40K = 2.17x vs Strategy B's $58.43K / $20K = 2.92x... actually Strategy B has better ROI, so Strategy B is the correct choice.",
+      "They are nearly equal — Strategy A generates $86.81K and Strategy B generates $58.43K, but adjusting for the $20K additional investment in Strategy A, the net advantage is negligible."
+    ],
+    "subdomain": "strategy"
+  },
+  {
+    "id": "sb-020",
+    "question": "Your 10-person web agency is offered a large contract: $180,000 for a 6-month project requiring 8 of your 10 staff members full-time. Your current annual revenue run-rate is $900,000 (evenly distributed). What is the primary risk of accepting this contract, and what is the most important mitigation?\n\nContext: The contract would start in 30 days. The client is well-funded and creditworthy.",
+    "correct_answer": "The primary risk is revenue concentration and opportunity cost: one client representing ~40% of annual revenue with 80% of your team for 6 months means any scope dispute, delay, or relationship failure is existential. The most important mitigation is a detailed contract with clear change-order procedures and a milestone-based payment schedule — not just accepting because the client is creditworthy.",
+    "incorrect_answers": [
+      "The primary risk is cash flow — a $180K contract paid at completion creates a 6-month gap. Mitigation: negotiate 50% upfront before signing.",
+      "The primary risk is overextension — 8 of 10 staff on one project leaves no capacity for new business development. Mitigation: hire 2 contractors before the project starts.",
+      "There is no significant risk — the client is creditworthy and $180K in 6 months equals your normal $150K run-rate, so this is simply a good deal that should be accepted as-is."
+    ],
+    "subdomain": "strategy"
+  }
+]

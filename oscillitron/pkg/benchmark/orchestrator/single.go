@@ -35,14 +35,16 @@ import (
 // Vote to count votes and by Single to populate Answer.Extracted
 // when set.
 type Extractor interface {
-	Extract(raw string) string
+	Extract(ctx context.Context, goal string, raw string) string
 }
 
 // ExtractorFunc adapts a plain function to the Extractor interface.
-type ExtractorFunc func(string) string
+type ExtractorFunc func(context.Context, string, string) string
 
 // Extract implements Extractor.
-func (f ExtractorFunc) Extract(s string) string { return f(s) }
+func (f ExtractorFunc) Extract(ctx context.Context, goal, raw string) string {
+	return f(ctx, goal, raw)
+}
 
 // Single calls the adapter once per case. Wire with a frontier model
 // (Sonnet/Opus) for the baseline arm of a benchmark — the yardstick
@@ -98,7 +100,7 @@ func (s Single) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer,
 	raw := out.Execute.ReturnResult.Result.Content
 	extracted := raw
 	if s.Extractor != nil {
-		extracted = s.Extractor.Extract(raw)
+		extracted = s.Extractor.Extract(ctx, c.Goal, raw)
 	}
 	return benchmark.Answer{
 		Raw:        raw,

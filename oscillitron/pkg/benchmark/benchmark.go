@@ -56,6 +56,11 @@ type Case struct {
 	// v3.0 landed. The bench driver assigns per-case stakes via
 	// --stakes (uniform or rotate).
 	Stakes stakes.Level
+	// Goal is a one-sentence description of the expected answer format,
+	// derived by the benchmark runner via LLM call before orchestrators
+	// run. Used by the Extractor to pull the canonical answer from model
+	// output. Empty when goal derivation is not wired.
+	Goal string
 	// Metadata carries benchmark-specific tags (difficulty, subject,
 	// source IDs). Optional; never required by the Runner.
 	Metadata map[string]string

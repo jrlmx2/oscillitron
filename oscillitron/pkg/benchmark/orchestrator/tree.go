@@ -130,7 +130,7 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	}
 
 	rawContent := res.ResolvedPayload.Result.Content
-	extracted := t.Extractor.Extract(rawContent)
+	extracted := t.Extractor.Extract(ctx, c.Goal, rawContent)
 	calls := res.State.ExecuteCount + res.State.EvaluateCount
 
 	t.emitTreeTrace(ctx, c, goal, res, extracted)

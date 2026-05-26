@@ -102,6 +102,20 @@ func (s *scriptAdapter) Execute(_ context.Context, env session.Envelope) (sessio
 	return env, nil
 }
 
+func (s *scriptAdapter) RawCall(_ context.Context, _ string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.idx >= len(s.answers) {
+		return "", errors.New("script exhausted")
+	}
+	ans := s.answers[s.idx]
+	s.idx++
+	return ans, nil
+}
+
 var _ adapter.Adapter = (*scriptAdapter)(nil)
 
 func TestVote_RequiresAdapter(t *testing.T) {

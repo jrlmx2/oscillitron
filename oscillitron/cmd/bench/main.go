@@ -402,23 +402,17 @@ func run() error {
 	// Build orchestrators. The LLM extractor replaces per-benchmark
 	// regex extractors: one adapter call per extraction, guided by
 	// Case.Goal (derived once per case by the runner's GoalDeriver).
-	// Passthrough extractor: returns raw text as-is. The grader's
-	// internal extraction handles letter/boxed parsing. LLM extraction
-	// is disabled for this run to isolate goal-only impact.
-	passthrough := orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
-		return raw
-	})
 	frontierOrch := orchestrator.Single{
 		NameStr:   "frontier-" + adapterModel(*frontSubstrate, *frontModel),
 		Adapter:   frontAdapter,
-		Extractor: passthrough,
+		Extractor: benchCfg.Extractor,
 		Governor:  governor,
 	}
 	voteOrch := orchestrator.Vote{
 		NameStr:   fmt.Sprintf("orchestrator-vote-%d-%s", *voteN, adapterModel(*orchSubstrate, *orchModel)),
 		Adapter:   orchAdapter,
 		N:         *voteN,
-		Extractor: passthrough,
+		Extractor: benchCfg.Extractor,
 		Governor:  governor,
 		Tracer:    tracer,
 	}
@@ -452,7 +446,7 @@ func run() error {
 			NameStr:     "tree-" + adapterModel(*orchSubstrate, *orchModel),
 			Adapter:     orchAdapter,
 			Synthesizer: recomposer.AdapterSynth{Adapter: orchAdapter},
-			Extractor:   passthrough,
+			Extractor:   benchCfg.Extractor,
 			Governor:    governor,
 			Tracer:      tracer,
 			MaxDepth:    *treeMaxDepth,
@@ -775,8 +769,9 @@ var smallModelSubstrings = []string{
 // runner's GoalDeriver + LLMExtractor, so no per-benchmark
 // Extractor is needed.
 type benchmarkConfig struct {
-	Loader benchmark.Loader
-	Grader benchmark.Grader
+	Loader    benchmark.Loader
+	Grader    benchmark.Grader
+	Extractor orchestrator.Extractor
 }
 
 func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
@@ -784,18 +779,27 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 	case "gpqa", "gpqa-diamond":
 		return benchmarkConfig{
 			Loader: gpqa.Loader{Path: path, Limit: limit},
-			Grader: grader.Multichoice{}, // default Letters = "ABCD"
+			Grader: grader.Multichoice{},
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
+				return grader.ExtractLetter(raw, grader.MultichoiceLetters)
+			}),
 		}, nil
 	case "mmlu-pro", "mmlu_pro":
 		const letters = "ABCDEFGHIJ"
 		return benchmarkConfig{
 			Loader: mmlu_pro.Loader{Path: path, Limit: limit},
 			Grader: grader.Multichoice{Letters: letters},
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
+				return grader.ExtractLetter(raw, letters)
+			}),
 		}, nil
 	case "math-500", "math500":
 		return benchmarkConfig{
 			Loader: math500.Loader{Path: path, Limit: limit},
 			Grader: grader.BoxedAnswer{},
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
+				return grader.ExtractBoxed(raw)
+			}),
 		}, nil
 	default:
 		return benchmarkConfig{}, fmt.Errorf("unknown benchmark %q (supported: gpqa, mmlu-pro, math-500)", name)

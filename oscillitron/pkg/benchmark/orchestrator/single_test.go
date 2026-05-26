@@ -24,9 +24,9 @@ func TestSingle_HappyPath_NoExtractor(t *testing.T) {
 	if ans.Raw != "The answer is C" {
 		t.Errorf("Raw = %q", ans.Raw)
 	}
-	// Without an extractor, Extracted equals Raw.
-	if ans.Extracted != ans.Raw {
-		t.Errorf("Extracted = %q, want = Raw", ans.Extracted)
+	// Without an extractor, Extracted is empty (grader does extraction).
+	if ans.Extracted != "" {
+		t.Errorf("Extracted = %q, want empty", ans.Extracted)
 	}
 	if ans.Calls != 1 {
 		t.Errorf("Calls = %d, want 1", ans.Calls)

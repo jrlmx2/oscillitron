@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
+	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
 func TestDeriveGoal_ReturnsFormatDescription(t *testing.T) {
@@ -165,5 +166,36 @@ func TestLLMExtractor_DirectJSON(t *testing.T) {
 	result := ext.Extract(context.Background(), "a number", "the result is 42")
 	if result != "42" {
 		t.Errorf("extracted = %q, want 42", result)
+	}
+}
+
+func TestLLMExtractor_IntegrationWithGoal(t *testing.T) {
+	// Simulate the full pipeline: DeriveGoal → orchestrator → LLMExtractor.
+	goalAdapter := &scriptAdapter{answers: []string{
+		`{"response":"The answer must be exactly one letter: A, B, C, or D.","confidence":1.0}`,
+	}}
+	c := benchmark.Case{
+		ID:       "integ-001",
+		Prompt:   "Question: X?\nA) a\nB) b\nC) c\nD) d\nAnswer with a letter.",
+		Expected: "C",
+	}
+	// Step 1: derive goal
+	goal := DeriveGoal(context.Background(), goalAdapter, trace.Discard{}, c)
+	if goal == "" {
+		t.Fatal("DeriveGoal returned empty")
+	}
+	c.Goal = goal
+
+	// Step 2: simulate orchestrator producing a response
+	response := "After careful analysis, the answer is C because it best fits."
+
+	// Step 3: extract via LLM
+	extractAdapter := &scriptAdapter{answers: []string{
+		`{"response":"{\"extracted\":\"C\",\"confidence\":0.99}","confidence":1.0}`,
+	}}
+	ext := LLMExtractor{Adapter: extractAdapter, Tracer: trace.Discard{}}
+	extracted := ext.Extract(context.Background(), c.Goal, response)
+	if extracted != "C" {
+		t.Errorf("extracted = %q, want C", extracted)
 	}
 }

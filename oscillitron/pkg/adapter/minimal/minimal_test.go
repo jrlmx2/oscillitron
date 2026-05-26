@@ -264,14 +264,15 @@ func TestCritiqueSchema_MarshalsCleanJSON(t *testing.T) {
 
 // --- AllPlaybookFormats tests ---
 
-func TestAllPlaybookFormats_CoversAllPlaybooks(t *testing.T) {
+func TestAllPlaybookFormats_CoversJSONPlaybooks(t *testing.T) {
 	m := AllPlaybookFormats()
+	// Process and compose produce natural text (no JSON schema
+	// enforcement). Only plan, critique, and verify_grounded get
+	// response_format schemas.
 	expected := []session.Playbook{
 		session.PlaybookPlan,
-		session.PlaybookProcess,
 		session.PlaybookCritique,
 		session.PlaybookVerifyGrounded,
-		session.PlaybookCompose,
 	}
 	for _, pb := range expected {
 		rf, ok := m[pb]
@@ -286,5 +287,11 @@ func TestAllPlaybookFormats_CoversAllPlaybooks(t *testing.T) {
 	}
 	if len(m) != len(expected) {
 		t.Errorf("AllPlaybookFormats has %d entries, want %d", len(m), len(expected))
+	}
+	// Confirm process and compose are NOT present.
+	for _, pb := range []session.Playbook{session.PlaybookProcess, session.PlaybookCompose} {
+		if _, ok := m[pb]; ok {
+			t.Errorf("AllPlaybookFormats should NOT contain %q (natural text, no JSON enforcement)", pb)
+		}
 	}
 }

@@ -147,6 +147,13 @@ func parseSeverity(s string) session.Severity {
 }
 
 func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*session.Execute, error) {
+	// Process and compose produce natural text with a trailing
+	// "confidence: X.X" annotation — no JSON envelope. Go straight
+	// to unstructuredFallback; applyEffectiveConfidence recovers
+	// the confidence downstream.
+	if pb == session.PlaybookProcess || pb == session.PlaybookCompose {
+		return unstructuredFallback(pb, raw), nil
+	}
 	obj, ok := extractJSONObject(raw)
 	if !ok {
 		if require {
@@ -157,8 +164,6 @@ func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*sessi
 	switch pb {
 	case session.PlaybookPlan:
 		return parseEmitSubtreeJSON(obj)
-	case session.PlaybookProcess, session.PlaybookCompose:
-		return parseReturnResultJSON(obj)
 	case session.PlaybookCritique, session.PlaybookVerifyGrounded:
 		return parseVerifierSignalJSON(obj)
 	default:

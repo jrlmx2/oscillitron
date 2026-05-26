@@ -291,14 +291,18 @@ func TestEvaluate_PropagatesHTTPError(t *testing.T) {
 func TestExecute_ProcessHappyPath(t *testing.T) {
 	f := newFakeOllama()
 	defer f.close()
+	// Process now produces natural text with a trailing confidence
+	// annotation (no JSON envelope).
 	f.queue(scriptedResponse{
 		status:       http.StatusOK,
-		content:      `{"content":"4","confidence":0.98}`,
+		content:      "4\nconfidence: 0.98",
 		finishReason: "stop",
 		tokensIn:     200,
 		tokensOut:    8,
 	})
-	a := newAdapter(t, f.server.URL)
+	a := newAdapter(t, f.server.URL, func(c *Config) {
+		c.Inspector = &notice.Inspector{ContextSize: 8000}
+	})
 	env := session.Envelope{
 		ID:       "ap-1",
 		Input:    session.Payload{Kind: "task", Content: "what is 2+2?"},
@@ -311,8 +315,13 @@ func TestExecute_ProcessHappyPath(t *testing.T) {
 	if got.Execute == nil || got.Execute.ReturnResult == nil {
 		t.Fatal("env.Execute.ReturnResult not populated")
 	}
-	if got.Execute.ReturnResult.Result.Content != "4" {
-		t.Errorf("Result.Content = %q, want '4'", got.Execute.ReturnResult.Result.Content)
+	// Raw text is placed in Result.Content via unstructuredFallback;
+	// applyEffectiveConfidence recovers the confidence annotation.
+	if !strings.Contains(got.Execute.ReturnResult.Result.Content, "4") {
+		t.Errorf("Result.Content = %q, want to contain '4'", got.Execute.ReturnResult.Result.Content)
+	}
+	if got.Execute.ReturnResult.Confidence < 0.97 || got.Execute.ReturnResult.Confidence > 0.99 {
+		t.Errorf("Confidence = %v, want ~0.98 (recovered from text annotation)", got.Execute.ReturnResult.Confidence)
 	}
 	if got.ExitReason != session.ExitDone {
 		t.Errorf("ExitReason = %q, want done", got.ExitReason)

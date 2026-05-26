@@ -27,7 +27,7 @@ func letterExtractor() Extractor {
 
 func TestTree_RequiresAdapter(t *testing.T) {
 	_, err := Tree{Synthesizer: recomposer.NewSynthStub("s"), Extractor: letterExtractor()}.
-		Answer(context.Background(), benchmark.Case{ID: "x"})
+		Answer(context.Background(), benchmark.Case{ID: "x", Goal: "a single letter A-D"})
 	if err == nil {
 		t.Fatal("expected error with nil Adapter")
 	}
@@ -36,7 +36,7 @@ func TestTree_RequiresAdapter(t *testing.T) {
 func TestTree_RequiresSynthesizer(t *testing.T) {
 	a := stub.New("a")
 	_, err := Tree{Adapter: a, Extractor: letterExtractor()}.
-		Answer(context.Background(), benchmark.Case{ID: "x"})
+		Answer(context.Background(), benchmark.Case{ID: "x", Goal: "a single letter A-D"})
 	if err == nil {
 		t.Fatal("expected error with nil Synthesizer")
 	}
@@ -45,7 +45,7 @@ func TestTree_RequiresSynthesizer(t *testing.T) {
 func TestTree_RequiresExtractor(t *testing.T) {
 	a := stub.New("a")
 	_, err := Tree{Adapter: a, Synthesizer: recomposer.NewSynthStub("s")}.
-		Answer(context.Background(), benchmark.Case{ID: "x"})
+		Answer(context.Background(), benchmark.Case{ID: "x", Goal: "a single letter A-D"})
 	if err == nil {
 		t.Fatal("expected error with nil Extractor")
 	}
@@ -95,7 +95,7 @@ func TestTree_PlanDecomposeRecompose(t *testing.T) {
 		Extractor:   letterExtractor(),
 	}
 
-	ans, err := tree.Answer(context.Background(), benchmark.Case{ID: "x", Prompt: "What letter?"})
+	ans, err := tree.Answer(context.Background(), benchmark.Case{ID: "x", Prompt: "What letter?", Goal: "a single letter A-D"})
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
@@ -147,7 +147,7 @@ func TestTree_RootEvaluatesFreelyCanPickProcess(t *testing.T) {
 		Synthesizer: recomposer.NewSynthStub("synth"),
 		Extractor:   letterExtractor(),
 	}
-	ans, err := tree.Answer(context.Background(), benchmark.Case{ID: "y", Prompt: "what?"})
+	ans, err := tree.Answer(context.Background(), benchmark.Case{ID: "y", Prompt: "what?", Goal: "a single letter A-D"})
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}

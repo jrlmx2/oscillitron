@@ -133,6 +133,8 @@ func run() error {
 		structuredOutput = flag.Bool("structured-output", true, "v3.5+: constrain the OpenAI-compat substrate (ollama/vllm/lmstudio) to the {response, confidence} JSON shape via response_format schema enforcement. On by default — required for any substrate at or above the capability floor (see references/model-capability-floor.md). Disable only to A/B-test the prompt-only path; expect substrate-dependent results.")
 		thinkingMode     = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
 
+		systemPreamble = flag.String("system-preamble", "Be terse and dense.", "universal behavioral directive prepended to every adapter call (Evaluate, Execute, RawCall). Empty string disables.")
+
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
 		otelService = flag.String("otel-service-name", "oscillitron-bench", "value sent as the OTLP resource attribute service.name; props: trace.otel.service_name")
@@ -343,11 +345,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy, *systemPreamble)
 	if err != nil {
 		return err
 	}
-	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy, *systemPreamble)
 	if err != nil {
 		return err
 	}
@@ -601,7 +603,7 @@ func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 // pkg/adapter/minimal; only applies to OpenAI-compat substrates that
 // expose RawExecuteInstructions (hermes/ollama/lmstudio/vllm). The
 // anthropic adapter is unaffected.
-func buildAdapter(role, substrate, url, model string, minimalOutput, structuredOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy) (adapter.Adapter, error) {
+func buildAdapter(role, substrate, url, model string, minimalOutput, structuredOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy, preamble string) (adapter.Adapter, error) {
 	if substrate == "auto" {
 		substrate = resolveSubstrate(role, model)
 	}
@@ -650,6 +652,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 		// will gain parallel wiring in follow-up phases.
 		cfg.Inspector = inspector
 		cfg.Thinking = thinkingPolicy
+		cfg.SystemPreamble = preamble
 		a, err := ollama.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)

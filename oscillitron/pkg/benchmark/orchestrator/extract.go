@@ -13,7 +13,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
-const goalExtractionPrompt = `What is the goal of the following prompt?`
+const goalExtractionPrompt = `What is the goal of the following prompt? Do not answer the prompt.`
 
 const extractionPreamble = `Extract the final answer from the response below. Respond with ONLY the extracted answer — nothing else.
 

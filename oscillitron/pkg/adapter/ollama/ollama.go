@@ -110,6 +110,11 @@ type Config struct {
 	// small models that don't always honor the format.
 	RequireStructured bool
 
+	// SystemPreamble is prepended to every call's instructions
+	// (Evaluate, Execute, and RawCall). Use for universal behavioral
+	// directives like response style. Empty = no preamble.
+	SystemPreamble string
+
 	// SemanticPool is the optional shared-knowledge store. When set,
 	// the adapter prepends the pool's rendered preamble to every
 	// call's instructions — a stable, cache-friendly addition.
@@ -276,6 +281,7 @@ func (a *Adapter) Evaluate(ctx context.Context, env session.Envelope) (session.E
 	if instructions == "" {
 		instructions = renderEvaluateInstructions(env)
 	}
+	instructions = a.withSystemPreamble(instructions)
 	instructions = a.withPoolPreamble(ctx, instructions)
 	raw, _, usage, finish, err := a.oneCall(ctx, a.cfg.EvaluateEndpoint, env, instructions, "evaluate", nil)
 	if err != nil {
@@ -335,6 +341,7 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	if instructions == "" {
 		instructions = renderExecuteInstructions(pb, env)
 	}
+	instructions = a.withSystemPreamble(instructions)
 	instructions = a.withPoolPreamble(ctx, instructions)
 	raw, reasoning, usage, _, err := a.oneCall(ctx, ep, env, instructions, "execute", a.executeResponseFormat(pb))
 	if err != nil {
@@ -376,13 +383,15 @@ func (a *Adapter) RawCall(ctx context.Context, prompt string) (string, error) {
 		defer cancel()
 	}
 	ep := a.cfg.EvaluateEndpoint
+	msgs := []chatMessage{{Role: "user", Content: prompt}}
+	if a.cfg.SystemPreamble != "" {
+		msgs = append([]chatMessage{{Role: "system", Content: a.cfg.SystemPreamble}}, msgs...)
+	}
 	body := chatRequest{
-		Model: ep.Model,
-		Messages: []chatMessage{
-			{Role: "user", Content: prompt},
-		},
-		Stream:  false,
-		Options: ep.Options,
+		Model:    ep.Model,
+		Messages: msgs,
+		Stream:   false,
+		Options:  ep.Options,
 	}
 	buf, err := json.Marshal(body)
 	if err != nil {
@@ -639,6 +648,13 @@ func (a *Adapter) recordCost(ep Endpoint, usage tokenUsage) {
 		model = adapterName
 	}
 	a.cfg.Cost.Record(model, usage.input, usage.output)
+}
+
+func (a *Adapter) withSystemPreamble(instructions string) string {
+	if a.cfg.SystemPreamble == "" {
+		return instructions
+	}
+	return a.cfg.SystemPreamble + "\n\n" + instructions
 }
 
 // withPoolPreamble prepends the semantic-pool rendered preamble to

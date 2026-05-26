@@ -281,7 +281,7 @@ func TestExecute_ProcessHappyPath(t *testing.T) {
 	defer f.close()
 	f.queue(scriptedResponse{
 		status:       http.StatusOK,
-		content:      `{"content":"4","confidence":0.98,"contradictions":[],"open_questions":[]}`,
+		content:      `{"content":"4","confidence":0.98}`,
 		finishReason: "stop",
 		tokensIn:     200,
 		tokensOut:    8,

@@ -381,11 +381,6 @@ func run() error {
 			*useStoreDir, *useStoreAction, *useStoreTopK, *useStoreMaxTokens)
 	}
 
-	llmExtractor := orchestrator.LLMExtractor{
-		Adapter: orchAdapter,
-		Tracer:  tracer,
-	}
-
 	// Build benchmark config (loader + grader configured for the
 	// chosen --benchmark).
 	benchCfg, err := buildBenchmark(*benchName, *casesPath, *limit)
@@ -407,17 +402,23 @@ func run() error {
 	// Build orchestrators. The LLM extractor replaces per-benchmark
 	// regex extractors: one adapter call per extraction, guided by
 	// Case.Goal (derived once per case by the runner's GoalDeriver).
+	// Passthrough extractor: returns raw text as-is. The grader's
+	// internal extraction handles letter/boxed parsing. LLM extraction
+	// is disabled for this run to isolate goal-only impact.
+	passthrough := orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
+		return raw
+	})
 	frontierOrch := orchestrator.Single{
 		NameStr:   "frontier-" + adapterModel(*frontSubstrate, *frontModel),
 		Adapter:   frontAdapter,
-		Extractor: llmExtractor,
-		Governor:  governor, // shares the same budget — risky if frontier and orch are same substrate, but the governor handles it
+		Extractor: passthrough,
+		Governor:  governor,
 	}
 	voteOrch := orchestrator.Vote{
 		NameStr:   fmt.Sprintf("orchestrator-vote-%d-%s", *voteN, adapterModel(*orchSubstrate, *orchModel)),
 		Adapter:   orchAdapter,
 		N:         *voteN,
-		Extractor: llmExtractor,
+		Extractor: passthrough,
 		Governor:  governor,
 		Tracer:    tracer,
 	}
@@ -451,7 +452,7 @@ func run() error {
 			NameStr:     "tree-" + adapterModel(*orchSubstrate, *orchModel),
 			Adapter:     orchAdapter,
 			Synthesizer: recomposer.AdapterSynth{Adapter: orchAdapter},
-			Extractor:   llmExtractor,
+			Extractor:   passthrough,
 			Governor:    governor,
 			Tracer:      tracer,
 			MaxDepth:    *treeMaxDepth,

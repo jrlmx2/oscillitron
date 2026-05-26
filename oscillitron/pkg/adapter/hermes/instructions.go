@@ -104,9 +104,7 @@ const executeProcessInstructions = `You are a processing specialist inside a cal
 {
   "content":        "<your actual answer>",
   "confidence":     <number between 0.0 and 1.0>,
-  "grounded_pass":  null,
-  "contradictions": [],
-  "open_questions": []
+  "grounded_pass":  null
 }
 
 Set "grounded_pass" to true or false only when you actually ran a grounded check (compiled, executed, looked it up). Leave it null otherwise — do not synthesize a value you don't have.
@@ -163,9 +161,7 @@ const executeComposeInstructions = `You are a composition specialist inside a ca
 {
   "content":        "<the composed result>",
   "confidence":     <number between 0.0 and 1.0 (weakest-link from inputs is a reasonable default)>,
-  "grounded_pass":  null,
-  "contradictions": [],
-  "open_questions": []
+  "grounded_pass":  null
 }
 
 Output schema (your "content" must satisfy this):

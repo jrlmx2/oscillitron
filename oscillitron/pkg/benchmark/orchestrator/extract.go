@@ -2,7 +2,6 @@ package orchestrator
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -39,18 +38,9 @@ Describe ONLY the format. Do NOT reason about the content.`
 // extractionPrompt is the system-level instruction for LLMExtractor.
 // It takes a GOAL (from DeriveGoal) and a RESPONSE (from the
 // orchestrator) and extracts the canonical answer.
-const extractionPrompt = `You are an ANSWER EXTRACTOR. You do NOT solve tasks or reason about correctness.
+const extractionPreamble = `Extract the final answer from the response below. Respond with ONLY the extracted answer — nothing else.
 
-You are given:
-1. A GOAL describing what format the answer should be in.
-2. A RESPONSE from another system that attempted the task.
-
-Extract the answer from the RESPONSE that satisfies the GOAL.
-If the response contains reasoning, ignore the reasoning — extract only the final answer.
-If the response states multiple candidates, extract the one the response commits to.
-If no answer can be extracted, return an empty string for "extracted".
-
-Reply with a single JSON object: {"extracted": "<the answer>", "confidence": <0.0 to 1.0>}.`
+`
 
 // DeriveGoal makes a one-shot LLM call to extract a format
 // description from the case prompt. Returns empty string on error
@@ -65,7 +55,7 @@ func DeriveGoal(ctx context.Context, a adapter.Adapter, tracer trace.Tracer, c b
 	env := session.NewRoot(
 		session.ID(fmt.Sprintf("bench-%s-goal", c.ID)),
 		goalExtractionPrompt+"\n\n---\n\n"+c.Prompt,
-		`{"response":"..."}`,
+		"",
 		classification.Internal,
 		session.Budget{TokensRemaining: 2000, DepthRemaining: 1},
 	)
@@ -90,8 +80,7 @@ func DeriveGoal(ctx context.Context, a adapter.Adapter, tracer trace.Tracer, c b
 		return ""
 	}
 
-	raw := out.Execute.ReturnResult.Result.Content
-	goal := parseGoalResponse(raw)
+	goal := strings.TrimSpace(out.Execute.ReturnResult.Result.Content)
 	if goal == "" {
 		trace.Error(tracer, ctx, "extractor.goal_derive_error",
 			slog.String("case", c.ID),
@@ -106,18 +95,6 @@ func DeriveGoal(ctx context.Context, a adapter.Adapter, tracer trace.Tracer, c b
 		slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 	)
 	return goal
-}
-
-// parseGoalResponse tries JSON {"response":"..."} first, then falls
-// back to the raw text.
-func parseGoalResponse(raw string) string {
-	var structured struct {
-		Response string `json:"response"`
-	}
-	if err := json.Unmarshal([]byte(raw), &structured); err == nil && structured.Response != "" {
-		return strings.TrimSpace(structured.Response)
-	}
-	return strings.TrimSpace(raw)
 }
 
 // LLMExtractor uses an LLM call to extract the canonical answer from
@@ -150,11 +127,11 @@ func (e LLMExtractor) Extract(ctx context.Context, goal string, raw string) stri
 	}
 	defer lease.Release()
 
-	userMessage := fmt.Sprintf("[GOAL]\n%s\n\n[RESPONSE]\n%s", goal, raw)
+	prompt := extractionPreamble + goal + "\n\n[RESPONSE]\n" + raw
 	env := session.NewRoot(
 		session.ID("extract"),
-		extractionPrompt+"\n\n"+userMessage,
-		`{"extracted":"...","confidence":0.0}`,
+		prompt,
+		"",
 		classification.Internal,
 		session.Budget{TokensRemaining: 2000, DepthRemaining: 1},
 	)
@@ -177,8 +154,8 @@ func (e LLMExtractor) Extract(ctx context.Context, goal string, raw string) stri
 		return ""
 	}
 
-	content := out.Execute.ReturnResult.Result.Content
-	extracted, confidence := parseExtractionResponse(content)
+	extracted := strings.TrimSpace(out.Execute.ReturnResult.Result.Content)
+	confidence := out.Execute.ReturnResult.Confidence
 
 	truncated := raw
 	if len(truncated) > 200 {
@@ -203,44 +180,4 @@ func (e LLMExtractor) Extract(ctx context.Context, goal string, raw string) stri
 		slog.Int64("duration_ms", time.Since(start).Milliseconds()),
 	)
 	return extracted
-}
-
-// parseExtractionResponse handles the nested JSON format from the
-// adapter. The adapter wraps the model's text in a ReturnResult whose
-// Content is the raw model output. The model is instructed to return
-// {"extracted":"...","confidence":...}. But the adapter itself may
-// wrap that in {"response":"...","confidence":...}.
-//
-// Strategy: try outer {"response":"<inner>"} first, then parse inner
-// as {"extracted":"..."}. If outer doesn't parse, try the raw content
-// as {"extracted":"..."} directly.
-func parseExtractionResponse(content string) (extracted string, confidence float64) {
-	// Try outer wrapper: {"response":"<inner>","confidence":...}
-	var outer struct {
-		Response   string  `json:"response"`
-		Confidence float64 `json:"confidence"`
-	}
-	if err := json.Unmarshal([]byte(content), &outer); err == nil && outer.Response != "" {
-		// inner is the model's JSON: {"extracted":"...","confidence":...}
-		var inner struct {
-			Extracted  string  `json:"extracted"`
-			Confidence float64 `json:"confidence"`
-		}
-		if err := json.Unmarshal([]byte(outer.Response), &inner); err == nil {
-			return strings.TrimSpace(inner.Extracted), inner.Confidence
-		}
-		// Outer parsed but inner didn't — treat outer.Response as raw text.
-		return strings.TrimSpace(outer.Response), outer.Confidence
-	}
-
-	// No outer wrapper — try content directly as extraction JSON.
-	var direct struct {
-		Extracted  string  `json:"extracted"`
-		Confidence float64 `json:"confidence"`
-	}
-	if err := json.Unmarshal([]byte(content), &direct); err == nil {
-		return strings.TrimSpace(direct.Extracted), direct.Confidence
-	}
-
-	return "", 0
 }

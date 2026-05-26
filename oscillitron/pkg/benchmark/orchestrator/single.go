@@ -98,7 +98,7 @@ func (s Single) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer,
 		return benchmark.Answer{}, fmt.Errorf("single: empty return_result")
 	}
 	raw := out.Execute.ReturnResult.Result.Content
-	extracted := raw
+	var extracted string
 	if s.Extractor != nil {
 		extracted = s.Extractor.Extract(ctx, c.Goal, raw)
 	}

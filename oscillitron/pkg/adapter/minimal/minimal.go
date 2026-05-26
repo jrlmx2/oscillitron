@@ -4,7 +4,7 @@
 //
 // Why this exists: the legacy playbook prompts shipped in each
 // adapter's `instructions.go` ask the substrate to emit a verbose
-// JSON envelope (content / confidence / grounded_pass / ...) on every
+// JSON envelope (content / confidence / ...) on every
 // call — roughly 250 tokens of pure formatting overhead per request
 // before the model sees the actual question. The minimal template
 // drops that overhead. It asks for a small two-field JSON object,

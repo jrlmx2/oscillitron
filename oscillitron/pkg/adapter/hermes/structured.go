@@ -43,11 +43,10 @@ type verifySpecRaw struct {
 // and PlaybookCompose. Field preference: Response → Answer → Content
 // (see pkg/adapter/ollama/structured.go for the rename history).
 type returnResultPayloadJSON struct {
-	Response     string  `json:"response,omitempty"`
-	Answer       string  `json:"answer,omitempty"`
-	Content      string  `json:"content,omitempty"`
-	Confidence   float64 `json:"confidence"`
-	GroundedPass *bool   `json:"grounded_pass,omitempty"`
+	Response   string  `json:"response,omitempty"`
+	Answer     string  `json:"answer,omitempty"`
+	Content    string  `json:"content,omitempty"`
+	Confidence float64 `json:"confidence"`
 }
 
 // verifierSignalPayloadJSON is the execute-step JSON for
@@ -254,9 +253,6 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 			Result: session.Payload{Kind: "result", Content: content},
 			// v3.5 percent-normalize. See ollama/structured.go.
 			Confidence: notice.NormalizeConfidence(p.Confidence),
-			Signals: session.Signals{
-				GroundedPass: p.GroundedPass,
-			},
 		},
 	}, nil
 }

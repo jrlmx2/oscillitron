@@ -56,11 +56,10 @@ type verifySpecRaw struct {
 // the v3.5-era Answer name is kept as legacy fallback; Content is
 // the original legacy envelope's field.
 type returnResultPayloadJSON struct {
-	Response     string  `json:"response,omitempty"`
-	Answer       string  `json:"answer,omitempty"`
-	Content      string  `json:"content,omitempty"`
-	Confidence   float64 `json:"confidence"`
-	GroundedPass *bool   `json:"grounded_pass,omitempty"`
+	Response   string  `json:"response,omitempty"`
+	Answer     string  `json:"answer,omitempty"`
+	Content    string  `json:"content,omitempty"`
+	Confidence float64 `json:"confidence"`
 }
 
 type verifierSignalPayloadJSON struct {
@@ -235,9 +234,6 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 			// v3.5 percent-normalize: schema enforces type but not
 			// numeric bounds; qwen2.5:7b emits 95/100 (percent).
 			Confidence: notice.NormalizeConfidence(p.Confidence),
-			Signals: session.Signals{
-				GroundedPass: p.GroundedPass,
-			},
 		},
 	}, nil
 }

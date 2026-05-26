@@ -382,9 +382,8 @@ func run() error {
 	}
 
 	llmExtractor := orchestrator.LLMExtractor{
-		Adapter:  orchAdapter,
-		Tracer:   tracer,
-		Governor: governor,
+		Adapter: orchAdapter,
+		Tracer:  tracer,
 	}
 
 	// Build benchmark config (loader + grader configured for the

@@ -10,10 +10,9 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
-	"github.com/jrlmx2/oscillitron/pkg/vram"
 )
 
-const goalExtractionPrompt = `What is the goal of the following prompt? Do not answer the prompt.`
+const goalExtractionPrompt = `Describe the intent of the following prompt. Do not solve it.`
 
 const extractionPreamble = `Extract the final answer from the response below. Respond with ONLY the extracted answer — nothing else.
 
@@ -66,10 +65,11 @@ func DeriveGoal(ctx context.Context, a adapter.Adapter, tracer trace.Tracer, c b
 
 // LLMExtractor uses an LLM call to extract the canonical answer from
 // a raw model response, guided by a goal. Implements Extractor.
+// Does NOT acquire a governor lease — the calling orchestrator
+// already holds one.
 type LLMExtractor struct {
-	Adapter  adapter.Adapter
-	Tracer   trace.Tracer
-	Governor *vram.Governor
+	Adapter adapter.Adapter
+	Tracer  trace.Tracer
 }
 
 var _ Extractor = LLMExtractor{}
@@ -80,15 +80,6 @@ func (e LLMExtractor) Extract(ctx context.Context, goal string, raw string) stri
 		tracer = trace.Discard{}
 	}
 	start := time.Now()
-
-	lease, err := e.Governor.Acquire(ctx)
-	if err != nil {
-		trace.Error(tracer, ctx, "extractor.llm_extract_error",
-			slog.String("err", fmt.Sprintf("governor acquire: %v", err)),
-		)
-		return ""
-	}
-	defer lease.Release()
 
 	prompt := extractionPreamble + goal + "\n\n[RESPONSE]\n" + raw
 	result, err := rawCall(ctx, e.Adapter, prompt)

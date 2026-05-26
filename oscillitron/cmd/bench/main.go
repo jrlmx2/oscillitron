@@ -617,7 +617,6 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 	var schemaRF map[string]any
 	var perPlaybookRF map[session.Playbook]map[string]any
 	if structuredOutput {
-		schemaRF = minimal.AsResponseFormat("process_response", minimal.ProcessSchema())
 		perPlaybookRF = minimal.AllPlaybookFormats()
 	}
 	switch substrate {

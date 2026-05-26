@@ -279,9 +279,11 @@ func TestEvaluate_PropagatesHTTPError(t *testing.T) {
 func TestExecute_ProcessHappyPath(t *testing.T) {
 	f := newFakeVLLM()
 	defer f.close()
+	// Process now produces natural text with a trailing confidence
+	// annotation (no JSON envelope).
 	f.queue(scriptedResponse{
 		status:       http.StatusOK,
-		content:      `{"content":"4","confidence":0.98}`,
+		content:      "4\nconfidence: 0.98",
 		finishReason: "stop",
 		tokensIn:     200,
 		tokensOut:    8,
@@ -299,8 +301,9 @@ func TestExecute_ProcessHappyPath(t *testing.T) {
 	if got.Execute == nil || got.Execute.ReturnResult == nil {
 		t.Fatal("env.Execute.ReturnResult not populated")
 	}
-	if got.Execute.ReturnResult.Result.Content != "4" {
-		t.Errorf("Result.Content = %q, want '4'", got.Execute.ReturnResult.Result.Content)
+	// Raw text placed in Result.Content via unstructuredFallback.
+	if !strings.Contains(got.Execute.ReturnResult.Result.Content, "4") {
+		t.Errorf("Result.Content = %q, want to contain '4'", got.Execute.ReturnResult.Result.Content)
 	}
 	if got.ExitReason != session.ExitDone {
 		t.Errorf("ExitReason = %q, want done", got.ExitReason)

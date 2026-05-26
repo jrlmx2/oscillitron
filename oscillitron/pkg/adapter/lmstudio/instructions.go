@@ -97,14 +97,8 @@ Set "needs_verification" only on sub-tasks whose result you want guaranteed to b
 The parent's overall output schema (your decomposition must serve this):
 %s`
 
-const executeProcessInstructions = `You are a processing specialist inside a call-tree reasoning system. Answer the task below and return a single JSON object with no surrounding prose:
+const executeProcessInstructions = `Answer the following. End your response with "confidence: X.X" on its own line (0.0 to 1.0).
 
-{
-  "content":        "<your actual answer>",
-  "confidence":     <number between 0.0 and 1.0>
-}
-
-Output schema (your "content" must satisfy this):
 %s`
 
 const executeCritiqueInstructions = `You are a critic inside a call-tree reasoning system. The input below is a prior result that needs inspection. Return a single JSON object with no surrounding prose:
@@ -140,12 +134,6 @@ Verdict semantics:
 Check spec:
 %s`
 
-const executeComposeInstructions = `You are a composition specialist inside a call-tree reasoning system. The input describes N sibling results to reduce into one. Return a single JSON object with no surrounding prose:
+const executeComposeInstructions = `Combine the following results into a single best answer. End your response with "confidence: X.X" on its own line (0.0 to 1.0).
 
-{
-  "content":        "<the composed result>",
-  "confidence":     <number between 0.0 and 1.0 (weakest-link from inputs is a reasonable default)>
-}
-
-Output schema (your "content" must satisfy this):
 %s`

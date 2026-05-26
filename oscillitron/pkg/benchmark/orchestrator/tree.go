@@ -185,21 +185,8 @@ func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) 
 	return out.Execute.ReturnResult.Result.Content, nil
 }
 
-const goalExtractionPrompt = `You are a FORMAT DETECTOR. You do NOT solve tasks.
-
-Given the task below, state in ONE sentence what FORMAT the final answer must be in.
-
-GOOD examples of format descriptions:
-- "The answer must be exactly one letter: A, B, C, or D."
-- "The answer must be a number in electron-volts."
-- "The answer must be a short paragraph."
-
-BAD examples (these solve the task — NEVER do this):
-- "A" (this is solving the MCQ)
-- "10^-4 eV" (this is computing the answer)
-- "The reaction produces 11 carbon atoms" (this is answering the question)
-
-Describe ONLY the format. Do NOT reason about the content.`
+// goalExtractionPrompt is defined in extract.go — shared by
+// Tree.deriveGoal (this file) and DeriveGoal (extract.go).
 
 // Compile-time check.
 var _ benchmark.Orchestrator = Tree{}

@@ -128,29 +128,17 @@ func TestTree_NameDefault(t *testing.T) {
 	}
 }
 
-func TestTree_ForcesPlanPlaybook(t *testing.T) {
-	// The root must be pre-stamped with PlaybookPlan so the model's
-	// Evaluate doesn't accidentally pick Process (which would degenerate
-	// Tree to Single under a different name). Verify by inspecting the
-	// stub's evaluator-call history: the evaluator should NOT have been
-	// called for the root because Evaluate is pre-stamped.
-	a := stub.New("tree-force")
-	a.WithReturnResult(
-		session.PlaybookPlan,
-		session.Payload{Kind: "result", Content: "A"},
-		0.8,
-	)
+func TestTree_RootEvaluatesFreelyCanPickProcess(t *testing.T) {
+	// Root goes through the model's Evaluate. If the model picks
+	// process, the tree degenerates to a single call — which is the
+	// correct outcome for simple tasks that don't need decomposition.
+	a := stub.New("tree-free")
 	a.WithEvaluator(func(env session.Envelope) (session.Playbook, float64) {
-		// If this is invoked for the root, the pre-stamp didn't work.
-		// Return Process to make the test fail loudly.
-		return session.PlaybookProcess, 0.0
+		return session.PlaybookProcess, 0.9
 	})
-	// The plan playbook here returns a ReturnResult directly (degenerate
-	// "plan that just returns") so we can test the pre-stamping without
-	// also needing children + recompose.
 	a.WithReturnResult(
-		session.PlaybookPlan,
-		session.Payload{Kind: "result", Content: "A direct from plan"},
+		session.PlaybookProcess,
+		session.Payload{Kind: "result", Content: "A"},
 		0.8,
 	)
 
@@ -164,6 +152,9 @@ func TestTree_ForcesPlanPlaybook(t *testing.T) {
 		t.Fatalf("Answer: %v", err)
 	}
 	if ans.Extracted != "A" {
-		t.Errorf("Extracted = %q, want A (plan playbook returned 'A direct from plan')", ans.Extracted)
+		t.Errorf("Extracted = %q, want A", ans.Extracted)
+	}
+	if ans.Calls != 2 {
+		t.Errorf("Calls = %d, want 2 (one evaluate + one execute)", ans.Calls)
 	}
 }

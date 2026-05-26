@@ -247,21 +247,14 @@ type treeAdapter struct {
 func (a treeAdapter) Name() string { return a.inner.Name() }
 
 func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
-	if env.ParentID == nil {
+	if env.ParentID != nil {
 		env.Evaluate = &session.Evaluate{
-			Playbook:   session.PlaybookPlan,
+			Playbook:   session.PlaybookProcess,
 			Confidence: 1.0,
 		}
 		return env, nil
 	}
-	out, err := a.inner.Evaluate(ctx, env)
-	if err != nil {
-		return out, err
-	}
-	if out.Evaluate != nil && out.Evaluate.Playbook != session.PlaybookProcess {
-		out.Evaluate.Playbook = session.PlaybookProcess
-	}
-	return out, nil
+	return a.inner.Evaluate(ctx, env)
 }
 
 func (a treeAdapter) Execute(ctx context.Context, env session.Envelope) (session.Envelope, error) {

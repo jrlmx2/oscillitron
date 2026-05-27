@@ -10,32 +10,11 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
 
-func letterExtractor() Extractor {
-	return ExtractorFunc(func(_ context.Context, _, raw string) string {
-		for i := len(raw) - 1; i >= 0; i-- {
-			c := raw[i]
-			if c >= 'A' && c <= 'D' {
-				return string(c)
-			}
-		}
-		return ""
-	})
-}
-
 func TestTree_RequiresAdapter(t *testing.T) {
-	_, err := Tree{Extractor: letterExtractor()}.
+	_, err := Tree{}.
 		Answer(context.Background(), benchmark.Case{ID: "x", Goal: "a single letter A-D"})
 	if err == nil {
 		t.Fatal("expected error with nil Adapter")
-	}
-}
-
-func TestTree_RequiresExtractor(t *testing.T) {
-	a := stub.New("a")
-	_, err := Tree{Adapter: a}.
-		Answer(context.Background(), benchmark.Case{ID: "x", Goal: "a single letter A-D"})
-	if err == nil {
-		t.Fatal("expected error with nil Extractor")
 	}
 }
 
@@ -65,19 +44,19 @@ func TestTree_PlanDecomposeRecompose(t *testing.T) {
 	})
 
 	tree := Tree{
-		NameStr:   "test-tree",
-		Adapter:   a,
-		Extractor: letterExtractor(),
+		NameStr: "test-tree",
+		Adapter: a,
 	}
 
 	ans, err := tree.Answer(context.Background(), benchmark.Case{ID: "x", Prompt: "What letter?", Goal: "a single letter A-D"})
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
-	if ans.Extracted != "A" {
-		t.Errorf("Extracted = %q, want A", ans.Extracted)
+	// Extracted is empty — grader handles extraction from Raw.
+	if ans.Extracted != "" {
+		t.Errorf("Extracted = %q, want empty (grader extracts)", ans.Extracted)
 	}
-	// Collect recomposer produces [Analysis 1]...[Analysis 2]... blocks.
+	// Raw contains the collected reasoning trail.
 	if !strings.Contains(ans.Raw, "[Analysis 1]") {
 		t.Errorf("Raw should contain collected analysis blocks; got %q", ans.Raw)
 	}
@@ -107,15 +86,15 @@ func TestTree_RootEvaluatesFreelyCanPickProcess(t *testing.T) {
 	)
 
 	tree := Tree{
-		Adapter:   a,
-		Extractor: letterExtractor(),
+		Adapter: a,
 	}
 	ans, err := tree.Answer(context.Background(), benchmark.Case{ID: "y", Prompt: "what?", Goal: "a single letter A-D"})
 	if err != nil {
 		t.Fatalf("Answer: %v", err)
 	}
-	if ans.Extracted != "A" {
-		t.Errorf("Extracted = %q, want A", ans.Extracted)
+	// Raw carries the answer; Extracted is empty for grader.
+	if ans.Raw != "A" {
+		t.Errorf("Raw = %q, want A", ans.Raw)
 	}
 	if ans.Calls != 2 {
 		t.Errorf("Calls = %d, want 2 (one evaluate + one execute)", ans.Calls)

@@ -4,7 +4,7 @@
 //
 // Why this exists: the legacy playbook prompts shipped in each
 // adapter's `instructions.go` ask the substrate to emit a verbose
-// JSON envelope (content / confidence / grounded_pass / ...) on every
+// JSON envelope (content / confidence / ...) on every
 // call — roughly 250 tokens of pure formatting overhead per request
 // before the model sees the actual question. The minimal template
 // drops that overhead. It asks for a small two-field JSON object,
@@ -193,22 +193,24 @@ func AsResponseFormat(name string, schema map[string]any) map[string]any {
 	}
 }
 
-// AllPlaybookFormats returns a map from every v0 playbook to its
-// pre-wrapped AsResponseFormat envelope, ready to pass directly as
-// the `response_format` field on a chat-completions request.
+// AllPlaybookFormats returns a map from playbooks that need JSON
+// schema enforcement to their pre-wrapped AsResponseFormat envelopes,
+// ready to pass directly as the `response_format` field on a
+// chat-completions request.
+//
+// Process and compose are NOT included — those playbooks produce
+// natural text with a trailing "confidence: X.X" annotation. The
+// existing applyEffectiveConfidence + notice.ExtractConfidence
+// pipeline parses the confidence from raw text.
 //
 // Mapping:
-//   - plan           → PlanSchema        (emit_subtree output)
-//   - process        → ProcessSchema     (return_result output)
-//   - critique       → CritiqueSchema    (verifier_signal output)
-//   - verify_grounded → CritiqueSchema   (same verifier_signal shape)
-//   - compose        → ProcessSchema     (return_result, same shape as process)
+//   - plan            → PlanSchema        (emit_subtree output)
+//   - critique        → CritiqueSchema    (verifier_signal output)
+//   - verify_grounded → CritiqueSchema    (same verifier_signal shape)
 func AllPlaybookFormats() map[session.Playbook]map[string]any {
 	return map[session.Playbook]map[string]any{
 		session.PlaybookPlan:           AsResponseFormat("plan_response", PlanSchema()),
-		session.PlaybookProcess:        AsResponseFormat("process_response", ProcessSchema()),
 		session.PlaybookCritique:       AsResponseFormat("critique_response", CritiqueSchema()),
 		session.PlaybookVerifyGrounded: AsResponseFormat("verify_grounded_response", CritiqueSchema()),
-		session.PlaybookCompose:        AsResponseFormat("compose_response", ProcessSchema()),
 	}
 }

@@ -24,9 +24,9 @@ func TestSingle_HappyPath_NoExtractor(t *testing.T) {
 	if ans.Raw != "The answer is C" {
 		t.Errorf("Raw = %q", ans.Raw)
 	}
-	// Without an extractor, Extracted equals Raw.
-	if ans.Extracted != ans.Raw {
-		t.Errorf("Extracted = %q, want = Raw", ans.Extracted)
+	// Without an extractor, Extracted is empty (grader does extraction).
+	if ans.Extracted != "" {
+		t.Errorf("Extracted = %q, want empty", ans.Extracted)
 	}
 	if ans.Calls != 1 {
 		t.Errorf("Calls = %d, want 1", ans.Calls)
@@ -38,7 +38,7 @@ func TestSingle_HappyPath_NoExtractor(t *testing.T) {
 
 func TestSingle_AppliesExtractor(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"Reasoning... therefore the answer is B."}}
-	ext := ExtractorFunc(func(raw string) string {
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string {
 		// Trivial extractor for the test.
 		if len(raw) > 0 {
 			return string(raw[len(raw)-2])

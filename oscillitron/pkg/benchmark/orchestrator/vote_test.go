@@ -102,10 +102,24 @@ func (s *scriptAdapter) Execute(_ context.Context, env session.Envelope) (sessio
 	return env, nil
 }
 
+func (s *scriptAdapter) RawCall(_ context.Context, _ string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.idx >= len(s.answers) {
+		return "", errors.New("script exhausted")
+	}
+	ans := s.answers[s.idx]
+	s.idx++
+	return ans, nil
+}
+
 var _ adapter.Adapter = (*scriptAdapter)(nil)
 
 func TestVote_RequiresAdapter(t *testing.T) {
-	_, err := Vote{N: 3, Extractor: ExtractorFunc(func(s string) string { return s })}.
+	_, err := Vote{N: 3, Extractor: ExtractorFunc(func(_ context.Context, _, s string) string { return s })}.
 		Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err == nil {
 		t.Fatal("expected error with nil Adapter")
@@ -114,7 +128,7 @@ func TestVote_RequiresAdapter(t *testing.T) {
 
 func TestVote_RequiresPositiveN(t *testing.T) {
 	a := &scriptAdapter{}
-	_, err := Vote{Adapter: a, N: 0, Extractor: ExtractorFunc(func(s string) string { return s })}.
+	_, err := Vote{Adapter: a, N: 0, Extractor: ExtractorFunc(func(_ context.Context, _, s string) string { return s })}.
 		Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err == nil {
 		t.Fatal("expected error with N=0")
@@ -133,7 +147,7 @@ func TestVote_RequiresExtractor(t *testing.T) {
 func TestVote_MajorityWins(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"A", "A", "B", "A", "C"}}
 	// Extractor returns first character (trimmed).
-	ext := ExtractorFunc(func(raw string) string {
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string {
 		raw = strings.TrimSpace(raw)
 		if raw == "" {
 			return ""
@@ -158,7 +172,7 @@ func TestVote_MajorityWins(t *testing.T) {
 
 func TestVote_TieBreakAlphabetical(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"B", "B", "A", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote", Adapter: a, N: 4, Extractor: ext}
 	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err != nil {
@@ -172,7 +186,7 @@ func TestVote_TieBreakAlphabetical(t *testing.T) {
 func TestVote_EmptyExtractions_ExcludedFromTally(t *testing.T) {
 	// Three attempts: "A", "", "A". Empty doesn't count; majority = A.
 	a := &scriptAdapter{answers: []string{"A", "", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err != nil {
@@ -200,7 +214,7 @@ func TestVote_ConfidenceExcludesEmptyExtraction(t *testing.T) {
 		answers:     []string{"A", "B", ""},
 		confidences: []float64{0.6, 0.8, 0.95},
 	}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err != nil {
@@ -215,7 +229,7 @@ func TestVote_ConfidenceExcludesEmptyExtraction(t *testing.T) {
 
 func TestVote_AllExtractionsEmpty_ReturnsEmpty(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"", "", ""}}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err != nil {
@@ -231,7 +245,7 @@ func TestVote_AllExtractionsEmpty_ReturnsEmpty(t *testing.T) {
 
 func TestVote_AllAttemptsErrored_ReturnsError(t *testing.T) {
 	a := &scriptAdapter{err: errors.New("substrate down")}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	_, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
 	if err == nil {
@@ -244,7 +258,7 @@ func TestVote_AllAttemptsErrored_ReturnsError(t *testing.T) {
 
 func TestVote_TokensAccumulated(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"A", "A", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	ans, _ := v.Answer(context.Background(), benchmark.Case{ID: "x"})
 	if ans.TokensUsed != 30 {
@@ -257,7 +271,7 @@ func TestVote_TokensAccumulated(t *testing.T) {
 func TestVote_EmitsPerAttemptEvents(t *testing.T) {
 	tracer := &captureTracer{}
 	a := &scriptAdapter{answers: []string{"A", "B", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote-3-test", Adapter: a, N: 3, Extractor: ext, Tracer: tracer}
 
 	_, err := v.Answer(context.Background(), benchmark.Case{ID: "c-001"})
@@ -295,7 +309,7 @@ func TestVote_EmitsPerAttemptEvents(t *testing.T) {
 func TestVote_EmitsTallyWithDistribution(t *testing.T) {
 	tracer := &captureTracer{}
 	a := &scriptAdapter{answers: []string{"A", "A", "B", "A", "C"}}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote-5", Adapter: a, N: 5, Extractor: ext, Tracer: tracer}
 
 	_, err := v.Answer(context.Background(), benchmark.Case{ID: "c-001"})
@@ -328,7 +342,7 @@ func TestVote_EmitsTallyWithDistribution(t *testing.T) {
 func TestVote_EmitsAttemptErrorOnFailure(t *testing.T) {
 	tracer := &captureTracer{}
 	a := &scriptAdapter{err: errors.New("substrate boom")}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 2, Extractor: ext, Tracer: tracer}
 
 	_, err := v.Answer(context.Background(), benchmark.Case{ID: "c-001"})
@@ -353,7 +367,7 @@ func TestVote_EmitsAttemptErrorOnFailure(t *testing.T) {
 func TestVote_TallyOnAllExtractionsEmpty(t *testing.T) {
 	tracer := &captureTracer{}
 	a := &scriptAdapter{answers: []string{"", "", ""}}
-	ext := ExtractorFunc(func(raw string) string { return strings.TrimSpace(raw) })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext, Tracer: tracer}
 
 	_, err := v.Answer(context.Background(), benchmark.Case{ID: "c-001"})
@@ -371,7 +385,7 @@ func TestVote_TallyOnAllExtractionsEmpty(t *testing.T) {
 
 func TestVote_NoTracer_StillWorks(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"A", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 2, Extractor: ext} // no Tracer
 	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x"}); err != nil {
 		t.Fatalf("Answer with nil Tracer: %v", err)
@@ -382,7 +396,7 @@ func TestVote_NoTracer_StillWorks(t *testing.T) {
 
 func TestVote_StakesLow_RunsSingleAttempt(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"A", "A", "A", "A", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	// Base N=5, but stakes=Low should cap effective attempts at 1.
 	v := Vote{NameStr: "vote", Adapter: a, N: 5, Extractor: ext}
 	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.Low})
@@ -399,7 +413,7 @@ func TestVote_StakesLow_RunsSingleAttempt(t *testing.T) {
 
 func TestVote_StakesMedium_UsesBaseN(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"A", "A", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.Medium}); err != nil {
 		t.Fatalf("Answer: %v", err)
@@ -415,7 +429,7 @@ func TestVote_StakesHigh_DoublesAttempts(t *testing.T) {
 		answers[i] = "A"
 	}
 	a := &scriptAdapter{answers: answers}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
 	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.High}); err != nil {
 		t.Fatalf("Answer: %v", err)
@@ -431,7 +445,7 @@ func TestVote_StakesZeroValue_DefaultsToMedium(t *testing.T) {
 	// guarantee that lets us land v3.0 without re-baselining every
 	// existing benchmark.
 	a := &scriptAdapter{answers: []string{"A", "A", "A", "A", "A"}}
-	ext := ExtractorFunc(func(raw string) string { return raw })
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return raw })
 	v := Vote{NameStr: "vote", Adapter: a, N: 5, Extractor: ext}
 	if _, err := v.Answer(context.Background(), benchmark.Case{ID: "x"}); err != nil {
 		t.Fatalf("Answer: %v", err)

@@ -49,7 +49,6 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
-	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/thinking"
@@ -132,6 +131,8 @@ func run() error {
 		treeTraceDir     = flag.String("tree-trace-dir", "", "v3.5+: write per-case tree trace files (<case-id>.tree.txt) to this directory. Shows the full prompt→response path through the tree for debugging.")
 		structuredOutput = flag.Bool("structured-output", true, "v3.5+: constrain the OpenAI-compat substrate (ollama/vllm/lmstudio) to the {response, confidence} JSON shape via response_format schema enforcement. On by default — required for any substrate at or above the capability floor (see references/model-capability-floor.md). Disable only to A/B-test the prompt-only path; expect substrate-dependent results.")
 		thinkingMode     = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
+
+		systemPreamble = flag.String("system-preamble", "Be terse and dense.", "universal behavioral directive prepended to every adapter call (Evaluate, Execute, RawCall). Empty string disables.")
 
 		verbose     = flag.Bool("v", false, "verbose tracer (slog Info events to stderr); props: trace.verbose")
 		otelEnable  = flag.Bool("otel", false, "ship trace events to OpenTelemetry via OTLP HTTP (operator configures endpoint + auth via OTEL_EXPORTER_OTLP_* env vars; combine with -v to keep stderr output too); props: trace.otel.enabled")
@@ -343,11 +344,11 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	orchAdapter, err := buildAdapter("orchestrator", *orchSubstrate, *orchURL, *orchModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy, *systemPreamble)
 	if err != nil {
 		return err
 	}
-	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy)
+	frontAdapter, err := buildAdapter("frontier", *frontSubstrate, *frontURL, *frontModel, *minimalOutput, *structuredOutput, benchInspector(*notice_, *noticeCtxSize, *modelContext), thinkPolicy, *systemPreamble)
 	if err != nil {
 		return err
 	}
@@ -379,8 +380,8 @@ func run() error {
 			*useStoreDir, *useStoreAction, *useStoreTopK, *useStoreMaxTokens)
 	}
 
-	// Build benchmark config (loader + grader + extractor configured
-	// for the chosen --benchmark).
+	// Build benchmark config (loader + grader configured for the
+	// chosen --benchmark).
 	benchCfg, err := buildBenchmark(*benchName, *casesPath, *limit)
 	if err != nil {
 		return err
@@ -397,21 +398,20 @@ func run() error {
 		}
 	}
 
-	// Build orchestrators. The extractor and grader come from the
-	// benchmark config built above: MCQ benchmarks (GPQA, MMLU-Pro)
-	// produce a letter; MATH-500 produces a \boxed{} expression.
-	extractor := benchCfg.Extractor
+	// Build orchestrators. The LLM extractor replaces per-benchmark
+	// regex extractors: one adapter call per extraction, guided by
+	// Case.Goal (derived once per case by the runner's GoalDeriver).
 	frontierOrch := orchestrator.Single{
 		NameStr:   "frontier-" + adapterModel(*frontSubstrate, *frontModel),
 		Adapter:   frontAdapter,
-		Extractor: extractor,
-		Governor:  governor, // shares the same budget — risky if frontier and orch are same substrate, but the governor handles it
+		Extractor: benchCfg.Extractor,
+		Governor:  governor,
 	}
 	voteOrch := orchestrator.Vote{
 		NameStr:   fmt.Sprintf("orchestrator-vote-%d-%s", *voteN, adapterModel(*orchSubstrate, *orchModel)),
 		Adapter:   orchAdapter,
 		N:         *voteN,
-		Extractor: extractor,
+		Extractor: benchCfg.Extractor,
 		Governor:  governor,
 		Tracer:    tracer,
 	}
@@ -442,14 +442,12 @@ func run() error {
 	}
 	if *treeEnable {
 		treeOrch := orchestrator.Tree{
-			NameStr:     "tree-" + adapterModel(*orchSubstrate, *orchModel),
-			Adapter:     orchAdapter,
-			Synthesizer: recomposer.AdapterSynth{Adapter: orchAdapter},
-			Extractor:   benchCfg.Extractor,
-			Governor:    governor,
-			Tracer:      tracer,
-			MaxDepth:    *treeMaxDepth,
-			TraceDir:    *treeTraceDir,
+			NameStr:  "tree-" + adapterModel(*orchSubstrate, *orchModel),
+			Adapter:  orchAdapter,
+			Governor: governor,
+			Tracer:   tracer,
+			MaxDepth: *treeMaxDepth,
+			TraceDir: *treeTraceDir,
 		}
 		orchestrators = append(orchestrators, treeOrch)
 	}
@@ -492,6 +490,9 @@ func run() error {
 		OnCase:            onCase,
 		Pricing:           pricing,
 		FrontierPricing:   benchmark.Pricing{USDPerMTok: *frontierPrice},
+		GoalDeriver: func(ctx context.Context, c benchmark.Case) string {
+			return orchestrator.DeriveGoal(ctx, orchAdapter, tracer, c)
+		},
 	})
 	if err != nil {
 		return err
@@ -593,7 +594,7 @@ func buildGovernor(layers, kvHidden, kvDtype, ctx, prefix int, name string,
 // pkg/adapter/minimal; only applies to OpenAI-compat substrates that
 // expose RawExecuteInstructions (hermes/ollama/lmstudio/vllm). The
 // anthropic adapter is unaffected.
-func buildAdapter(role, substrate, url, model string, minimalOutput, structuredOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy) (adapter.Adapter, error) {
+func buildAdapter(role, substrate, url, model string, minimalOutput, structuredOutput bool, inspector *notice.Inspector, thinkingPolicy thinking.Policy, preamble string) (adapter.Adapter, error) {
 	if substrate == "auto" {
 		substrate = resolveSubstrate(role, model)
 	}
@@ -607,7 +608,6 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 	var schemaRF map[string]any
 	var perPlaybookRF map[session.Playbook]map[string]any
 	if structuredOutput {
-		schemaRF = minimal.AsResponseFormat("process_response", minimal.ProcessSchema())
 		perPlaybookRF = minimal.AllPlaybookFormats()
 	}
 	switch substrate {
@@ -642,6 +642,7 @@ func buildAdapter(role, substrate, url, model string, minimalOutput, structuredO
 		// will gain parallel wiring in follow-up phases.
 		cfg.Inspector = inspector
 		cfg.Thinking = thinkingPolicy
+		cfg.SystemPreamble = preamble
 		a, err := ollama.New(cfg)
 		if err != nil {
 			return nil, fmt.Errorf("%s adapter (ollama %s): %w", role, url, err)
@@ -759,13 +760,11 @@ var smallModelSubstrings = []string{
 	"qwen2.5-coder:7b",
 }
 
-// benchmarkConfig bundles the three per-benchmark pieces the runner
-// needs: the Loader (parses dataset to []Case), the Grader (decides
-// pass/fail per case), and the Extractor the orchestrator uses for
-// per-attempt vote tallying. MCQ benchmarks (GPQA, MMLU-Pro) produce
-// a letter; MATH-500 produces a \boxed{} expression. Keeping these
-// bundled means cmd/bench can't accidentally pair an MCQ extractor
-// with a math grader (or vice versa).
+// benchmarkConfig bundles the per-benchmark pieces the runner needs:
+// the Loader (parses dataset to []Case) and the Grader (decides
+// pass/fail per case). Extraction is now LLM-driven via the
+// runner's GoalDeriver + LLMExtractor, so no per-benchmark
+// Extractor is needed.
 type benchmarkConfig struct {
 	Loader    benchmark.Loader
 	Grader    benchmark.Grader
@@ -777,8 +776,8 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 	case "gpqa", "gpqa-diamond":
 		return benchmarkConfig{
 			Loader: gpqa.Loader{Path: path, Limit: limit},
-			Grader: grader.Multichoice{}, // default Letters = "ABCD"
-			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+			Grader: grader.Multichoice{},
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
 				return grader.ExtractLetter(raw, grader.MultichoiceLetters)
 			}),
 		}, nil
@@ -787,7 +786,7 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 		return benchmarkConfig{
 			Loader: mmlu_pro.Loader{Path: path, Limit: limit},
 			Grader: grader.Multichoice{Letters: letters},
-			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
 				return grader.ExtractLetter(raw, letters)
 			}),
 		}, nil
@@ -795,7 +794,7 @@ func buildBenchmark(name, path string, limit int) (benchmarkConfig, error) {
 		return benchmarkConfig{
 			Loader: math500.Loader{Path: path, Limit: limit},
 			Grader: grader.BoxedAnswer{},
-			Extractor: orchestrator.ExtractorFunc(func(raw string) string {
+			Extractor: orchestrator.ExtractorFunc(func(_ context.Context, _, raw string) string {
 				return grader.ExtractBoxed(raw)
 			}),
 		}, nil

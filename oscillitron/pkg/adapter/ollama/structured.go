@@ -56,13 +56,10 @@ type verifySpecRaw struct {
 // the v3.5-era Answer name is kept as legacy fallback; Content is
 // the original legacy envelope's field.
 type returnResultPayloadJSON struct {
-	Response       string   `json:"response,omitempty"`
-	Answer         string   `json:"answer,omitempty"`
-	Content        string   `json:"content,omitempty"`
-	Confidence     float64  `json:"confidence"`
-	GroundedPass   *bool    `json:"grounded_pass,omitempty"`
-	Contradictions []string `json:"contradictions,omitempty"`
-	OpenQuestions  []string `json:"open_questions,omitempty"`
+	Response   string  `json:"response,omitempty"`
+	Answer     string  `json:"answer,omitempty"`
+	Content    string  `json:"content,omitempty"`
+	Confidence float64 `json:"confidence"`
 }
 
 type verifierSignalPayloadJSON struct {
@@ -160,6 +157,13 @@ func parseSeverity(s string) session.Severity {
 }
 
 func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*session.Execute, error) {
+	// Process and compose produce natural text with a trailing
+	// "confidence: X.X" annotation — no JSON envelope. Go straight
+	// to unstructuredFallback; applyEffectiveConfidence recovers
+	// the confidence downstream.
+	if pb == session.PlaybookProcess || pb == session.PlaybookCompose {
+		return unstructuredFallback(pb, raw), nil
+	}
 	obj, ok := extractJSONObject(raw)
 	if !ok {
 		if require {
@@ -170,8 +174,6 @@ func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*sessi
 	switch pb {
 	case session.PlaybookPlan:
 		return parseEmitSubtreeJSON(obj)
-	case session.PlaybookProcess, session.PlaybookCompose:
-		return parseReturnResultJSON(obj)
 	case session.PlaybookCritique, session.PlaybookVerifyGrounded:
 		return parseVerifierSignalJSON(obj)
 	default:
@@ -237,11 +239,6 @@ func parseReturnResultJSON(obj string) (*session.Execute, error) {
 			// v3.5 percent-normalize: schema enforces type but not
 			// numeric bounds; qwen2.5:7b emits 95/100 (percent).
 			Confidence: notice.NormalizeConfidence(p.Confidence),
-			Signals: session.Signals{
-				GroundedPass:   p.GroundedPass,
-				Contradictions: p.Contradictions,
-				OpenQuestions:  p.OpenQuestions,
-			},
 		},
 	}, nil
 }

@@ -158,6 +158,7 @@ type caseJSON struct {
 	Prompt   string            `json:"prompt"`
 	Expected string            `json:"expected"`
 	Stakes   stakes.Level      `json:"stakes,omitempty"`
+	Goal     string            `json:"goal,omitempty"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 }
 

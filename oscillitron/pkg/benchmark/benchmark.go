@@ -56,6 +56,11 @@ type Case struct {
 	// v3.0 landed. The bench driver assigns per-case stakes via
 	// --stakes (uniform or rotate).
 	Stakes stakes.Level
+	// Goal is a one-sentence description of the expected answer format,
+	// derived by the benchmark runner via LLM call before orchestrators
+	// run. Used by the Extractor to pull the canonical answer from model
+	// output. Empty when goal derivation is not wired.
+	Goal string
 	// Metadata carries benchmark-specific tags (difficulty, subject,
 	// source IDs). Optional; never required by the Runner.
 	Metadata map[string]string
@@ -249,6 +254,11 @@ type RunnerConfig struct {
 	// the "what would the frontier model have cost?" column.
 	// Zero value = no counterfactual.
 	FrontierPricing Pricing
+	// GoalDeriver, when set, is called once per case before
+	// orchestrators run. It derives a format-description goal from
+	// the case prompt and returns it. The runner stores the result
+	// in Case.Goal. When nil, Case.Goal stays empty.
+	GoalDeriver func(ctx context.Context, c Case) string
 }
 
 // Run loads cases, runs each through every orchestrator + grader,
@@ -307,6 +317,10 @@ func Run(ctx context.Context, cfg RunnerConfig) (Report, error) {
 		// Stamp the case ID for every event emitted by downstream
 		// orchestrators, graders, runners, governors, and adapters.
 		caseCtx := trace.WithCorrelation(ctx, "case", c.ID)
+		if cfg.GoalDeriver != nil {
+			c.Goal = cfg.GoalDeriver(caseCtx, c)
+			cr.Case = c
+		}
 		for _, o := range cfg.Orchestrators {
 			or := OrchestratorResult{OrchestratorName: o.Name()}
 			// Stamp the orchestrator name so events from inside

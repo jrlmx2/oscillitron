@@ -46,15 +46,6 @@ type Tree struct {
 	// Adapter runs Evaluate and Execute for every AP in the tree.
 	// Required.
 	Adapter adapter.Adapter
-	// Synthesizer is used by recomposer.Synth to combine pairs of
-	// child results into a single synthesized result. Required.
-	// Typically recomposer.AdapterSynth wrapping the same Adapter
-	// so the substrate participates in synthesis as well as drafting.
-	Synthesizer recomposer.Synthesizer
-	// Extractor pulls the canonical answer form from the recomposed
-	// payload's Result.Content. Required. Use the same extractor as
-	// Single / Vote use (letter extraction for MCQ, boxed for math).
-	Extractor Extractor
 	// Governor optionally coordinates VRAM across all components
 	// hitting the same substrate. Forwarded to runner.Config.
 	Governor *vram.Governor
@@ -86,32 +77,17 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	if t.Adapter == nil {
 		return benchmark.Answer{}, fmt.Errorf("tree: Adapter is required")
 	}
-	if t.Synthesizer == nil {
-		return benchmark.Answer{}, fmt.Errorf("tree: Synthesizer is required")
-	}
-	if t.Extractor == nil {
-		return benchmark.Answer{}, fmt.Errorf("tree: Extractor is required")
-	}
-
 	maxDepth := t.MaxDepth
 	if maxDepth == 0 {
 		maxDepth = 10
 	}
 
-	goal, err := t.deriveGoal(ctx, c)
-	if err != nil {
-		goal = ""
-	}
-
-	outputSchema := goal
-	if outputSchema == "" {
-		outputSchema = "{answer}"
-	}
+	goal := c.Goal
 
 	root := session.NewRoot(
 		session.ID(fmt.Sprintf("bench-tree-%s", c.ID)),
 		c.Prompt,
-		outputSchema,
+		"",
 		classification.Internal,
 		session.Budget{TokensRemaining: 64_000, DepthRemaining: maxDepth},
 	)
@@ -119,7 +95,7 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 
 	cfg := runner.Config{
 		Adapter:    treeAdapter{inner: t.Adapter, originalTask: c.Prompt},
-		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer, Goal: goal, OriginalTask: c.Prompt},
+		Recomposer: recomposer.Collect{},
 		Tracer:     t.Tracer,
 		Governor:   t.Governor,
 		MaxDepth:   maxDepth,
@@ -130,14 +106,13 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	}
 
 	rawContent := res.ResolvedPayload.Result.Content
-	extracted := t.Extractor.Extract(rawContent)
 	calls := res.State.ExecuteCount + res.State.EvaluateCount
 
-	t.emitTreeTrace(ctx, c, goal, res, extracted)
+	t.emitTreeTrace(ctx, c, goal, res, "")
 
 	return benchmark.Answer{
 		Raw:        rawContent,
-		Extracted:  extracted,
+		Extracted:  "",
 		Calls:      calls,
 		Confidence: res.ResolvedPayload.Confidence,
 	}, nil
@@ -160,47 +135,6 @@ func (t Tree) emitTreeTrace(ctx context.Context, c benchmark.Case, goal string, 
 	}
 }
 
-// deriveGoal makes an LLM call to extract a freeform goal statement
-// from the input. The model reads the prompt and describes what the
-// final output should look like — not solving, just format detection.
-func (t Tree) deriveGoal(ctx context.Context, c benchmark.Case) (string, error) {
-	env := session.NewRoot(
-		session.ID(fmt.Sprintf("bench-tree-%s-goal", c.ID)),
-		goalExtractionPrompt+"\n\n---\n\n"+c.Prompt,
-		"",
-		classification.Internal,
-		session.Budget{TokensRemaining: 2_000, DepthRemaining: 1},
-	)
-	env.Evaluate = &session.Evaluate{
-		Playbook:   session.PlaybookProcess,
-		Confidence: 1.0,
-	}
-	out, err := t.Adapter.Execute(ctx, env)
-	if err != nil {
-		return "", err
-	}
-	if out.Execute == nil || out.Execute.ReturnResult == nil {
-		return "", fmt.Errorf("goal extraction returned no result")
-	}
-	return out.Execute.ReturnResult.Result.Content, nil
-}
-
-const goalExtractionPrompt = `You are a FORMAT DETECTOR. You do NOT solve tasks.
-
-Given the task below, state in ONE sentence what FORMAT the final answer must be in.
-
-GOOD examples of format descriptions:
-- "The answer must be exactly one letter: A, B, C, or D."
-- "The answer must be a number in electron-volts."
-- "The answer must be a short paragraph."
-
-BAD examples (these solve the task — NEVER do this):
-- "A" (this is solving the MCQ)
-- "10^-4 eV" (this is computing the answer)
-- "The reaction produces 11 carbon atoms" (this is answering the question)
-
-Describe ONLY the format. Do NOT reason about the content.`
-
 // Compile-time check.
 var _ benchmark.Orchestrator = Tree{}
 
@@ -215,6 +149,10 @@ type treeAdapter struct {
 
 func (a treeAdapter) Name() string { return a.inner.Name() }
 
+const treePreamble = `If this requires PhD-level reasoning, break it down step by step.
+
+`
+
 func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	if env.ParentID != nil {
 		env.Evaluate = &session.Evaluate{
@@ -223,7 +161,9 @@ func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (sessio
 		}
 		return env, nil
 	}
-	out, err := a.inner.Evaluate(ctx, env)
+	evalEnv := env
+	evalEnv.Input.Content = treePreamble + env.Input.Content
+	out, err := a.inner.Evaluate(ctx, evalEnv)
 	if err != nil {
 		env.Evaluate = &session.Evaluate{
 			Playbook:   session.PlaybookProcess,
@@ -236,6 +176,7 @@ func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (sessio
 		out.Evaluate.Playbook != session.PlaybookProcess {
 		out.Evaluate.Playbook = session.PlaybookProcess
 	}
+	out.Input.Content = env.Input.Content
 	return out, nil
 }
 

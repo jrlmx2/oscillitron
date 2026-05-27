@@ -169,6 +169,15 @@ func detectInternalInconsistency(s string) (Detection, bool) {
 // reasons through calibration explicitly).
 var confidenceRE = regexp.MustCompile(`(?i)\bconfidence\s*[:=]\s*([0-9]*\.?[0-9]+)`)
 
+// confidenceLineRE matches a standalone "confidence: X.X" line for stripping.
+var confidenceLineRE = regexp.MustCompile(`(?im)^\s*confidence\s*[:=]\s*[0-9]*\.?[0-9]+\s*$`)
+
+// StripConfidenceLine removes the "confidence: X.X" annotation line
+// from model output so downstream consumers see only the answer.
+func StripConfidenceLine(s string) string {
+	return strings.TrimSpace(confidenceLineRE.ReplaceAllString(s, ""))
+}
+
 // ExtractConfidence parses a "confidence: 0.X" annotation from raw
 // response text. Case-insensitive, last match wins. Returns
 // (value, true) on hit; (0, false) on miss. Value normalized via

@@ -49,7 +49,6 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
-	"github.com/jrlmx2/oscillitron/pkg/recomposer"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/thinking"
@@ -443,14 +442,13 @@ func run() error {
 	}
 	if *treeEnable {
 		treeOrch := orchestrator.Tree{
-			NameStr:     "tree-" + adapterModel(*orchSubstrate, *orchModel),
-			Adapter:     orchAdapter,
-			Synthesizer: recomposer.AdapterSynth{Adapter: orchAdapter},
-			Extractor:   benchCfg.Extractor,
-			Governor:    governor,
-			Tracer:      tracer,
-			MaxDepth:    *treeMaxDepth,
-			TraceDir:    *treeTraceDir,
+			NameStr:   "tree-" + adapterModel(*orchSubstrate, *orchModel),
+			Adapter:   orchAdapter,
+			Extractor: orchestrator.LLMExtractor{Adapter: orchAdapter, Tracer: tracer},
+			Governor:  governor,
+			Tracer:    tracer,
+			MaxDepth:  *treeMaxDepth,
+			TraceDir:  *treeTraceDir,
 		}
 		orchestrators = append(orchestrators, treeOrch)
 	}

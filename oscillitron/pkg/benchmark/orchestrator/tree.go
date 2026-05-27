@@ -46,11 +46,6 @@ type Tree struct {
 	// Adapter runs Evaluate and Execute for every AP in the tree.
 	// Required.
 	Adapter adapter.Adapter
-	// Synthesizer is used by recomposer.Synth to combine pairs of
-	// child results into a single synthesized result. Required.
-	// Typically recomposer.AdapterSynth wrapping the same Adapter
-	// so the substrate participates in synthesis as well as drafting.
-	Synthesizer recomposer.Synthesizer
 	// Extractor pulls the canonical answer form from the recomposed
 	// payload's Result.Content. Required. Use the same extractor as
 	// Single / Vote use (letter extraction for MCQ, boxed for math).
@@ -86,9 +81,6 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	if t.Adapter == nil {
 		return benchmark.Answer{}, fmt.Errorf("tree: Adapter is required")
 	}
-	if t.Synthesizer == nil {
-		return benchmark.Answer{}, fmt.Errorf("tree: Synthesizer is required")
-	}
 	if t.Extractor == nil {
 		return benchmark.Answer{}, fmt.Errorf("tree: Extractor is required")
 	}
@@ -116,7 +108,7 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 
 	cfg := runner.Config{
 		Adapter:    treeAdapter{inner: t.Adapter, originalTask: c.Prompt},
-		Recomposer: recomposer.Synth{Synthesizer: t.Synthesizer, Goal: goal, OriginalTask: c.Prompt},
+		Recomposer: recomposer.Collect{},
 		Tracer:     t.Tracer,
 		Governor:   t.Governor,
 		MaxDepth:   maxDepth,
@@ -171,6 +163,10 @@ type treeAdapter struct {
 
 func (a treeAdapter) Name() string { return a.inner.Name() }
 
+const treePreamble = `If this requires PhD-level reasoning, break it down step by step.
+
+`
+
 func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (session.Envelope, error) {
 	if env.ParentID != nil {
 		env.Evaluate = &session.Evaluate{
@@ -179,7 +175,9 @@ func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (sessio
 		}
 		return env, nil
 	}
-	out, err := a.inner.Evaluate(ctx, env)
+	evalEnv := env
+	evalEnv.Input.Content = treePreamble + env.Input.Content
+	out, err := a.inner.Evaluate(ctx, evalEnv)
 	if err != nil {
 		env.Evaluate = &session.Evaluate{
 			Playbook:   session.PlaybookProcess,
@@ -192,6 +190,7 @@ func (a treeAdapter) Evaluate(ctx context.Context, env session.Envelope) (sessio
 		out.Evaluate.Playbook != session.PlaybookProcess {
 		out.Evaluate.Playbook = session.PlaybookProcess
 	}
+	out.Input.Content = env.Input.Content
 	return out, nil
 }
 

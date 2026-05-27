@@ -12,7 +12,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 )
 
-const goalExtractionPrompt = `Describe the intent of the following prompt. Do not solve it.`
+const goalExtractionPrompt = `Describe the intent and expected response format of the following prompt. Do not solve it.`
 
 const extractionPreamble = `Extract the final answer from the response below. Respond with ONLY the extracted answer — nothing else.
 
@@ -76,6 +76,8 @@ var _ Extractor = LLMExtractor{}
 
 func (e LLMExtractor) Extract(ctx context.Context, goal string, raw string) string {
 	trimmed := strings.TrimSpace(raw)
+	trimmed = strings.TrimRight(trimmed, ".),:;!? ")
+	trimmed = strings.TrimSpace(trimmed)
 	if len(trimmed) <= 3 {
 		return trimmed
 	}

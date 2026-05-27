@@ -442,13 +442,12 @@ func run() error {
 	}
 	if *treeEnable {
 		treeOrch := orchestrator.Tree{
-			NameStr:   "tree-" + adapterModel(*orchSubstrate, *orchModel),
-			Adapter:   orchAdapter,
-			Extractor: orchestrator.LLMExtractor{Adapter: orchAdapter, Tracer: tracer},
-			Governor:  governor,
-			Tracer:    tracer,
-			MaxDepth:  *treeMaxDepth,
-			TraceDir:  *treeTraceDir,
+			NameStr:  "tree-" + adapterModel(*orchSubstrate, *orchModel),
+			Adapter:  orchAdapter,
+			Governor: governor,
+			Tracer:   tracer,
+			MaxDepth: *treeMaxDepth,
+			TraceDir: *treeTraceDir,
 		}
 		orchestrators = append(orchestrators, treeOrch)
 	}

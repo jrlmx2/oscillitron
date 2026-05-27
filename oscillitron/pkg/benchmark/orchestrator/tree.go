@@ -46,10 +46,6 @@ type Tree struct {
 	// Adapter runs Evaluate and Execute for every AP in the tree.
 	// Required.
 	Adapter adapter.Adapter
-	// Extractor pulls the canonical answer form from the recomposed
-	// payload's Result.Content. Required. Use the same extractor as
-	// Single / Vote use (letter extraction for MCQ, boxed for math).
-	Extractor Extractor
 	// Governor optionally coordinates VRAM across all components
 	// hitting the same substrate. Forwarded to runner.Config.
 	Governor *vram.Governor
@@ -81,10 +77,6 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	if t.Adapter == nil {
 		return benchmark.Answer{}, fmt.Errorf("tree: Adapter is required")
 	}
-	if t.Extractor == nil {
-		return benchmark.Answer{}, fmt.Errorf("tree: Extractor is required")
-	}
-
 	maxDepth := t.MaxDepth
 	if maxDepth == 0 {
 		maxDepth = 10
@@ -114,14 +106,13 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 	}
 
 	rawContent := res.ResolvedPayload.Result.Content
-	extracted := t.Extractor.Extract(ctx, c.Goal, rawContent)
 	calls := res.State.ExecuteCount + res.State.EvaluateCount
 
-	t.emitTreeTrace(ctx, c, goal, res, extracted)
+	t.emitTreeTrace(ctx, c, goal, res, "")
 
 	return benchmark.Answer{
 		Raw:        rawContent,
-		Extracted:  extracted,
+		Extracted:  "",
 		Calls:      calls,
 		Confidence: res.ResolvedPayload.Confidence,
 	}, nil

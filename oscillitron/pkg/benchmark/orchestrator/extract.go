@@ -75,6 +75,11 @@ type LLMExtractor struct {
 var _ Extractor = LLMExtractor{}
 
 func (e LLMExtractor) Extract(ctx context.Context, goal string, raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if len(trimmed) <= 3 {
+		return trimmed
+	}
+
 	tracer := e.Tracer
 	if tracer == nil {
 		tracer = trace.Discard{}

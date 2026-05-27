@@ -92,15 +92,10 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 
 	goal := c.Goal
 
-	outputSchema := goal
-	if outputSchema == "" {
-		outputSchema = "{answer}"
-	}
-
 	root := session.NewRoot(
 		session.ID(fmt.Sprintf("bench-tree-%s", c.ID)),
 		c.Prompt,
-		outputSchema,
+		"",
 		classification.Internal,
 		session.Budget{TokensRemaining: 64_000, DepthRemaining: maxDepth},
 	)

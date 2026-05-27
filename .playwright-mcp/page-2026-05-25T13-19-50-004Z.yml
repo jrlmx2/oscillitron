@@ -1,0 +1,100 @@
+- generic [ref=e2]:
+  - heading "0 notifications" [level=2] [ref=e3]
+  - generic [ref=e4]:
+    - generic:
+      - button [ref=e5] [cursor=pointer]:
+        - generic [ref=e7]: Skip to main content
+      - button [ref=e8] [cursor=pointer]
+    - generic [ref=e11]:
+      - banner [ref=e13]:
+        - generic [ref=e16]:
+          - button [ref=e17] [cursor=pointer]
+          - generic [ref=e20]:
+            - navigation [ref=e23]:
+              - list [ref=e24]:
+                - listitem [ref=e25]:
+                  - button "Home, 1 new notification" [ref=e26] [cursor=pointer]:
+                    - img [ref=e28]
+                    - generic [ref=e31]: Home
+                - listitem [ref=e32]:
+                  - link "My Network, 0 new notifications" [ref=e33] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/mynetwork
+                    - img [ref=e35]
+                    - generic [ref=e38]: My Network
+                - listitem [ref=e39]:
+                  - link "Jobs, 0 new notifications" [ref=e40] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/jobs/
+                    - img [ref=e42]
+                    - generic [ref=e45]: Jobs
+                - listitem [ref=e46]:
+                  - link "Messaging, 0 new notifications" [ref=e47] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/messaging/
+                    - img [ref=e49]
+                    - generic [ref=e52]: Messaging
+                - listitem [ref=e53]:
+                  - link "Notifications, 0 new notifications" [ref=e54] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/notifications/
+                    - img [ref=e56]
+                    - generic [ref=e59]: Notifications
+                - listitem [ref=e60]:
+                  - button "Me" [ref=e61] [cursor=pointer]:
+                    - figure [ref=e63]
+                    - generic [ref=e65]: Me
+            - navigation [ref=e69]:
+              - list [ref=e70]:
+                - listitem [ref=e71]:
+                  - button "For Business" [ref=e72] [cursor=pointer]:
+                    - img [ref=e74]
+                    - generic [ref=e77]: For Business
+                - listitem [ref=e79]:
+                  - link "Learning, 0 new notifications" [ref=e80] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/learning/?trk=nav_neptune_learning
+                    - generic [ref=e84]: Learning
+      - generic [ref=e85]:
+        - toolbar [ref=e86]
+        - main [ref=e100]:
+          - generic [ref=e103]:
+            - region "Primary content" [ref=e104]:
+              - generic [ref=e109]:
+                - paragraph [ref=e113]:
+                  - text: Results for people
+                  - strong [ref=e114]: named Nik Koblov currently or previously at Ramp
+                  - text: .
+                - list [ref=e115]:
+                  - listitem [ref=e117]:
+                    - generic [ref=e118]:
+                      - link:
+                        - /url: https://www.linkedin.com/in/koblov/
+                      - generic [ref=e119]:
+                        - link:
+                          - /url: https://www.linkedin.com/in/koblov/
+                        - generic [ref=e120]:
+                          - link [ref=e121] [cursor=pointer]:
+                            - /url: https://www.linkedin.com/in/koblov/
+                            - figure [ref=e122]
+                          - generic [ref=e123]:
+                            - link:
+                              - /url: https://www.linkedin.com/in/koblov/
+                            - paragraph [ref=e124]:
+                              - link:
+                                - /url: https://www.linkedin.com/in/koblov/
+                              - link "Nik Koblov Premium" [ref=e125] [cursor=pointer]:
+                                - /url: https://www.linkedin.com/in/koblov/
+                                - text: Nik Koblov
+                                - img "Premium" [ref=e126]
+                              - generic [ref=e128]: • 2nd
+                            - paragraph [ref=e130]: Autonomous Finance
+                            - paragraph [ref=e132]: New York, New York, United States
+                        - paragraph [ref=e134]:
+                          - generic [ref=e135]:
+                            - text: "Current: Head Of Engineering at"
+                            - strong [ref=e136]: Ramp
+                        - generic [ref=e137]:
+                          - figure [ref=e138]
+                          - paragraph [ref=e140]:
+                            - generic [ref=e141]:
+                              - link "Oron Gill Haus" [ref=e142] [cursor=pointer]:
+                                - /url: https://www.linkedin.com/in/orongillhaus/
+                                - strong [ref=e143]: Oron Gill Haus
+                              - text: is a mutual connection
+            - complementary "Aside" [ref=e144]

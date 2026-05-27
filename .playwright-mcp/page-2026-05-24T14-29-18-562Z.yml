@@ -1,0 +1,156 @@
+- generic [ref=e2]:
+  - heading "0 notifications" [level=2] [ref=e3]
+  - generic [ref=e4]:
+    - generic:
+      - button [ref=e5] [cursor=pointer]:
+        - generic [ref=e7]: Skip to main content
+      - button [ref=e8] [cursor=pointer]
+    - generic [ref=e11]:
+      - banner [ref=e13]:
+        - generic [ref=e16]:
+          - button [ref=e17] [cursor=pointer]
+          - generic [ref=e20]:
+            - navigation [ref=e23]:
+              - list [ref=e24]:
+                - listitem [ref=e25]:
+                  - button "Home, 1 new notification" [ref=e26] [cursor=pointer]:
+                    - img [ref=e28]
+                    - generic [ref=e31]: Home
+                - listitem [ref=e32]:
+                  - link "My Network, 0 new notifications" [ref=e33] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/mynetwork
+                    - img [ref=e35]
+                    - generic [ref=e38]: My Network
+                - listitem [ref=e39]:
+                  - link "Jobs, 0 new notifications" [ref=e40] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/jobs/
+                    - img [ref=e42]
+                    - generic [ref=e45]: Jobs
+                - listitem [ref=e46]:
+                  - link "Messaging, 0 new notifications" [ref=e47] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/messaging/
+                    - img [ref=e49]
+                    - generic [ref=e52]: Messaging
+                - listitem [ref=e53]:
+                  - link "Notifications, 0 new notifications" [ref=e54] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/notifications/
+                    - img [ref=e56]
+                    - generic [ref=e59]: Notifications
+                - listitem [ref=e60]:
+                  - button "Me" [ref=e61] [cursor=pointer]:
+                    - figure [ref=e63]
+                    - generic [ref=e65]: Me
+            - navigation [ref=e69]:
+              - list [ref=e70]:
+                - listitem [ref=e71]:
+                  - button "For Business" [ref=e72] [cursor=pointer]:
+                    - img [ref=e74]
+                    - generic [ref=e77]: For Business
+                - listitem [ref=e79]:
+                  - link "Learning, 0 new notifications" [ref=e80] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/learning/?trk=nav_neptune_learning
+                    - generic [ref=e84]: Learning
+      - generic [ref=e85]:
+        - toolbar [ref=e86]
+        - main [ref=e100]:
+          - generic [ref=e103]:
+            - region "Primary content" [ref=e104]:
+              - list [ref=e110]:
+                - listitem [ref=e112]:
+                  - generic [ref=e113]:
+                    - link:
+                      - /url: https://www.linkedin.com/in/jay-goel/
+                    - generic [ref=e114]:
+                      - link:
+                        - /url: https://www.linkedin.com/in/jay-goel/
+                      - generic [ref=e115]:
+                        - link [ref=e116] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/in/jay-goel/
+                          - figure [ref=e117]
+                        - generic [ref=e118]:
+                          - link:
+                            - /url: https://www.linkedin.com/in/jay-goel/
+                          - paragraph [ref=e119]:
+                            - link:
+                              - /url: https://www.linkedin.com/in/jay-goel/
+                            - link "Jay Goel" [ref=e120] [cursor=pointer]:
+                              - /url: https://www.linkedin.com/in/jay-goel/
+                            - generic [ref=e121]: • 2nd
+                          - paragraph [ref=e123]: Engineering at Ramp
+                          - paragraph [ref=e125]: New York, New York, United States
+                      - paragraph [ref=e129]:
+                        - link "2K followers" [ref=e131] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/search/results/people/?origin=SHARED_FOLLOWERS_CANNED_SEARCH&followerOf=%5B%22ACoAAARmeTkB5KfeF6GMSSUOVH1Hca98WJY9L60%22%5D
+                - listitem [ref=e133]:
+                  - generic [ref=e134]:
+                    - link:
+                      - /url: https://www.linkedin.com/in/jared-vreeland/
+                    - generic [ref=e135]:
+                      - link:
+                        - /url: https://www.linkedin.com/in/jared-vreeland/
+                      - generic [ref=e136]:
+                        - link [ref=e137] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/in/jared-vreeland/
+                          - figure [ref=e138]
+                        - generic [ref=e139]:
+                          - link:
+                            - /url: https://www.linkedin.com/in/jared-vreeland/
+                          - paragraph [ref=e140]:
+                            - link:
+                              - /url: https://www.linkedin.com/in/jared-vreeland/
+                            - link "Jared Vreeland Premium" [ref=e141] [cursor=pointer]:
+                              - /url: https://www.linkedin.com/in/jared-vreeland/
+                              - text: Jared Vreeland
+                              - img "Premium" [ref=e142]
+                            - generic [ref=e144]: • 3rd+
+                          - paragraph [ref=e146]: Senior Technical Consultant @ Ramp | Marine Corps Veteran
+                          - paragraph [ref=e148]: Cincinnati Metropolitan Area
+                - listitem [ref=e150]:
+                  - generic [ref=e151]:
+                    - link:
+                      - /url: https://www.linkedin.com/in/akashwadawadigi/
+                    - generic [ref=e152]:
+                      - link:
+                        - /url: https://www.linkedin.com/in/akashwadawadigi/
+                      - generic [ref=e153]:
+                        - link [ref=e154] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/in/akashwadawadigi/
+                          - figure [ref=e155]
+                        - generic [ref=e156]:
+                          - link:
+                            - /url: https://www.linkedin.com/in/akashwadawadigi/
+                          - paragraph [ref=e157]:
+                            - link:
+                              - /url: https://www.linkedin.com/in/akashwadawadigi/
+                            - link "Akash Wadawadigi Premium" [ref=e158] [cursor=pointer]:
+                              - /url: https://www.linkedin.com/in/akashwadawadigi/
+                              - text: Akash Wadawadigi
+                              - img "Premium" [ref=e159]
+                            - generic [ref=e161]: • 3rd+
+                          - paragraph [ref=e163]: Director of Engineering @ Ramp
+                          - paragraph [ref=e165]: New York, New York, United States
+                - listitem [ref=e167]:
+                  - generic [ref=e168]:
+                    - link:
+                      - /url: https://www.linkedin.com/in/rjfoss/
+                    - generic [ref=e169]:
+                      - link:
+                        - /url: https://www.linkedin.com/in/rjfoss/
+                      - generic [ref=e170]:
+                        - link [ref=e171] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/in/rjfoss/
+                          - figure [ref=e172]
+                        - generic [ref=e173]:
+                          - link:
+                            - /url: https://www.linkedin.com/in/rjfoss/
+                          - paragraph [ref=e174]:
+                            - link:
+                              - /url: https://www.linkedin.com/in/rjfoss/
+                            - link "Ryan Foss Premium" [ref=e175] [cursor=pointer]:
+                              - /url: https://www.linkedin.com/in/rjfoss/
+                              - text: Ryan Foss
+                              - img "Premium" [ref=e176]
+                            - generic [ref=e178]: • 3rd+
+                          - paragraph [ref=e180]: Capital, Treasury and Financial Systems
+                          - paragraph [ref=e182]: New York, New York, United States
+            - complementary "Aside" [ref=e183]

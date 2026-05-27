@@ -1,0 +1,266 @@
+- generic [ref=e2]:
+  - heading "0 notifications" [level=2] [ref=e3]
+  - generic [ref=e4]:
+    - generic:
+      - button [ref=e5] [cursor=pointer]:
+        - generic [ref=e7]: Skip to main content
+      - button [ref=e8] [cursor=pointer]
+    - generic [ref=e11]:
+      - banner [ref=e13]:
+        - generic [ref=e16]:
+          - button [ref=e17] [cursor=pointer]
+          - generic [ref=e20]:
+            - navigation [ref=e23]:
+              - list [ref=e24]:
+                - listitem [ref=e25]:
+                  - button "Home, 1 new notification" [ref=e26] [cursor=pointer]:
+                    - img [ref=e28]
+                    - generic [ref=e31]: Home
+                - listitem [ref=e32]:
+                  - link "My Network, 0 new notifications" [ref=e33] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/mynetwork
+                    - img [ref=e35]
+                    - generic [ref=e38]: My Network
+                - listitem [ref=e39]:
+                  - link "Jobs, 0 new notifications" [ref=e40] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/jobs/
+                    - img [ref=e42]
+                    - generic [ref=e45]: Jobs
+                - listitem [ref=e46]:
+                  - link "Messaging, 0 new notifications" [ref=e47] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/messaging/
+                    - img [ref=e49]
+                    - generic [ref=e52]: Messaging
+                - listitem [ref=e53]:
+                  - link "Notifications, 1 new notification" [ref=e54] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/notifications/
+                    - img [ref=e56]
+                    - generic [ref=e59]: Notifications
+                - listitem [ref=e60]:
+                  - button "Me" [ref=e61] [cursor=pointer]:
+                    - figure [ref=e63]
+                    - generic [ref=e65]: Me
+            - navigation [ref=e69]:
+              - list [ref=e70]:
+                - listitem [ref=e71]:
+                  - button "For Business" [ref=e72] [cursor=pointer]:
+                    - img [ref=e74]
+                    - generic [ref=e77]: For Business
+                - listitem [ref=e79]:
+                  - link "Learning, 0 new notifications" [ref=e80] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/learning/?trk=nav_neptune_learning
+                    - generic [ref=e84]: Learning
+      - generic [ref=e86]:
+        - toolbar [ref=e87]:
+          - generic [ref=e91]:
+            - link "Jay Goel" [ref=e92] [cursor=pointer]:
+              - /url: https://www.linkedin.com/in/jay-goel/
+              - generic "Jay Goel" [ref=e93]:
+                - figure [ref=e94]
+                - generic [ref=e95]:
+                  - paragraph [ref=e96]: Jay Goel
+                  - paragraph [ref=e98]: Engineering at Ramp
+            - button "More" [ref=e101] [cursor=pointer]
+        - main [ref=e104]:
+          - generic [ref=e106]:
+            - region "Primary content" [ref=e107]:
+              - generic [ref=e114]:
+                - generic [ref=e115]:
+                  - button [ref=e118] [cursor=pointer]:
+                    - figure [ref=e119]
+                  - button "Profile photo" [ref=e120] [cursor=pointer]:
+                    - generic "Profile photo" [ref=e121]:
+                      - figure [ref=e122]
+                - generic [ref=e123]:
+                  - generic [ref=e124]:
+                    - generic [ref=e126]:
+                      - link "Jay Goel" [ref=e129] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/
+                        - heading "Jay Goel" [level=2] [ref=e131]
+                      - paragraph [ref=e132]: Engineering at Ramp
+                      - generic [ref=e133]:
+                        - paragraph [ref=e134]: New York, New York, United States
+                        - paragraph [ref=e135]: ·
+                        - paragraph [ref=e136]:
+                          - link "Contact info" [ref=e137] [cursor=pointer]:
+                            - /url: "#"
+                    - generic [ref=e139]:
+                      - button "Ramp" [ref=e140] [cursor=pointer]:
+                        - generic [ref=e141]:
+                          - figure [ref=e142]
+                          - paragraph [ref=e146]: Ramp
+                      - button "Y Combinator" [ref=e147] [cursor=pointer]:
+                        - generic [ref=e148]:
+                          - figure [ref=e149]
+                          - paragraph [ref=e153]: Y Combinator
+                  - generic [ref=e154]:
+                    - paragraph [ref=e155]: 2,316 followers
+                    - paragraph [ref=e156]: ·
+                    - paragraph [ref=e157]: 500+
+                    - paragraph [ref=e158]: connections
+                  - button "More" [ref=e164] [cursor=pointer]
+            - complementary "Aside" [ref=e198]:
+              - generic [ref=e200]:
+                - iframe [ref=e203]:
+                  
+                - generic [ref=e206]:
+                  - heading "Explore Premium profiles" [level=2] [ref=e208]
+                  - generic [ref=e210]:
+                    - generic [ref=e212]:
+                      - link "Tony Pu Premium · 3rd Founding Head of Engineering, Architect, Cloud, Infrastructure, and DevSecOps" [ref=e215] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/tony-pu-9071862/
+                        - generic [ref=e216]:
+                          - figure [ref=e217]
+                          - generic [ref=e218]:
+                            - generic [ref=e219]:
+                              - paragraph [ref=e221]:
+                                - generic [ref=e222]:
+                                  - text: Tony Pu
+                                  - img "Premium" [ref=e223]
+                              - paragraph [ref=e225]: · 3rd
+                            - paragraph [ref=e227]: Founding Head of Engineering, Architect, Cloud, Infrastructure, and DevSecOps
+                      - link "Message Tony Pu" [ref=e231] [cursor=pointer]:
+                        - /url: /messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AACoAAABhoZcBpn3ouNG_fHfUbNxeYyeKA-fFCoQ&recipient=ACoAAABhoZcBpn3ouNG_fHfUbNxeYyeKA-fFCoQ&screenContext=NON_SELF_PROFILE_VIEW&interop=msgOverlay
+                        - generic [ref=e234]: Message
+                    - link "Chakradhar Gogula Premium · 2nd Software Engineer at Microsoft" [ref=e239] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/chkrdhr94/
+                      - generic [ref=e240]:
+                        - figure [ref=e241]
+                        - generic [ref=e242]:
+                          - generic [ref=e243]:
+                            - paragraph [ref=e245]:
+                              - generic [ref=e246]:
+                                - text: Chakradhar Gogula
+                                - img "Premium" [ref=e247]
+                            - paragraph [ref=e249]: · 2nd
+                          - paragraph [ref=e251]: Software Engineer at Microsoft
+                    - link "Praveen Gottam Premium · 2nd Field Engineering - Wealth and Asset Managers | Data Intelligent Platform" [ref=e257] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/praveenrg/
+                      - generic [ref=e258]:
+                        - figure [ref=e259]
+                        - generic [ref=e260]:
+                          - generic [ref=e261]:
+                            - paragraph [ref=e263]:
+                              - generic [ref=e264]:
+                                - text: Praveen Gottam
+                                - img "Premium" [ref=e265]
+                            - paragraph [ref=e267]: · 2nd
+                          - paragraph [ref=e269]: Field Engineering - Wealth and Asset Managers | Data Intelligent Platform
+                    - generic [ref=e272]:
+                      - link "Romit Chattopadhyay Premium · 3rd Principal Software Engineering Manager at Microsoft" [ref=e275] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/romit-chattopadhyay-591091b/
+                        - generic [ref=e276]:
+                          - figure [ref=e277]
+                          - generic [ref=e278]:
+                            - generic [ref=e279]:
+                              - paragraph [ref=e281]:
+                                - generic [ref=e282]:
+                                  - text: Romit Chattopadhyay
+                                  - img "Premium" [ref=e283]
+                              - paragraph [ref=e285]: · 3rd
+                            - paragraph [ref=e287]: Principal Software Engineering Manager at Microsoft
+                      - link "Message Romit Chattopadhyay" [ref=e291] [cursor=pointer]:
+                        - /url: /messaging/compose/?profileUrn=urn%3Ali%3Afsd_profile%3AACoAAAH4Ev0BKYk0GKYfXzVvxM_VcHFwaCezT14&recipient=ACoAAAH4Ev0BKYk0GKYfXzVvxM_VcHFwaCezT14&screenContext=NON_SELF_PROFILE_VIEW&interop=msgOverlay
+                        - generic [ref=e294]: Message
+            - generic "Footer" [ref=e295]:
+              - generic [ref=e298]:
+                - generic [ref=e299]:
+                  - navigation [ref=e300]:
+                    - link "About" [ref=e301] [cursor=pointer]:
+                      - /url: https://about.linkedin.com/
+                      - paragraph [ref=e302]: About
+                    - link "Accessibility" [ref=e303] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/accessibility/
+                      - paragraph [ref=e304]: Accessibility
+                    - link "Talent Solutions" [ref=e305] [cursor=pointer]:
+                      - /url: https://business.linkedin.com/talent-solutions?trk=flagship_nav&veh=li-footer-lts-control&src=li-footer
+                      - paragraph [ref=e306]: Talent Solutions
+                    - link "Community Guidelines" [ref=e307] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/legal/professional-community-policies/
+                      - paragraph [ref=e308]: Community Guidelines
+                    - link "Careers" [ref=e309] [cursor=pointer]:
+                      - /url: https://careers.linkedin.com/
+                      - paragraph [ref=e310]: Careers
+                    - link "Marketing Solutions" [ref=e311] [cursor=pointer]:
+                      - /url: https://business.linkedin.com/advertise?trk=n_nav_lms_f&src=li-footer
+                      - paragraph [ref=e312]: Marketing Solutions
+                    - button "Privacy & Terms" [ref=e313] [cursor=pointer]:
+                      - paragraph [ref=e315]: Privacy & Terms
+                    - link "Ad Choices" [ref=e317] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/help/linkedin/answer/62931/
+                      - paragraph [ref=e318]: Ad Choices
+                    - link "Advertising" [ref=e319] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/ad/start/?trk=n_nav_ads_rr
+                      - paragraph [ref=e320]: Advertising
+                    - link "Sales Solutions" [ref=e321] [cursor=pointer]:
+                      - /url: https://business.linkedin.com/sales-solutions?trk=flagship_nav&veh=li-footer-lss-control&src=li-footer
+                      - paragraph [ref=e322]: Sales Solutions
+                    - link "Mobile" [ref=e323] [cursor=pointer]:
+                      - /url: https://mobile.linkedin.com/
+                      - paragraph [ref=e324]: Mobile
+                    - link "Small Business" [ref=e325] [cursor=pointer]:
+                      - /url: https://business.linkedin.com/grow?src=li-footer
+                      - paragraph [ref=e326]: Small Business
+                    - link "Safety Center" [ref=e327] [cursor=pointer]:
+                      - /url: https://safety.linkedin.com/
+                      - paragraph [ref=e328]: Safety Center
+                  - paragraph [ref=e330]: LinkedIn Corporation © 2026
+                - generic [ref=e331]:
+                  - list [ref=e332]:
+                    - listitem [ref=e333]:
+                      - generic [ref=e336]:
+                        - link "Questions?" [ref=e337] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/help/linkedin/
+                          - paragraph [ref=e338]: Questions?
+                        - paragraph [ref=e339]: Visit our Help Center.
+                    - listitem [ref=e340]:
+                      - generic [ref=e343]:
+                        - link "Manage your account and privacy" [ref=e344] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/mypreferences/d/
+                          - paragraph [ref=e345]: Manage your account and privacy
+                        - paragraph [ref=e346]: Go to your Settings.
+                    - listitem [ref=e347]:
+                      - generic [ref=e350]:
+                        - link "Recommendation transparency" [ref=e351] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/help/linkedin/answer/a1339724/
+                          - paragraph [ref=e352]: Recommendation transparency
+                        - paragraph [ref=e353]: Learn more about Recommended Content.
+                  - generic [ref=e355]:
+                    - paragraph [ref=e357]: Select language
+                    - combobox "Select language" [ref=e359] [cursor=pointer]:
+                      - option "العربية (Arabic)"
+                      - option "বাংলা (Bangla)"
+                      - option "Čeština (Czech)"
+                      - option "Dansk (Danish)"
+                      - option "Deutsch (German)"
+                      - option "Ελληνικά (Greek)"
+                      - option "English (English)" [selected]
+                      - option "Español (Spanish)"
+                      - option "فارسی (Persian)"
+                      - option "Suomi (Finnish)"
+                      - option "Français (French)"
+                      - option "हिंदी (Hindi)"
+                      - option "Magyar (Hungarian)"
+                      - option "Bahasa Indonesia (Indonesian)"
+                      - option "Italiano (Italian)"
+                      - option "עברית (Hebrew)"
+                      - option "日本語 (Japanese)"
+                      - option "한국어 (Korean)"
+                      - option "मराठी (Marathi)"
+                      - option "Bahasa Malaysia (Malay)"
+                      - option "Nederlands (Dutch)"
+                      - option "Norsk (Norwegian)"
+                      - option "ਪੰਜਾਬੀ (Punjabi)"
+                      - option "Polski (Polish)"
+                      - option "Português (Portuguese)"
+                      - option "Română (Romanian)"
+                      - option "Русский (Russian)"
+                      - option "Svenska (Swedish)"
+                      - option "తెలుగు (Telugu)"
+                      - option "ภาษาไทย (Thai)"
+                      - option "Tagalog (Tagalog)"
+                      - option "Türkçe (Turkish)"
+                      - option "Українська (Ukrainian)"
+                      - option "Tiếng Việt (Vietnamese)"
+                      - option "简体中文 (Chinese (Simplified))"
+                      - option "正體中文 (Chinese (Traditional))"

@@ -1,0 +1,854 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - region "Toast message":
+      - heading "0 notifications total" [level=2] [ref=e3]
+      - alert
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - button "Skip to search" [ref=e7] [cursor=pointer]:
+        - generic [ref=e8]: Skip to search
+      - button "Skip to main content" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: Skip to main content
+      - button "Keyboard shortcuts" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Keyboard shortcuts
+      - button "Close jump menu" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e16]: Close jump menu
+    - banner "Global Navigation" [ref=e17]:
+      - generic [ref=e18]:
+        - link "LinkedIn" [ref=e19] [cursor=pointer]:
+          - /url: https://www.linkedin.com/feed/?nis=true
+          - img "LinkedIn" [ref=e22]:
+            - img [ref=e23]
+        - generic [ref=e27]:
+          - combobox "I’m looking for..." [ref=e28]
+          - generic:
+            - img
+        - navigation "Primary Navigation" [ref=e29]:
+          - list [ref=e30]:
+            - listitem [ref=e31]:
+              - link "new feed updates notifications Home" [ref=e32] [cursor=pointer]:
+                - /url: https://www.linkedin.com/feed/?nis=true&
+                - generic [ref=e33]:
+                  - generic [ref=e36]: new feed updates notifications
+                  - img [ref=e40]
+                - generic "Home" [ref=e42]
+            - listitem [ref=e43]:
+              - link "My Network" [ref=e44] [cursor=pointer]:
+                - /url: https://www.linkedin.com/mynetwork/?
+                - img [ref=e48]
+                - generic "My Network" [ref=e50]
+            - listitem [ref=e51]:
+              - link "Jobs" [ref=e52] [cursor=pointer]:
+                - /url: https://www.linkedin.com/jobs/?
+                - img [ref=e56]
+                - generic "Jobs" [ref=e58]
+            - listitem [ref=e59]:
+              - link "Messaging" [ref=e60] [cursor=pointer]:
+                - /url: https://www.linkedin.com/messaging/?
+                - img [ref=e64]
+                - generic "Messaging" [ref=e66]
+            - listitem [ref=e67]:
+              - link "1 new notification Notifications" [ref=e68] [cursor=pointer]:
+                - /url: https://www.linkedin.com/notifications/?
+                - generic [ref=e69]:
+                  - generic [ref=e70]:
+                    - generic [ref=e71]: "1"
+                    - generic [ref=e72]: 1 new notification
+                  - img [ref=e76]
+                - generic "Notifications" [ref=e78]
+            - listitem [ref=e79]:
+              - button "James Lemieux Me" [ref=e81] [cursor=pointer]:
+                - img "James Lemieux" [ref=e82]
+                - generic [ref=e83]:
+                  - text: Me
+                  - img [ref=e84]
+            - listitem [ref=e86]:
+              - button "For Business" [ref=e88] [cursor=pointer]:
+                - img [ref=e92]
+                - generic "For Business" [ref=e94]:
+                  - text: For Business
+                  - img [ref=e95]
+            - listitem [ref=e97]:
+              - link "Learning" [ref=e98] [cursor=pointer]:
+                - /url: https://www.linkedin.com/learning/?trk=nav_neptune_learning&
+                - img [ref=e102]
+                - generic "Learning" [ref=e107]
+    - generic [ref=e112]:
+      - main "Organization page for Ramp" [ref=e113]:
+        - generic [ref=e116]:
+          - button [ref=e119]
+          - generic [ref=e122]:
+            - generic [ref=e124]:
+              - generic [ref=e125]:
+                - img "Ramp logo" [ref=e126]
+                - generic [ref=e128]:
+                  - heading "Ramp" [level=1] [ref=e129]
+                  - link "Verified" [ref=e130] [cursor=pointer]:
+                    - /url: /company/ramp/about/
+                    - img [ref=e131]
+                  - paragraph [ref=e133]: The all-in-one financial operations platform designed to save businesses time and money. Trusted by 50,000+ teams.
+                  - generic [ref=e134]:
+                    - generic [ref=e135]: · Financial Services
+                    - generic [ref=e136]:
+                      - text: ·
+                      - link "Spend Management Software" [ref=e137] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/search/results/products/?origin=PRODUCT_PAGE_CATEGORY_CANNED_SEARCH&productCategory=%5B%221251%22%5D
+                        - generic [ref=e138]: Spend Management Software
+                    - generic [ref=e139]:
+                      - generic [ref=e140]: · New York, New York
+                      - generic [ref=e141]: · 306K followers
+                      - link "· 1K-5K employees" [ref=e142] [cursor=pointer]:
+                        - /url: /search/results/people/?currentCompany=%5B%221406226%22%5D&origin=COMPANY_PAGE_CANNED_SEARCH
+                        - text: ·
+                        - generic [ref=e143]: 1K-5K employees
+              - generic [ref=e146]:
+                - link "Bhavyashree Sisodia Bhavyashree & 4 other connections follow this page" [ref=e147] [cursor=pointer]:
+                  - /url: http://www.linkedin.com/company/ramp/?showInNetworkFollowers=true
+                  - img "Bhavyashree Sisodia" [ref=e150]
+                  - heading "Bhavyashree & 4 other connections follow this page" [level=2] [ref=e151]
+                - button "View all featured customers of Ramp Used by Morning Brew and 18 featured customers" [ref=e152] [cursor=pointer]:
+                  - img "Visit Morning Brew’s company page" [ref=e153]
+                  - generic [ref=e154]:
+                    - generic [ref=e155]: View all featured customers of Ramp
+                    - generic [ref=e156]: Used by Morning Brew and 18 featured customers
+              - generic [ref=e158]:
+                - region [ref=e160]:
+                  - button "Follow" [ref=e161] [cursor=pointer]:
+                    - img [ref=e162]
+                    - generic [ref=e164]: Follow
+                  - button "Message Ramp" [ref=e165] [cursor=pointer]:
+                    - img [ref=e166]
+                    - generic [ref=e168]: Message
+                - button "Overflow Actions" [ref=e172] [cursor=pointer]:
+                  - img "Overflow Actions" [ref=e173]
+            - navigation "Organization’s page navigation" [ref=e176]:
+              - list [ref=e177]:
+                - listitem [ref=e178]:
+                  - link "Home" [ref=e179] [cursor=pointer]:
+                    - /url: /company/ramp/
+                - listitem [ref=e180]:
+                  - link "About" [ref=e181] [cursor=pointer]:
+                    - /url: /company/ramp/about/
+                - listitem [ref=e182]:
+                  - link "Posts" [ref=e183] [cursor=pointer]:
+                    - /url: /company/ramp/posts/
+                - listitem [ref=e184]:
+                  - link "Products" [ref=e185] [cursor=pointer]:
+                    - /url: /company/ramp/product/
+                - listitem [ref=e186]:
+                  - link "Jobs" [ref=e187] [cursor=pointer]:
+                    - /url: /company/ramp/jobs/
+                - listitem [ref=e188]:
+                  - link "Life" [ref=e189] [cursor=pointer]:
+                    - /url: /company/ramp/life/
+                - listitem [ref=e190]:
+                  - link "People" [ref=e191] [cursor=pointer]:
+                    - /url: /company/ramp/people/?keywords=Fidelity
+                - listitem [ref=e192]:
+                  - link "Insights" [ref=e193] [cursor=pointer]:
+                    - /url: /company/ramp/insights/
+        - generic [ref=e196]:
+          - generic [ref=e247]:
+            - generic [ref=e248]:
+              - generic [ref=e249]:
+                - generic [ref=e251]:
+                  - heading "6 associated members" [level=2] [ref=e252]
+                  - button "More information" [ref=e254] [cursor=pointer]:
+                    - img [ref=e255]
+                - generic [ref=e258]:
+                  - textbox "Search employees by title, keyword or school" [disabled] [ref=e259]:
+                    - /placeholder: Keyword search already applied
+                  - generic [ref=e260]: Search employees by title, keyword or school
+                  - list [ref=e261]:
+                    - listitem [ref=e262]:
+                      - button "Remove the Fidelity filter" [ref=e263] [cursor=pointer]:
+                        - generic [ref=e264]: Fidelity
+                        - img [ref=e266]
+                    - listitem [ref=e268]:
+                      - button "Clear all" [ref=e269] [cursor=pointer]
+              - generic [ref=e271]:
+                - generic [ref=e272]: Page 1 of 6
+                - button "Previous" [disabled] [ref=e273]:
+                  - img
+                  - generic: Previous
+                - button "Next" [ref=e274] [cursor=pointer]:
+                  - img [ref=e275]
+                  - generic [ref=e277]: Next
+            - list [ref=e279]:
+              - listitem [ref=e280]:
+                - generic [ref=e283]:
+                  - generic [ref=e284]:
+                    - heading "Where they live" [level=3] [ref=e285]
+                    - button "Add any location" [ref=e286] [cursor=pointer]:
+                      - img [ref=e287]
+                      - generic [ref=e289]: Add
+                  - button "6 |United States toggle off" [ref=e290] [cursor=pointer]:
+                    - generic [ref=e291]:
+                      - strong [ref=e292]: "6"
+                      - text: "|United States"
+                      - generic [ref=e293]: toggle off
+                    - img [ref=e294]
+                  - button "4 |New York, United States toggle off" [ref=e297] [cursor=pointer]:
+                    - generic [ref=e298]:
+                      - strong [ref=e299]: "4"
+                      - text: "|New York, United States"
+                      - generic [ref=e300]: toggle off
+                    - img [ref=e301]
+                  - button "4 |New York City Metropolitan Area toggle off" [ref=e304] [cursor=pointer]:
+                    - generic [ref=e305]:
+                      - strong [ref=e306]: "4"
+                      - text: "|New York City Metropolitan Area"
+                      - generic [ref=e307]: toggle off
+                    - img [ref=e308]
+                  - button "3 |New York, NY toggle off" [ref=e311] [cursor=pointer]:
+                    - generic [ref=e312]:
+                      - strong [ref=e313]: "3"
+                      - text: "|New York, NY"
+                      - generic [ref=e314]: toggle off
+                    - img [ref=e315]
+                  - button "1 |Brooklyn, NY toggle off" [ref=e318] [cursor=pointer]:
+                    - generic [ref=e319]:
+                      - strong [ref=e320]: "1"
+                      - text: "|Brooklyn, NY"
+                      - generic [ref=e321]: toggle off
+                    - img [ref=e322]
+              - listitem [ref=e325]:
+                - generic [ref=e328]:
+                  - generic [ref=e329]:
+                    - heading "Where they studied" [level=3] [ref=e330]
+                    - button "Add any school" [ref=e331] [cursor=pointer]:
+                      - img [ref=e332]
+                      - generic [ref=e334]: Add
+                  - button "1 |Defense Language Institute Foreign Language Center toggle off" [ref=e335] [cursor=pointer]:
+                    - generic [ref=e336]:
+                      - strong [ref=e337]: "1"
+                      - text: "|Defense Language Institute Foreign Language Center"
+                      - generic [ref=e338]: toggle off
+                    - img [ref=e339]
+                  - button "1 |Princeton University toggle off" [ref=e342] [cursor=pointer]:
+                    - generic [ref=e343]:
+                      - strong [ref=e344]: "1"
+                      - text: "|Princeton University"
+                      - generic [ref=e345]: toggle off
+                    - img [ref=e346]
+                  - button "1 |Y Combinator toggle off" [ref=e349] [cursor=pointer]:
+                    - generic [ref=e350]:
+                      - strong [ref=e351]: "1"
+                      - text: "|Y Combinator"
+                      - generic [ref=e352]: toggle off
+                    - img [ref=e353]
+                  - button "1 |Stanford University toggle off" [ref=e356] [cursor=pointer]:
+                    - generic [ref=e357]:
+                      - strong [ref=e358]: "1"
+                      - text: "|Stanford University"
+                      - generic [ref=e359]: toggle off
+                    - img [ref=e360]
+                  - button "1 |The Juilliard School toggle off" [ref=e363] [cursor=pointer]:
+                    - generic [ref=e364]:
+                      - strong [ref=e365]: "1"
+                      - text: "|The Juilliard School"
+                      - generic [ref=e366]: toggle off
+                    - img [ref=e367]
+              - listitem [ref=e370]:
+                - generic [ref=e373]:
+                  - heading "What they do" [level=3] [ref=e375]
+                  - button [ref=e376] [cursor=pointer]:
+                    - generic [ref=e377]:
+                      - strong [ref=e378]: "2"
+                      - text: "|Information Technology"
+                      - generic [ref=e379]: toggle off
+                    - img [ref=e380]
+                  - button [ref=e383] [cursor=pointer]:
+                    - generic [ref=e384]:
+                      - strong [ref=e385]: "2"
+                      - text: "|Community and Social Services"
+                      - generic [ref=e386]: toggle off
+                    - img [ref=e387]
+                  - button [ref=e390] [cursor=pointer]:
+                    - generic [ref=e391]:
+                      - strong [ref=e392]: "2"
+                      - text: "|Engineering"
+                      - generic [ref=e393]: toggle off
+                    - img [ref=e394]
+                  - button [ref=e397] [cursor=pointer]:
+                    - generic [ref=e398]:
+                      - strong [ref=e399]: "1"
+                      - text: "|Finance"
+                      - generic [ref=e400]: toggle off
+                    - img [ref=e401]
+              - listitem [ref=e404]
+              - listitem [ref=e405]
+              - listitem [ref=e406]
+            - list [ref=e409]:
+              - listitem [ref=e410]:
+                - button "Page 1" [ref=e411] [cursor=pointer]:
+                  - generic [ref=e412]: "1"
+              - listitem [ref=e413]:
+                - button "Page 2" [ref=e414] [cursor=pointer]:
+                  - generic [ref=e415]: "2"
+              - listitem [ref=e416]:
+                - button "Page 3" [ref=e417] [cursor=pointer]:
+                  - generic [ref=e418]: "3"
+              - listitem [ref=e419]:
+                - button "Page 4" [ref=e420] [cursor=pointer]:
+                  - generic [ref=e421]: "4"
+              - listitem [ref=e422]:
+                - button "Page 5" [ref=e423] [cursor=pointer]:
+                  - generic [ref=e424]: "5"
+              - listitem [ref=e425]:
+                - button "Page 6" [ref=e426] [cursor=pointer]:
+                  - generic [ref=e427]: "6"
+          - generic [ref=e429]:
+            - heading "People you may know" [level=2] [ref=e430]
+            - list [ref=e433]:
+              - listitem [ref=e434]:
+                - generic [ref=e436]:
+                  - generic [ref=e438]:
+                    - link "Kedar Thakkar" [ref=e440] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/kedar-thakkar-22b4a4119?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAB1wRkMBrtxlXXNkNrt9wkQ_gOOEnOYdmj0
+                      - img "Kedar Thakkar" [ref=e441]
+                    - generic [ref=e442]:
+                      - link "View Kedar Thakkar’s profile" [ref=e444] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/kedar-thakkar-22b4a4119?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAB1wRkMBrtxlXXNkNrt9wkQ_gOOEnOYdmj0
+                        - generic [ref=e445]: Kedar Thakkar
+                      - generic [ref=e446]:
+                        - generic [ref=e447]: 3rd+ degree connection
+                        - generic [ref=e448]: · 3rd
+                      - generic [ref=e451]: Staff Applied AI Engineer @ Ramp, ex-Lyft
+                  - button "Message Kedar Thakkar" [ref=e455] [cursor=pointer]:
+                    - generic [ref=e456]: Message
+              - listitem [ref=e457]:
+                - generic [ref=e459]:
+                  - generic [ref=e461]:
+                    - link "Nithiwat Seesillapachai" [ref=e463] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/nithiwat-seesillapachai-71b82b5b?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAAzCQEcBt203hqbXUrku2CmP0JTD-3A8ypA
+                      - img "Nithiwat Seesillapachai" [ref=e464]
+                    - generic [ref=e465]:
+                      - link "View Nithiwat Seesillapachai’s profile" [ref=e467] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/nithiwat-seesillapachai-71b82b5b?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAAzCQEcBt203hqbXUrku2CmP0JTD-3A8ypA
+                        - generic [ref=e468]: Nithiwat Seesillapachai
+                      - generic [ref=e469]:
+                        - generic [ref=e470]: 3rd+ degree connection
+                        - generic [ref=e471]: · 3rd
+                      - generic [ref=e474]: Senior Staff Software Engineer, Applied AI at Ramp | Duke CS (AI/ML)/ECON (Finance) ’22
+                  - button "Message Nithiwat Seesillapachai" [ref=e478] [cursor=pointer]:
+                    - generic [ref=e479]: Message
+              - listitem [ref=e480]:
+                - generic [ref=e482]:
+                  - generic [ref=e484]:
+                    - link "Jared Vreeland" [ref=e486] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/jared-vreeland?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAABgHQ5UB3Zzq8YzMlhUAHlBdxc9ANudYvVU
+                      - img "Jared Vreeland" [ref=e487]
+                    - generic [ref=e488]:
+                      - link "View Jared Vreeland’s profile" [ref=e490] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/jared-vreeland?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAABgHQ5UB3Zzq8YzMlhUAHlBdxc9ANudYvVU
+                        - generic [ref=e491]: Jared Vreeland
+                      - generic [ref=e492]:
+                        - generic [ref=e493]: 3rd+ degree connection
+                        - generic [ref=e494]: · 3rd
+                      - generic [ref=e497]: Senior Technical Consultant @ Ramp | Marine Corps Veteran
+                  - button "Message Jared Vreeland" [ref=e501] [cursor=pointer]:
+                    - generic [ref=e502]: Message
+              - listitem [ref=e503]:
+                - generic [ref=e505]:
+                  - generic [ref=e507]:
+                    - link "Akash Wadawadigi" [ref=e509] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/akashwadawadigi?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAABO4ZcQBy_KaaT2fcO3kd9TFD5YRVh5dNJ8
+                      - img "Akash Wadawadigi" [ref=e510]
+                    - generic [ref=e511]:
+                      - link "View Akash Wadawadigi’s profile" [ref=e513] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/akashwadawadigi?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAABO4ZcQBy_KaaT2fcO3kd9TFD5YRVh5dNJ8
+                        - generic [ref=e514]: Akash Wadawadigi
+                      - generic [ref=e515]:
+                        - generic [ref=e516]: 3rd+ degree connection
+                        - generic [ref=e517]: · 3rd
+                      - generic [ref=e520]: Director of Engineering @ Ramp
+                  - button "Invite Akash Wadawadigi to connect" [ref=e523] [cursor=pointer]:
+                    - generic [ref=e524]: Connect
+              - listitem [ref=e525]:
+                - generic [ref=e527]:
+                  - generic [ref=e528]:
+                    - generic [ref=e529]:
+                      - link "Jay Goel" [ref=e531] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/jay-goel?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAARmeTkB5KfeF6GMSSUOVH1Hca98WJY9L60
+                        - img "Jay Goel" [ref=e532]
+                      - generic [ref=e533]:
+                        - link "View Jay Goel’s profile" [ref=e535] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/in/jay-goel?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAARmeTkB5KfeF6GMSSUOVH1Hca98WJY9L60
+                          - generic [ref=e536]: Jay Goel
+                        - generic [ref=e537]:
+                          - generic [ref=e538]: 2nd degree connection
+                          - generic [ref=e539]: · 2nd
+                        - generic [ref=e542]: Engineering at Ramp
+                    - generic [ref=e544]: 2K followers
+                  - button "Follow Jay Goel" [ref=e546] [cursor=pointer]:
+                    - generic [ref=e547]: Follow
+              - listitem [ref=e548]:
+                - generic [ref=e550]:
+                  - generic [ref=e552]:
+                    - link "Amber Stickel" [ref=e554] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/amberstickel?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAAjkmuwB0-xv6kY-6l1un4jdYMxoe9LVqLQ
+                      - img "Amber Stickel" [ref=e555]
+                    - generic [ref=e556]:
+                      - link "View Amber Stickel’s profile" [ref=e558] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/amberstickel?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAAAjkmuwB0-xv6kY-6l1un4jdYMxoe9LVqLQ
+                        - generic [ref=e559]: Amber Stickel
+                      - generic [ref=e560]:
+                        - generic [ref=e561]: 3rd+ degree connection
+                        - generic [ref=e562]: · 3rd
+                      - generic [ref=e565]: Design Technology & Design Systems
+                  - button "Message Amber Stickel" [ref=e569] [cursor=pointer]:
+                    - generic [ref=e570]: Message
+              - listitem [ref=e571]:
+                - generic [ref=e573]:
+                  - generic [ref=e575]:
+                    - link "Pavan Garidipuri" [ref=e577] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/pavangaridipuri?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAACUyF48BrWrBCVC_XWBSpYqBe_qWnfeyAkw
+                      - img "Pavan Garidipuri" [ref=e578]
+                    - generic [ref=e579]:
+                      - link "View Pavan Garidipuri’s profile" [ref=e581] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/pavangaridipuri?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAACUyF48BrWrBCVC_XWBSpYqBe_qWnfeyAkw
+                        - generic [ref=e582]: Pavan Garidipuri
+                      - generic [ref=e583]:
+                        - generic [ref=e584]: 3rd+ degree connection
+                        - generic [ref=e585]: · 3rd
+                      - generic [ref=e588]: Senior Product Designer @Ramp | Prev. @Google, Roblox, 8VC
+                  - button "Message Pavan Garidipuri" [ref=e592] [cursor=pointer]:
+                    - generic [ref=e593]: Message
+              - listitem [ref=e594]:
+                - generic [ref=e596]:
+                  - generic [ref=e598]:
+                    - link "Tate Adamson" [ref=e600] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/tateadamson?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADZALEQB_FuB5CQm4EQF3Djk5NIIHW9kFQc
+                      - img "Tate Adamson" [ref=e601]
+                    - generic [ref=e602]:
+                      - link "View Tate Adamson’s profile" [ref=e604] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/tateadamson?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADZALEQB_FuB5CQm4EQF3Djk5NIIHW9kFQc
+                        - generic [ref=e605]: Tate Adamson
+                      - generic [ref=e606]:
+                        - generic [ref=e607]: 3rd+ degree connection
+                        - generic [ref=e608]: · 3rd
+                      - generic [ref=e611]: Partnerships @ Ramp
+                  - button "Message Tate Adamson" [ref=e615] [cursor=pointer]:
+                    - generic [ref=e616]: Message
+              - listitem [ref=e617]:
+                - generic [ref=e619]:
+                  - generic [ref=e620]:
+                    - generic [ref=e621]:
+                      - link "Perly Dahan" [ref=e623] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/perla-dahan?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADt-d7ABwEobpxSCleAeWef0gX75z7IEni0
+                        - img "Perly Dahan" [ref=e624]
+                      - generic [ref=e625]:
+                        - link "View Perly Dahan’s profile" [ref=e627] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/in/perla-dahan?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADt-d7ABwEobpxSCleAeWef0gX75z7IEni0
+                          - generic [ref=e628]: Perly Dahan
+                        - generic [ref=e629]:
+                          - generic [ref=e630]: 3rd+ degree connection
+                          - generic [ref=e631]: · 3rd
+                        - generic [ref=e634]: Security @ Ramp | Investing @Alya capital
+                    - generic [ref=e636]: 6K followers
+                  - button "Follow Perly Dahan" [ref=e638] [cursor=pointer]:
+                    - generic [ref=e639]: Follow
+              - listitem [ref=e640]:
+                - generic [ref=e642]:
+                  - generic [ref=e644]:
+                    - link "Owen Sherman" [ref=e646] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/owen-sherman?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADv6YXwBQZyoDYqh00ikAo6SQBU6U_2kXH8
+                      - img "Owen Sherman" [ref=e647]
+                    - generic [ref=e648]:
+                      - link "View Owen Sherman’s profile" [ref=e650] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/owen-sherman?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADv6YXwBQZyoDYqh00ikAo6SQBU6U_2kXH8
+                        - generic [ref=e651]: Owen Sherman
+                      - generic [ref=e652]:
+                        - generic [ref=e653]: 3rd+ degree connection
+                        - generic [ref=e654]: · 3rd
+                      - generic [ref=e657]: New Business @ Ramp
+                  - button "Message Owen Sherman" [ref=e661] [cursor=pointer]:
+                    - generic [ref=e662]: Message
+              - listitem [ref=e663]:
+                - generic [ref=e665]:
+                  - generic [ref=e667]:
+                    - link "Edward Li" [ref=e669] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/edwardjxli?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADKD4MsBwhHawWAPjsF1tvMB1ttaXd-H59Q
+                      - img "Edward Li" [ref=e670]
+                    - generic [ref=e671]:
+                      - link "View Edward Li’s profile" [ref=e673] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/edwardjxli?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAADKD4MsBwhHawWAPjsF1tvMB1ttaXd-H59Q
+                        - generic [ref=e674]: Edward Li
+                      - generic [ref=e675]:
+                        - generic [ref=e676]: 3rd+ degree connection
+                        - generic [ref=e677]: · 3rd
+                      - generic [ref=e680]: Computer Science & Physics @ UBC | SWE Intern @ Ramp | Prev. Google & Codegen | Schulich Leader
+                  - button "Message Edward Li" [ref=e684] [cursor=pointer]:
+                    - generic [ref=e685]: Message
+              - listitem [ref=e686]:
+                - generic [ref=e688]:
+                  - generic [ref=e690]:
+                    - link "Thomas Kellard" [ref=e692] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/in/thomaskellard?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAACezcP8BQfaypF40357pOHL0jAvj8NkUGcs
+                      - img "Thomas Kellard" [ref=e693]
+                    - generic [ref=e694]:
+                      - link "View Thomas Kellard’s profile" [ref=e696] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/thomaskellard?miniProfileUrn=urn%3Ali%3Afs_miniProfile%3AACoAACezcP8BQfaypF40357pOHL0jAvj8NkUGcs
+                        - generic [ref=e697]: Thomas Kellard
+                      - generic [ref=e698]:
+                        - generic [ref=e699]: 3rd+ degree connection
+                        - generic [ref=e700]: · 3rd
+                      - generic [ref=e703]: Automating Finance @ Ramp | Fintech | Sales
+                  - button "Message Thomas Kellard" [ref=e707] [cursor=pointer]:
+                    - generic [ref=e708]: Message
+      - complementary "Advertisement" [ref=e213]:
+        - iframe [ref=e710]:
+          - main "Work With Us Container" [ref=f55e3]:
+            - generic [ref=f55e4]:
+              - paragraph [ref=f55e5]: Promoted
+              - button "Ad Options" [ref=f55e6] [cursor=pointer]:
+                - img [ref=f55e7]
+                - generic [ref=f55e11]: Ad Options
+            - generic [ref=f55e12]:
+              - generic [ref=f55e13]:
+                - img "James" [ref=f55e14]
+                - paragraph [ref=f55e15]:
+                  - text: James, explore jobs at
+                  - generic [ref=f55e16]: Ramp
+              - list [ref=f55e17]:
+                - listitem [ref=f55e18]:
+                  - link "Ramp Software Engineer, AI DevX New York, New York, United States" [ref=f55e19] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/li/tscp/sct?destinationUrl=http%3A%2F%2Fwww.linkedin.com%2Fjobs%2Fview%2F4387606016%2F%3FrefId%3D%25EF%25BF%25BD%2526%25DF%2582%255E%25EF%25BF%25BD%255B%250BhZF%25EF%25BF%25BD%25EF%25BF%25BD%25EF%25BF%25BD%253Am&trackingEvent=%5B%7B%22eventInfo%22%3A%7B%22appId%22%3A%22com.linkedin.ads.rendering.d_web%22%2C%22eventName%22%3A%22SponsoredRightRailContentActionEvent%22%2C%22topicName%22%3A%22SponsoredRightRailContentActionEvent%22%7D%2C%22eventBody%22%3A%7B%22sponsoredEventHeader%22%3A%7B%22encryptedTrackingData%22%3A%22CwEAAAGeWmvWwqv-aLGwQKk3YNnP9_IvfGNRG--juaD4jbplkwv9lhKF92nvbv0rSVEgdyGSMnmuB1zzpquXEx_tSsH_kBgyUr5oc8ZxoJltlHiD0ZP1opmrtpvImItNbf3MZq0cGTmNMhaUK7qDyKVgTJ6NQxXT2KOpqH0cx-JAmozG6IRqXypYIp4chfNhH0jpp0q0Vte60DatADsIkd0rC4V1u96KgUuCNzKmjuW1q1taBEhDQDm7utxVUtAII5Y-5f89mOq3VooLFX-RFTxPVQWUVi90ZDbDBrVgXT0ZGSILzbBlS2e57nPFuc4B2KXsgjhuP44_2AV042Y3HGBm_U8i26HDZ5EOkFHywpq6YmrSKUT5qPqNgpKsfzAfQ2DvSZMOdOZaHMXKxKrgQ3yFhda2d5Z0GdZ4JBwNQnJL6FVUS6roA6g0_Xou0zP7e5fho11XrIm0Tw3bzzawaqIxSd-4-blTh7mwwaMwL84tdD9EKj3aOube3tKjtVzh0bOxEdvhJZArvOP8VNDoNw_fOwQK6Hh7AiQOuN4fdJt5BX50Z_acq67NtBBiHd_0DgPeDU1nlfiVFLzxxSbyO8iedO7DhEAAOx0r9wtG1vdGyiD1HwmNKs4L962ezpq65ViVT20prlKLCqzp4f52KKhemM832WYKBqSNerLMgeKdSx8ymcSSXc4n-ljSnVA_0ClLbUxhSKKPuHIEQQj8E3PbxgfYusm84ZQy6BNrrg-55Ux0TZ-2Y3ZHM3WrQtlnGF_sglBnnewMC54Ykxwv6ompB2evp1jjLyU20kmixIn95mgzb768jyTbap3BED9WRL8JkYHaj3ZZxKO-t6QzZZ83KVVpRR9JwH-4457v9AudPQM0jXvd%22%7D%2C%22header%22%3A%7B%22pageInstance%22%3A%7B%22pageUrn%22%3A%22urn%3Ali%3Apage%3Ad_flagship3_company%22%2C%22trackingId%22%3A%2272c20fc2-2a5c-43cf-8f8b-f8dd002c45d4%22%7D%2C%22time%22%3A1779633477199%2C%22version%22%3A%220.0.0%22%7D%2C%22requestHeader%22%3A%7B%22pageKey%22%3A%22d_flagship3_company%22%2C%22interfaceLocale%22%3A%22en-US%22%7D%7D%7D%5D&csrfToken=ajax%3A7134068059694737283
+                    - img "Ramp" [ref=f55e20]
+                    - generic [ref=f55e21]:
+                      - paragraph [ref=f55e22]: Software Engineer, AI DevX
+                      - paragraph [ref=f55e23]: New York, New York, United States
+                - listitem [ref=f55e24]:
+                  - link "Ramp Software Engineer, Ramp Travel United States" [ref=f55e25] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/li/tscp/sct?destinationUrl=http%3A%2F%2Fwww.linkedin.com%2Fjobs%2Fview%2F4398333364%2F%3FrefId%3D%25EF%25BF%25BD%251F%25EF%25B7%259A%25EF%25BF%25BD%253C%25EF%25BF%25BD%25EF%25BF%25BD%25EF%25BF%25BD%2508%255E%25EF%25BF%25BD%251E%25EF%25BF%25BD%25EF%25BF%25BD&trackingEvent=%5B%7B%22eventInfo%22%3A%7B%22appId%22%3A%22com.linkedin.ads.rendering.d_web%22%2C%22eventName%22%3A%22SponsoredRightRailContentActionEvent%22%2C%22topicName%22%3A%22SponsoredRightRailContentActionEvent%22%7D%2C%22eventBody%22%3A%7B%22sponsoredEventHeader%22%3A%7B%22encryptedTrackingData%22%3A%22CwEAAAGeWmvWwy8xld_XyT2t7uSMWTRK9E6k2_-k15Fpx7GLT5QkEtz934La4lKj5qO6lROc5shNar6zxyNz5IHXSTzrl8IhVc1i1FOxDo4h8cRYl-twYNEjBJWPxPc_dwwcnM0UKyVd0QWL7lYPo8-rDhlE_y8HXwuYtmRwhEcTnYr3t2Zm7kE6sBCzWLF2DwLal9zK9CBc7dCWg0jtEOQAOuGAukH9StfbsoWYv1dViBhsiMCysNQwNXihFBeaSogA1QXfBGBQWMzB40kBFlRrl35KVa7LQdvz8haQSu9_X_awVNRi_WzD_Y74RIPWZP_UKZ1_d6EpjHYoB-nghu_5lMZK7R1uuHCjMqMDYq69ZBXO69eOQfpKWekQmdSHk5OlV0AQn5UHpDU12jD8rMOKexUV2F6CrKfOJUhIk8uTB5nlcTJqnXTVVfG8rs_bCI35sx035U8ybZkMzPIf3HRZO624VGr4GqIg8vBIb9-76DOFS09Blowb_R4Su_rcs_VLb4a6WOhlI3pJ6O2rB_EGMj_4iwiM4VeJi8ZxVJpdPFJ9UzvE1Pze4LlghUgKuNtkbA_bZA1TFbqt3y6crPVIGMWFGyEJUmRz3mfGXrSZszflnmwVRAbs8VyB1Old09CieBL6-gvYFQ0jBz8WWmkH9-m9b-ejEQo-Pgr601SfHY7O5-tNJMwR0i6W-QbrCW6V9uBdLUWEXxrhEglxxOuTYtAXDkB_w34nMaPvgqDuZwLBxo0lULmBcUMKbo7XgYAwrcXGx3By5rxz-oXMoqAqWdj6F8rDCSDadyPjNyWWe01RgwMUUy2-0_RGDPGndj8fQfw1TTAuWsEKuldiRd4qsKNz14Gyn7mDiomWyp7Xi2pc-DCT%22%7D%2C%22header%22%3A%7B%22pageInstance%22%3A%7B%22pageUrn%22%3A%22urn%3Ali%3Apage%3Ad_flagship3_company%22%2C%22trackingId%22%3A%22c4f294a9-f763-4224-8fd7-96fab99a51e0%22%7D%2C%22time%22%3A1779633477199%2C%22version%22%3A%220.0.0%22%7D%2C%22requestHeader%22%3A%7B%22pageKey%22%3A%22d_flagship3_company%22%2C%22interfaceLocale%22%3A%22en-US%22%7D%7D%7D%5D&csrfToken=ajax%3A7134068059694737283
+                    - img "Ramp" [ref=f55e26]
+                    - generic [ref=f55e27]:
+                      - paragraph [ref=f55e28]: Software Engineer, Ramp Travel
+                      - paragraph [ref=f55e29]: United States
+                - listitem [ref=f55e30]:
+                  - link "Ramp Software Engineer, Guest Travel United States" [ref=f55e31] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/li/tscp/sct?destinationUrl=http%3A%2F%2Fwww.linkedin.com%2Fjobs%2Fview%2F4392083968%2F%3FrefId%3D%25EF%25BF%25BD5Fv%25EF%25BF%25BD%25EF%25BF%25BD%252F%2506%25EF%25BF%25BD%253C%25EF%25BF%25BD%25285bM%2526&trackingEvent=%5B%7B%22eventInfo%22%3A%7B%22appId%22%3A%22com.linkedin.ads.rendering.d_web%22%2C%22eventName%22%3A%22SponsoredRightRailContentActionEvent%22%2C%22topicName%22%3A%22SponsoredRightRailContentActionEvent%22%7D%2C%22eventBody%22%3A%7B%22sponsoredEventHeader%22%3A%7B%22encryptedTrackingData%22%3A%22CwEAAAGeWmvWw3w0EbQaUro3dLK2bfHGaLeHPmgRYjWhdGZQdvWflF-JIKyOQbpaXf2iu63a1zlPcTgsVW3acvEjHFGSN4AGE0ZVz6WSmu8qbckuV-bKT5uYmv9Gy2RQZuxKH-MVkmVeYdPDsg0igKvb_tMXiluRpUjbNIizZun2D5xonKTLV9RTahxFtSjI7PL__lg-uzeGvMGuS7wGPR1yjGL-_u6DonTrRlGqa46YjegiCMCPlRs-XZXxrq0_lJe1nSWIn4ptxDpOogw4fl6AO2ngdHezMFCl60YCWLlN_OVgKNeM0nfGRFafjnq9wwPbHGrUH6dLFStcEg7tsOX-0LHL9hgVdxDqoHWq9QWr-RdEncNZfEdJImkP6P7N80x8UqNnvcF6ltMhqm5eQ7YPtZlaBMPxfnmqgvnKaLvG-Nf_KCuirapoEyJh21IvQmKneVo-b0KA1tPNaPjr1zDVYpU0PN10UHR0gkSUJbWs5dXgll31kZV3AEcaZmvv35uxuWMgTKCpQsf3wZqxvceoaQueWS7JAeET2tQctHlSnvnVaB9wxVBSPqjX4ybuiE-cBOBlbqSVrqg6kYSBVBLqFJdi5ITLNNZPLql3VtsSM24BFAs1W8BDv2xFxfl7wsUp9Psrarjwb23zBmfFndyXm1SWpYjM3OK4VLFLI9SorejwJBRbYZYBXgtyfQ4jHNF-fB1PENIl-hni-LhS7IN3MBqsvGx0TCMDvHNk8VjB9JWARc0D_CoIgP5G0_IAwAUGp9_fwQ6AB9oSXnx_hIzwzs_88Jcp359XVP9rpG7v2Hq4ni15EEY76EYQNon4JCo16hJCBqlYBx9Qrrq-7YdozaTWmu5VAIk12ht2yKQLHwns2L2V%22%7D%2C%22header%22%3A%7B%22pageInstance%22%3A%7B%22pageUrn%22%3A%22urn%3Ali%3Apage%3Ad_flagship3_company%22%2C%22trackingId%22%3A%22059b6ceb-b03d-417a-a8ab-5dc6a228e034%22%7D%2C%22time%22%3A1779633477199%2C%22version%22%3A%220.0.0%22%7D%2C%22requestHeader%22%3A%7B%22pageKey%22%3A%22d_flagship3_company%22%2C%22interfaceLocale%22%3A%22en-US%22%7D%7D%7D%5D&csrfToken=ajax%3A7134068059694737283
+                    - img "Ramp" [ref=f55e32]
+                    - generic [ref=f55e33]:
+                      - paragraph [ref=f55e34]: Software Engineer, Guest Travel
+                      - paragraph [ref=f55e35]: United States
+              - link "See More Jobs" [ref=f55e36] [cursor=pointer]:
+                - /url: https://www.linkedin.com/li/tscp/sct?destinationUrl=http%3A%2F%2Fwww.linkedin.com%2Fcompany%2F1406226%2Fjobs&trackingEvent=%5B%7B%22eventInfo%22%3A%7B%22appId%22%3A%22com.linkedin.ads.rendering.d_web%22%2C%22eventName%22%3A%22SponsoredRightRailContentActionEvent%22%2C%22topicName%22%3A%22SponsoredRightRailContentActionEvent%22%7D%2C%22eventBody%22%3A%7B%22sponsoredEventHeader%22%3A%7B%22encryptedTrackingData%22%3A%22CwEAAAGeWmvWwtN8o6qnE-ucknjEhvJRB3-rrWHkh2JtTtMB68c6P4xrrfJEhW02Lx7aoXBhBll3c6QBcdO5qvUY5Dhg5ZzCcvCbyoCxmomOuqislu0b9u2DEUflbI-Yi7aOD2WGmROpVQ1GY-uz26qKTqwymR3ud1YJBlyzT7fAjW1bnGcieii3OFWgMZ4dc-JG6VMsVnd05jKzYqKCe3QqfhGO6hnw2x7W2EikIE9b5pt_skpvv9J0AiP1M2WRA1HNCkf7GSM1SJv7SRy6xfA8_hcF0sh2P72Ogeqgxp1ubE4Asbku_AEMd28AxGMKKgssL2ZMSiSFKInTY67IW__AJ-VFNSIw02V4_J4AK8ZfETMsQYKmpxnw8gYVVbIOsEagq3btk_CwP5eoHZTJx3iFJ0bi04Kpo0MWsMgPPLpMieMWfQSULbSvb4LX4fE1vvR7DX0FJfF9sdQz3SV7MCRGdrFo88rNGUaBfcgo0QVzR66OTYrXsFZY4J3iaUCpzYw5qBxRR7XUDDR08n2lrHJ1DN9NVNHLoH4zJx_oHRfQ1mFa4LZ-dhPd05_SHY6w7bAs3erBxUbcfgjLADWjpF0lNpYuPNpkMo65r-j0EiOki6MqhGp6AENfREjOf3OjRLdWbtFArDyC2UBFws6DUf0tLke8awYf-kSjPrVqxm5qTZ0wNd7TnB2bzfxzUek4xUye84_y9U_3FEz-HtUqtI7Rk7sUODGPNJ7DpeS-Rttmy5lYgXyW2VByoxe3WQD44UxqsxB-hMMDWp4ZYNmY6yuDVZs4ZFRaifYzEORfjuWWoj-W7Y3frFXmJRRvOrovQSmOgsVeHd10Z5_2R1Rkun8Z_tNmV8QEjhRO_m8RDl3gKfCVvEdTMwhS%22%7D%2C%22header%22%3A%7B%22pageInstance%22%3A%7B%22pageUrn%22%3A%22urn%3Ali%3Apage%3Ad_flagship3_company%22%2C%22trackingId%22%3A%225ca76bbe-63a8-423b-8cf8-4723854e537b%22%7D%2C%22time%22%3A1779633477199%2C%22version%22%3A%220.0.0%22%7D%2C%22requestHeader%22%3A%7B%22pageKey%22%3A%22d_flagship3_company%22%2C%22interfaceLocale%22%3A%22en-US%22%7D%7D%7D%5D&csrfToken=ajax%3A7134068059694737283
+        - generic [ref=e713]:
+          - generic [ref=e717]:
+            - generic [ref=e718]:
+              - heading "Products people also use" [level=3] [ref=e720]
+              - generic [ref=e721]: Spend Management Software
+              - list [ref=e723]:
+                - listitem [ref=e724]:
+                  - generic [ref=e726]:
+                    - link "Workday Spend Management page logo" [ref=e728] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/products/workday-spend-management/
+                      - generic "Workday Spend Management page logo" [ref=e730]:
+                        - img "Workday Spend Management page logo" [ref=e732]
+                    - link "Workday Spend Management Spend Management Software" [ref=e735] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/products/workday-spend-management/
+                      - generic [ref=e736]:
+                        - generic [ref=e738]: Workday Spend Management
+                        - generic [ref=e740]: Spend Management Software
+                - listitem [ref=e741]:
+                  - generic [ref=e743]:
+                    - link "Rippling Spend page logo" [ref=e745] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/products/rippling-spend/
+                      - generic "Rippling Spend page logo" [ref=e747]:
+                        - img "Rippling Spend page logo" [ref=e749]
+                    - link "Rippling Spend Spend Management Software" [ref=e752] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/products/rippling-spend/
+                      - generic [ref=e753]:
+                        - generic [ref=e755]: Rippling Spend
+                        - generic [ref=e757]: Spend Management Software
+                - listitem [ref=e758]:
+                  - generic [ref=e760]:
+                    - link "Qashio page logo" [ref=e762] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/company/qashio/product/
+                      - generic "Qashio page logo" [ref=e764]:
+                        - img "Qashio page logo" [ref=e766]
+                    - link "Qashio Spend Management Software" [ref=e769] [cursor=pointer]:
+                      - /url: https://www.linkedin.com/company/qashio/product/
+                      - generic [ref=e770]:
+                        - generic [ref=e772]: Qashio
+                        - generic [ref=e774]: Spend Management Software
+            - button "Show all products" [ref=e776] [cursor=pointer]:
+              - img [ref=e777]
+              - generic [ref=e779]: Show all
+          - generic [ref=e783]:
+            - generic [ref=e784]:
+              - heading "Pages people also viewed" [level=3] [ref=e786]
+              - list [ref=e788]:
+                - listitem [ref=e789]:
+                  - generic [ref=e790]:
+                    - generic [ref=e791]:
+                      - link "Brex page logo" [ref=e793] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/company/brexhq/
+                        - generic "Brex page logo" [ref=e795]:
+                          - img "Brex page logo" [ref=e797]
+                      - generic [ref=e798]:
+                        - link "Brex Financial Services 312,427 followers" [ref=e800] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/company/brexhq/
+                          - generic [ref=e801]:
+                            - generic [ref=e803]: Brex
+                            - generic [ref=e805]: Financial Services
+                            - generic [ref=e807]: 312,427 followers
+                        - link "Rohan Sinha Rohan & 5 other company alumni work here" [ref=e809] [cursor=pointer]:
+                          - /url: http://www.linkedin.com/search/results/people/?origin=COMPANY_PAGE_CANNED_SEARCH&currentCompany=%5B%2218505670%22%5D&pastCompany=%5B%221307%22%5D
+                          - img "Rohan Sinha" [ref=e812]
+                          - generic [ref=e813]: Rohan & 5 other company alumni work here
+                    - button "Follow Brex" [ref=e815] [cursor=pointer]:
+                      - img [ref=e816]
+                      - generic [ref=e818]: Follow
+                - listitem [ref=e819]:
+                  - generic [ref=e820]:
+                    - generic [ref=e821]:
+                      - link "Stripe page logo" [ref=e823] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/company/stripe/
+                        - generic "Stripe page logo" [ref=e825]:
+                          - img "Stripe page logo" [ref=e827]
+                      - generic [ref=e828]:
+                        - link "Stripe Technology, Information and Internet 1,427,755 followers" [ref=e830] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/company/stripe/
+                          - generic [ref=e831]:
+                            - generic [ref=e833]: Stripe
+                            - generic [ref=e835]: Technology, Information and Internet
+                            - generic [ref=e837]: 1,427,755 followers
+                        - link "Tatheer Zahra Tatheer works here" [ref=e839] [cursor=pointer]:
+                          - /url: http://www.linkedin.com/in/tatheer-zahra14
+                          - img "Tatheer Zahra" [ref=e842]
+                          - generic [ref=e843]: Tatheer works here
+                    - button "Follow Stripe" [ref=e845] [cursor=pointer]:
+                      - img [ref=e846]
+                      - generic [ref=e848]: Follow
+                - listitem [ref=e849]:
+                  - generic [ref=e850]:
+                    - generic [ref=e851]:
+                      - link "Rippling page logo" [ref=e853] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/company/rippling/
+                        - generic "Rippling page logo" [ref=e855]:
+                          - img "Rippling page logo" [ref=e857]
+                      - generic [ref=e858]:
+                        - link "Rippling Software Development 414,958 followers" [ref=e860] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/company/rippling/
+                          - generic [ref=e861]:
+                            - generic [ref=e863]: Rippling
+                            - generic [ref=e865]: Software Development
+                            - generic [ref=e867]: 414,958 followers
+                        - link "April Toms is open to work April follows this page" [ref=e869] [cursor=pointer]:
+                          - /url: http://www.linkedin.com/in/apriltoms
+                          - img "April Toms is open to work" [ref=e872]
+                          - generic [ref=e873]: April follows this page
+                    - button "Follow Rippling" [ref=e875] [cursor=pointer]:
+                      - img [ref=e876]
+                      - generic [ref=e878]: Follow
+            - button "Show all similar pages" [ref=e880] [cursor=pointer]:
+              - img [ref=e881]
+              - generic [ref=e883]: Show all
+          - generic [ref=e887]:
+            - generic [ref=e888]:
+              - heading "People also follow" [level=3] [ref=e890]
+              - list [ref=e892]:
+                - listitem [ref=e893]:
+                  - generic [ref=e894]:
+                    - generic [ref=e895]:
+                      - link "SAP page logo" [ref=e897] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/company/sap/
+                        - generic "SAP page logo" [ref=e899]:
+                          - img "SAP page logo" [ref=e901]
+                      - generic [ref=e902]:
+                        - link "SAP Software Development 4,912,729 followers" [ref=e904] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/company/sap/
+                          - generic [ref=e905]:
+                            - generic [ref=e907]: SAP
+                            - generic [ref=e909]: Software Development
+                            - generic [ref=e911]: 4,912,729 followers
+                        - link "Dharmender Singh Dharmender & 7 other connections follow this page" [ref=e913] [cursor=pointer]:
+                          - /url: http://www.linkedin.com/company/sap/?showInNetworkFollowers=true
+                          - img "Dharmender Singh" [ref=e916]
+                          - generic [ref=e917]: Dharmender & 7 other connections follow this page
+                    - button "Follow SAP" [ref=e919] [cursor=pointer]:
+                      - img [ref=e920]
+                      - generic [ref=e922]: Follow
+                - listitem [ref=e923]:
+                  - generic [ref=e924]:
+                    - generic [ref=e925]:
+                      - link "Uber page logo" [ref=e927] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/company/uber-com/
+                        - generic "Uber page logo" [ref=e929]:
+                          - img "Uber page logo" [ref=e931]
+                      - generic [ref=e932]:
+                        - link "Uber Internet Marketplace Platforms 3,492,573 followers" [ref=e934] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/company/uber-com/
+                          - generic [ref=e935]:
+                            - generic [ref=e937]: Uber
+                            - generic [ref=e939]: Internet Marketplace Platforms
+                            - generic [ref=e941]: 3,492,573 followers
+                        - link "Amit Sehgal Amit & 8 other connections follow this page" [ref=e943] [cursor=pointer]:
+                          - /url: http://www.linkedin.com/company/uber-com/?showInNetworkFollowers=true
+                          - img "Amit Sehgal" [ref=e946]
+                          - generic [ref=e947]: Amit & 8 other connections follow this page
+                    - button "Follow Uber" [ref=e949] [cursor=pointer]:
+                      - img [ref=e950]
+                      - generic [ref=e952]: Follow
+                - listitem [ref=e953]:
+                  - generic [ref=e954]:
+                    - generic [ref=e955]:
+                      - link "Airbnb page logo" [ref=e957] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/company/airbnb/
+                        - generic "Airbnb page logo" [ref=e959]:
+                          - img "Airbnb page logo" [ref=e961]
+                      - generic [ref=e962]:
+                        - link "Airbnb Software Development 3,295,808 followers" [ref=e964] [cursor=pointer]:
+                          - /url: https://www.linkedin.com/company/airbnb/
+                          - generic [ref=e965]:
+                            - generic [ref=e967]: Airbnb
+                            - generic [ref=e969]: Software Development
+                            - generic [ref=e971]: 3,295,808 followers
+                        - link "Dharmender Singh Dharmender & 11 other connections follow this page" [ref=e973] [cursor=pointer]:
+                          - /url: http://www.linkedin.com/company/airbnb/?showInNetworkFollowers=true
+                          - img "Dharmender Singh" [ref=e976]
+                          - generic [ref=e977]: Dharmender & 11 other connections follow this page
+                    - button "Follow Airbnb" [ref=e979] [cursor=pointer]:
+                      - img [ref=e980]
+                      - generic [ref=e982]: Follow
+            - button "Show all recommended pages" [ref=e984] [cursor=pointer]:
+              - img [ref=e985]
+              - generic [ref=e987]: Show all
+          - generic [ref=e993]:
+            - generic [ref=e994]:
+              - heading "Ex-coworkers that work here" [level=3] [ref=e996]
+              - list [ref=e998]:
+                - listitem [ref=e999]:
+                  - generic [ref=e1000]:
+                    - generic [ref=e1001]:
+                      - link "Jared Vreeland profile picture" [ref=e1003] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/jared-vreeland
+                        - generic "Jared Vreeland profile picture" [ref=e1005]:
+                          - img "Jared Vreeland" [ref=e1007]
+                      - link "Jared Vreeland 3rd+ Senior Technical Consultant @ Ramp | Marine Corps Veteran" [ref=e1010] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/jared-vreeland
+                        - generic [ref=e1011]:
+                          - generic [ref=e1012]:
+                            - generic [ref=e1013]: Jared Vreeland
+                            - generic [ref=e1014]:
+                              - generic [ref=e1015]: 3rd+
+                              - generic [ref=e1016]: · 3rd+
+                          - generic [ref=e1018]: Senior Technical Consultant @ Ramp | Marine Corps Veteran
+                    - button "Jared Vreeland Message" [ref=e1021] [cursor=pointer]:
+                      - generic [ref=e1022]: Message
+                - listitem [ref=e1023]:
+                  - generic [ref=e1024]:
+                    - generic [ref=e1025]:
+                      - link "Jay Goel profile picture" [ref=e1027] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/jay-goel
+                        - generic "Jay Goel profile picture" [ref=e1029]:
+                          - img "Jay Goel" [ref=e1031]
+                      - link "Jay Goel 2nd Engineering at Ramp" [ref=e1034] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/in/jay-goel
+                        - generic [ref=e1035]:
+                          - generic [ref=e1036]:
+                            - generic [ref=e1037]: Jay Goel
+                            - generic [ref=e1038]:
+                              - generic [ref=e1039]: 2nd
+                              - generic [ref=e1040]: · 2nd
+                          - generic [ref=e1042]: Engineering at Ramp
+                    - button "Follow" [ref=e1044] [cursor=pointer]:
+                      - img [ref=e1045]
+                      - generic [ref=e1047]: Follow
+            - link "Show all" [ref=e1049] [cursor=pointer]:
+              - /url: https://www.linkedin.com/search/results/people/?origin=COMPANY_HIRES_IN_COMPANY_CANNED_SEARCH&currentCompany=%5B1406226%5D&pastCompany=1307
+              - generic [ref=e1050]: Show all
+              - img [ref=e1051]
+        - generic [ref=e215]:
+          - iframe [ref=e1054]:
+            - generic [ref=f56e3]:
+              - banner [ref=f56e4]:
+                - generic [ref=f56e5]:
+                  - link "Promoted" [ref=f56e6] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/ads/start?src=en-all-ad-li-ads_by_li&trk=ads_by_li&utm_medium=ad&utm_source=li&utm_campaign=ads_by_li
+                  - button [ref=f56e7] [cursor=pointer]:
+                    - img [ref=f56e8]
+              - generic [ref=f56e13]:
+                - link "Ad Image 1,233,860,014 Career Transition Support You're likely eligible for LHH career transition support. Alison Alison & 13 other connections also follow LHH" [ref=f56e14] [cursor=pointer]:
+                  - /url: https://www.linkedin.com/li/tscp/sct?destinationUrl=https%3A%2F%2Fregister.lhh.com%3Futm_source%3DLinkedIn%26utm_medium%3Dpaid%26utm_campaign%3D663241623%26utm_term%3D333128643%26utm_content%3D505832703%26li_fat_id%3D30c103ac-e93c-45e5-a1bb-5e7f988b9bb3&trackingEvent=%5B%7B%22eventInfo%22%3A%7B%22appId%22%3A%22com.linkedin.ads.rendering.d_web%22%2C%22eventName%22%3A%22SponsoredRightRailContentActionEvent%22%2C%22topicName%22%3A%22SponsoredRightRailContentActionEvent%22%7D%2C%22eventBody%22%3A%7B%22sponsoredEventHeader%22%3A%7B%22encryptedTrackingData%22%3A%22CwEAAAGeWmvWaA2xNIb4qadmIPEY_6DoeyQx8mQyhpuuXZnIrTihkO6Hz1GaPRNZl2BeUBOHCyXSoDuFC1vs0HOUDUuVZ1aiWB_6k8ZgqzN5YiGIqIVWSucRn4BO--s4BRTZm9aqIQixdya2_m8GW7fBPSNvK0_lCgsK-zU91b2frCrE9XgDh6MwcWm0_ZjLZ4Z_6p2MRxzqKFv1nEY9u1XEBGlT3SsfUh7SjpuCq_QkMhQKaD0ozGHlySF8is9FPN59bpIF1ylmFU8Bnhhms-hxrmwtxRyxi1ZnkULApe3D3GtLNOpSl2iAkFPdGvibj6mrKcpVp53N3uLiFMaVBTt0s0DUqyr62cIpHJ9kemRJ07GeYsS4RnPyNhDPjz_KfoLIhIMIWG-fdxRArm3uuI_gSK6pwZYT3zfaAwzZ8TJ607y-Vsgs1wcfh0bAGnEvKuHcyJzOWkAbr77Vu8tzLNjMNyqfTRhExZOy-D8KxxA-X0ozzdFhbn4ozq8HliS5JlLZqANrF0ib-3ZU9E-vxvRV5BBeq2XJdf1TrsPz8SS1YouSUemoVtQZlLhLNBpWQT1wjqQNKHtf8khM05TP0WmvGskZ4LoXk2PszukLEcFLvS4JmV52OVIYGbVoQw_FuR2N3tUR9i8Wcunu-fC-6UyhfoFzk9qpA1STsCyED1VQ-BTbb88SO4F99Fp7FM7_5sFQ2VpbOl28Joo7kveIyFa96Zu8XwOo7w6-9CP24l50vDZOF6Zrnxz8uBtRCMNwH1SaFwL7WpBsa-iaO3y2ssGFg2HbCfh-H8U1_Ezx3T-0A2bIx-pZ-IwsQwRqFDBbaL5waO1W0qcsPouZEeThOxr279QFbak0fTweTPodxV37rvdqj5ncapvkAxHuyaD26-Vv8BhppPq5WYUtuRzFIeP2fmrJHgBEZFA4xJbpdU4_r9f-QJ0lquKbEVTZ0M2gvLkEkeWhUoOdahfBHfHdNvXrtw1nPVt9LNYuIJjATF83z85-aai8tC36TECN%22%7D%2C%22header%22%3A%7B%22pageInstance%22%3A%7B%22pageUrn%22%3A%22urn%3Ali%3Apage%3Ad_flagship3_company%22%2C%22trackingId%22%3A%22c95fc4ac-fccc-4d6e-8871-893a9003e2b2%22%7D%2C%22time%22%3A1779633477224%2C%22version%22%3A%220.0.0%22%7D%2C%22requestHeader%22%3A%7B%22pageKey%22%3A%22d_flagship3_company%22%2C%22interfaceLocale%22%3A%22en-US%22%7D%7D%7D%5D&csrfToken=ajax%3A7134068059694737283
+                  - img "Ad Image 1,233,860,014" [ref=f56e16]
+                  - generic [ref=f56e17]:
+                    - heading "Career Transition Support" [level=4] [ref=f56e18]
+                    - paragraph [ref=f56e19]: You're likely eligible for LHH career transition support.
+                    - generic [ref=f56e20]:
+                      - img "Alison" [ref=f56e22]
+                      - paragraph [ref=f56e23]: Alison & 13 other connections also follow LHH
+                - link "Ad Image 156,468,376 $1,424/month extra cash That’s the average earned on a 3-bedroom US Vrbo listing, 10/2023–09/2024." [ref=f56e24] [cursor=pointer]:
+                  - /url: https://www.linkedin.com/li/tscp/sct?destinationUrl=https%3A%2F%2Fwww.vrbo.com%2Fen-us%2Flist%3Fbrandcid%3DVRBO.OLA.08%26branddtl%3Dmid_4794%26utm_campaign%3Dvrbo%253Apsoc%253Ausa-en%253Ao%253Ag%253Axxx%253Aprospecting_mid_4794%26utm_medium%3Ddisplay%26utm_source%3Dlinkedin%26utm_content%3Da%253Asoc%253Alinkedin%253Axxx%253Apro%253Axxx%253Atext_top_funnel_generic%253A1989%26utm_term%3D27039252%257C326993388%257C165387404%257C518962649%26li_fat_id%3D30c103ac-e93c-45e5-a1bb-5e7f988b9bb3&trackingEvent=%5B%7B%22eventInfo%22%3A%7B%22appId%22%3A%22com.linkedin.ads.rendering.d_web%22%2C%22eventName%22%3A%22SponsoredRightRailContentActionEvent%22%2C%22topicName%22%3A%22SponsoredRightRailContentActionEvent%22%7D%2C%22eventBody%22%3A%7B%22sponsoredEventHeader%22%3A%7B%22encryptedTrackingData%22%3A%22CwEAAAGeWmvWaV0tDXbKmW3LSRTibabpoTSI29yOc9kTWyI3XHnBkQAaS9tMojYLwXz3T9Tn9h1bSvGXqgFIp2T8D4WDyBBUifBjIsyOev5_NFF3j7fuPvyiSMBD3wU73Ono53xdfytF_acg8E0LGL02VzG1HYzQP0eCpeewPQxQuSOlN-RqkkwQCe2em7bhmylLn2-87Aq197HOxamLb0NQOX84Nc3DJq441DwGNehJuCBymGNAgqkr9HwhogwIvjRRhlzJPVCSNpbgspHDMitdlJvRCZlUOYFuSKrM-Fm38s17v8PP0QYsNTv54DzE-Ss3OnKhqQU0YxNzaMmIWmjSHUHcaFFgCOzqWAGAfhstyP53TZuNWq2SA_jw2c3Sz0wqE4IB-8UvqeeT2gQzLOHtgIW2br0kB-OxuLdcXaoLDOCZbTByNtOitxpqEUYJ36EhzHJFxa4KqMTIs3gqs2f80XKx3R6ZGpjs1Ay3PUMYGa19CaHBSQ1tHdlZZQe9x8ywXhRU0qMgwAZS7bpEUly7wp1UnDqEFMnP_DZF23pu_jflUnPFfQDVrGMXGtgmUPW63ZKt1k870hE3-AJympnwkrVQyXHzE1wuMeTrhDcVzGvQcqJrnvfyv2pekWrEZFpf_uEk5dgCFa2bjmHMNLNRiLuKbKBuLCFsVrQN8XeHNTScm-i9aioxRKblejrAmIk8DoUL5n6IBrMQopH9o2WwmIwEi8wPJALtKGG40sSZxwG5BhbsctRronUQkcWeVCM9zNFDcQHriuCLpkeWO1jmK7MYX-DmdPecnKbjjW5iNG4Qs6exzThjb99Y9iQ-3N3fzTuJ-QTZ7w4l3LZ22Vz8E7mrsgQw86yYybYPVrS2nRVcx39RdY3S5mVyuAroj3iSF7jaTQ3BNuYkBc9tCXTuX4hr7dK_aAerk6i8Gk0v--aC3VrqsJ-TfqFUbRvST1OALmppRjPwP96gqmoEC3MwWekWeFfK_T7AuTQGYLLzh_YtBJTebscZEm16-YmW%22%7D%2C%22header%22%3A%7B%22pageInstance%22%3A%7B%22pageUrn%22%3A%22urn%3Ali%3Apage%3Ad_flagship3_company%22%2C%22trackingId%22%3A%22a4a4c9b4-f9a6-445e-82fc-e3a639a19976%22%7D%2C%22time%22%3A1779633477225%2C%22version%22%3A%220.0.0%22%7D%2C%22requestHeader%22%3A%7B%22pageKey%22%3A%22d_flagship3_company%22%2C%22interfaceLocale%22%3A%22en-US%22%7D%7D%7D%5D&csrfToken=ajax%3A7134068059694737283
+                  - img "Ad Image 156,468,376" [ref=f56e26]
+                  - generic [ref=f56e27]:
+                    - heading "$1,424/month extra cash" [level=4] [ref=f56e28]
+                    - paragraph [ref=f56e29]: That’s the average earned on a 3-bedroom US Vrbo listing, 10/2023–09/2024.
+          - generic "LinkedIn Footer Content" [ref=e216]:
+            - generic [ref=e217]:
+              - list [ref=e1055]:
+                - listitem [ref=e1056]:
+                  - link "About" [ref=e1057] [cursor=pointer]:
+                    - /url: https://about.linkedin.com/
+                    - generic [ref=e1058]: About
+                - listitem [ref=e1059]:
+                  - link "Accessibility" [ref=e1060] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/accessibility
+                    - generic [ref=e1061]: Accessibility
+                - listitem [ref=e1062]:
+                  - link "Help Center" [ref=e1063] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/help/linkedin?trk=footer_d_flagship3_company
+                    - generic [ref=e1064]: Help Center
+                - listitem [ref=e1065]:
+                  - button "Privacy & Terms" [ref=e1067] [cursor=pointer]:
+                    - generic [ref=e1069]:
+                      - text: Privacy & Terms
+                      - img [ref=e1070]
+                - listitem [ref=e1072]:
+                  - link "Ad Choices" [ref=e1073] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/help/linkedin/answer/62931
+                    - generic [ref=e1074]: Ad Choices
+                - listitem [ref=e1075]:
+                  - link "Advertising" [ref=e1076] [cursor=pointer]:
+                    - /url: https://www.linkedin.com/ad/start?trk=n_nav_ads_rr
+                    - generic [ref=e1077]: Advertising
+                - listitem [ref=e1078]:
+                  - button "Business Services" [ref=e1080] [cursor=pointer]:
+                    - generic [ref=e1082]:
+                      - text: Business Services
+                      - img [ref=e1083]
+                - listitem [ref=e1085]:
+                  - button "Get the LinkedIn app" [ref=e1088] [cursor=pointer]
+                - listitem [ref=e1089]:
+                  - button "More options" [ref=e1090] [cursor=pointer]: More
+              - generic [ref=e218]:
+                - img "LinkedIn" [ref=e219]:
+                  - img [ref=e220]
+                - text: LinkedIn Corporation © 2026
+    - generic:
+      - generic:
+        - complementary:
+          - generic [ref=e223]:
+            - generic [ref=e225] [cursor=pointer]:
+              - generic [ref=e226]:
+                - img "James Lemieux" [ref=e227]
+                - generic [ref=e1092]: Status is online
+              - button "You are on the messaging overlay. Press enter to open the list of conversations." [ref=e228]:
+                - generic [ref=e229]:
+                  - generic [ref=e230]: Messaging
+                  - generic [ref=e231]: You are on the messaging overlay. Press enter to open the list of conversations.
+            - generic [ref=e232]:
+              - button "Open messenger dropdown menu" [ref=e234] [cursor=pointer]:
+                - img "Open messenger dropdown menu" [ref=e235]
+              - button "Compose message" [ref=e238] [cursor=pointer]:
+                - img [ref=e239]
+                - generic [ref=e241]: Compose message
+              - button "You are on the messaging overlay. Press enter to open the list of conversations." [ref=e242] [cursor=pointer]:
+                - img [ref=e243]
+                - generic [ref=e245]: You are on the messaging overlay. Press enter to open the list of conversations.
+        - complementary "AI-powered assistant to get help with your career, jobs etc"
+  - region [ref=e246]

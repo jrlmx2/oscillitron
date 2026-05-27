@@ -1,0 +1,175 @@
+- generic [active] [ref=e1]:
+  - generic:
+    - region "Toast message":
+      - heading "0 notifications total" [level=2] [ref=e3]
+      - alert
+  - generic [ref=e4]:
+    - generic [ref=e6]:
+      - button "Skip to search" [ref=e7] [cursor=pointer]:
+        - generic [ref=e8]: Skip to search
+      - button "Skip to main content" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: Skip to main content
+      - button "Keyboard shortcuts" [ref=e11] [cursor=pointer]:
+        - generic [ref=e12]: Keyboard shortcuts
+      - button "Close jump menu" [ref=e13] [cursor=pointer]:
+        - img [ref=e14]
+        - generic [ref=e16]: Close jump menu
+    - banner "Global Navigation" [ref=e17]:
+      - generic [ref=e18]:
+        - link "LinkedIn" [ref=e19] [cursor=pointer]:
+          - /url: https://www.linkedin.com/feed/?nis=true
+          - img "LinkedIn" [ref=e22]:
+            - img [ref=e23]
+        - generic [ref=e27]:
+          - combobox "I’m looking for..." [ref=e28]
+          - generic:
+            - img
+        - navigation "Primary Navigation" [ref=e29]:
+          - list [ref=e30]:
+            - listitem [ref=e31]:
+              - link "new feed updates notifications Home" [ref=e32] [cursor=pointer]:
+                - /url: https://www.linkedin.com/feed/?nis=true&
+                - generic [ref=e33]:
+                  - generic [ref=e36]: new feed updates notifications
+                  - img [ref=e40]
+                - generic "Home" [ref=e42]
+            - listitem [ref=e43]:
+              - link "My Network" [ref=e44] [cursor=pointer]:
+                - /url: https://www.linkedin.com/mynetwork/?
+                - img [ref=e48]
+                - generic "My Network" [ref=e50]
+            - listitem [ref=e51]:
+              - link "Jobs" [ref=e52] [cursor=pointer]:
+                - /url: https://www.linkedin.com/jobs/?
+                - img [ref=e56]
+                - generic "Jobs" [ref=e58]
+            - listitem [ref=e59]:
+              - link "Messaging" [ref=e60] [cursor=pointer]:
+                - /url: https://www.linkedin.com/messaging/?
+                - img [ref=e64]
+                - generic "Messaging" [ref=e66]
+            - listitem [ref=e67]:
+              - link "Notifications" [ref=e68] [cursor=pointer]:
+                - /url: https://www.linkedin.com/notifications/?
+                - img [ref=e72]
+                - generic "Notifications" [ref=e74]
+            - listitem [ref=e75]:
+              - button "James Lemieux Me" [ref=e77] [cursor=pointer]:
+                - img "James Lemieux" [ref=e78]
+                - generic [ref=e79]:
+                  - text: Me
+                  - img [ref=e80]
+            - listitem [ref=e82]:
+              - button "For Business" [ref=e84] [cursor=pointer]:
+                - img [ref=e88]
+                - generic "For Business" [ref=e90]:
+                  - text: For Business
+                  - img [ref=e91]
+            - listitem [ref=e93]:
+              - link "Learning" [ref=e94] [cursor=pointer]:
+                - /url: https://www.linkedin.com/learning/?trk=nav_neptune_learning&
+                - img [ref=e98]
+                - generic "Learning" [ref=e103]
+    - generic [ref=e108]:
+      - main "Organization page for Ramp" [ref=e109]:
+        - generic [ref=e112]:
+          - button [ref=e115]
+          - generic [ref=e118]:
+            - generic [ref=e120]:
+              - generic [ref=e121]:
+                - img "Ramp logo" [ref=e122]
+                - generic [ref=e124]:
+                  - heading "Ramp" [level=1] [ref=e125]
+                  - link "Verified" [ref=e126] [cursor=pointer]:
+                    - /url: /company/ramp/about/
+                    - img [ref=e127]
+                  - paragraph [ref=e129]: The all-in-one financial operations platform designed to save businesses time and money. Trusted by 50,000+ teams.
+                  - generic [ref=e130]:
+                    - generic [ref=e131]: · Financial Services
+                    - generic [ref=e132]:
+                      - text: ·
+                      - link "Spend Management Software" [ref=e133] [cursor=pointer]:
+                        - /url: https://www.linkedin.com/search/results/products/?origin=PRODUCT_PAGE_CATEGORY_CANNED_SEARCH&productCategory=%5B%221251%22%5D
+                        - generic [ref=e134]: Spend Management Software
+                    - generic [ref=e135]:
+                      - generic [ref=e136]: · New York, New York
+                      - generic [ref=e137]: · 306K followers
+                      - link "· 1K-5K employees" [ref=e138] [cursor=pointer]:
+                        - /url: /search/results/people/?currentCompany=%5B%221406226%22%5D&origin=COMPANY_PAGE_CANNED_SEARCH
+                        - text: ·
+                        - generic [ref=e139]: 1K-5K employees
+              - generic [ref=e142]:
+                - link "Bhavyashree Sisodia Bhavyashree & 4 other connections follow this page" [ref=e143] [cursor=pointer]:
+                  - /url: http://www.linkedin.com/company/ramp/?showInNetworkFollowers=true
+                  - img "Bhavyashree Sisodia" [ref=e146]
+                  - heading "Bhavyashree & 4 other connections follow this page" [level=2] [ref=e147]
+                - button "View all featured customers of Ramp Used by Morning Brew and 18 featured customers" [ref=e148] [cursor=pointer]:
+                  - img "Visit Morning Brew’s company page" [ref=e149]
+                  - generic [ref=e150]:
+                    - generic [ref=e151]: View all featured customers of Ramp
+                    - generic [ref=e152]: Used by Morning Brew and 18 featured customers
+              - generic [ref=e154]:
+                - region [ref=e156]:
+                  - button "Follow" [ref=e157] [cursor=pointer]:
+                    - img [ref=e158]
+                    - generic [ref=e160]: Follow
+                  - button "Message Ramp" [ref=e161] [cursor=pointer]:
+                    - img [ref=e162]
+                    - generic [ref=e164]: Message
+                - button "Overflow Actions" [ref=e168] [cursor=pointer]:
+                  - img "Overflow Actions" [ref=e169]
+            - navigation "Organization’s page navigation" [ref=e172]:
+              - list [ref=e173]:
+                - listitem [ref=e174]:
+                  - link "Home" [ref=e175] [cursor=pointer]:
+                    - /url: /company/ramp/
+                - listitem [ref=e176]:
+                  - link "About" [ref=e177] [cursor=pointer]:
+                    - /url: /company/ramp/about/
+                - listitem [ref=e178]:
+                  - link "Posts" [ref=e179] [cursor=pointer]:
+                    - /url: /company/ramp/posts/
+                - listitem [ref=e180]:
+                  - link "Products" [ref=e181] [cursor=pointer]:
+                    - /url: /company/ramp/product/
+                - listitem [ref=e182]:
+                  - link "Jobs" [ref=e183] [cursor=pointer]:
+                    - /url: /company/ramp/jobs/
+                - listitem [ref=e184]:
+                  - link "Life" [ref=e185] [cursor=pointer]:
+                    - /url: /company/ramp/life/
+                - listitem [ref=e186]:
+                  - link "People" [ref=e187] [cursor=pointer]:
+                    - /url: /company/ramp/people/
+                - listitem [ref=e188]:
+                  - link "Insights" [ref=e189] [cursor=pointer]:
+                    - /url: /company/ramp/insights/
+      - complementary "Advertisement" [ref=e209]:
+        - generic "LinkedIn Footer Content" [ref=e212]:
+          - generic [ref=e213]:
+            - list
+            - generic [ref=e214]:
+              - img "LinkedIn" [ref=e215]:
+                - img [ref=e216]
+              - text: LinkedIn Corporation © 2026
+    - generic:
+      - generic:
+        - complementary:
+          - generic [ref=e219]:
+            - generic [ref=e221] [cursor=pointer]:
+              - img "James Lemieux" [ref=e223]
+              - button "You are on the messaging overlay. Press enter to open the list of conversations." [ref=e224]:
+                - generic [ref=e225]:
+                  - generic [ref=e226]: Messaging
+                  - generic [ref=e227]: You are on the messaging overlay. Press enter to open the list of conversations.
+            - generic [ref=e228]:
+              - button "Open messenger dropdown menu" [ref=e230] [cursor=pointer]:
+                - img "Open messenger dropdown menu" [ref=e231]
+              - button "Compose message" [ref=e234] [cursor=pointer]:
+                - img [ref=e235]
+                - generic [ref=e237]: Compose message
+              - button "You are on the messaging overlay. Press enter to open the list of conversations." [ref=e238] [cursor=pointer]:
+                - img [ref=e239]
+                - generic [ref=e241]: You are on the messaging overlay. Press enter to open the list of conversations.
+        - complementary "AI-powered assistant to get help with your career, jobs etc"
+  - region [ref=e242]

@@ -1,0 +1,80 @@
+- generic [ref=e2]:
+  - heading "0 notifications" [level=2] [ref=e3]
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - link "LinkedIn" [ref=e13] [cursor=pointer]:
+        - /url: /
+        - generic "LinkedIn" [ref=e14]
+      - generic [ref=e24]:
+        - paragraph [ref=e25]: Sign in
+        - generic [ref=e26]:
+          - paragraph [ref=e27]: New to LinkedIn?
+          - link "Join now" [ref=e28] [cursor=pointer]:
+            - /url: /signup/cold-join/
+            - generic [ref=e30]: Join now
+        - generic [ref=e32]:
+          - generic [ref=e33]:
+            - generic [ref=e36]:
+              - button
+            - button "Sign in with Apple" [ref=e38] [cursor=pointer]:
+              - generic [ref=e39]:
+                - figure [ref=e40]
+                - generic [ref=e41]: Sign in with Apple
+            - paragraph [ref=e43]:
+              - text: By continuing, you agree to LinkedIn’s
+              - link "User Agreement" [ref=e44] [cursor=pointer]:
+                - /url: https://www.linkedin.com/legal/user-agreement/
+                - strong [ref=e45]: User Agreement
+              - text: ","
+              - link "Privacy Policy" [ref=e46] [cursor=pointer]:
+                - /url: https://www.linkedin.com/legal/privacy-policy/
+                - strong [ref=e47]: Privacy Policy
+              - text: ", and"
+              - link "Cookie Policy" [ref=e48] [cursor=pointer]:
+                - /url: https://www.linkedin.com/legal/cookie-policy/
+                - strong [ref=e49]: Cookie Policy
+              - text: .
+          - paragraph [ref=e51]: or
+          - generic [ref=e52]:
+            - generic [ref=e55]:
+              - generic [ref=e57]: Email or phone
+              - textbox "Email or phone" [ref=e59]
+            - generic [ref=e61]:
+              - generic [ref=e63]: Password
+              - generic [ref=e64]:
+                - textbox "Password" [ref=e65]
+                - button "Show password" [ref=e67] [cursor=pointer]
+            - generic [ref=e70]:
+              - link "Forgot password?" [ref=e71] [cursor=pointer]:
+                - /url: /passwordReset/
+                - generic [ref=e73]: Forgot password?
+              - button "Keep me signed in" [ref=e75] [cursor=pointer]:
+                - generic [ref=e76]:
+                  - generic [ref=e77]:
+                    - checkbox [checked]
+                  - paragraph [ref=e79]: Keep me signed in
+            - button "Sign in" [ref=e80] [cursor=pointer]:
+              - generic [ref=e82]: Sign in
+      - generic [ref=e85]:
+        - paragraph [ref=e86]: LinkedIn Corporation © 2026
+        - generic [ref=e87]:
+          - link "User Agreement" [ref=e88] [cursor=pointer]:
+            - /url: https://www.linkedin.com/legal/user-agreement/
+            - paragraph [ref=e89]: User Agreement
+          - link "Privacy Policy" [ref=e90] [cursor=pointer]:
+            - /url: https://www.linkedin.com/legal/privacy-policy/
+            - paragraph [ref=e91]: Privacy Policy
+          - link "Community Guidelines" [ref=e92] [cursor=pointer]:
+            - /url: https://www.linkedin.com/help/linkedin/answer/a403269/
+            - paragraph [ref=e93]: Community Guidelines
+          - link "Cookie Policy" [ref=e94] [cursor=pointer]:
+            - /url: https://www.linkedin.com/legal/cookie-policy/
+            - paragraph [ref=e95]: Cookie Policy
+          - link "Copyright Policy" [ref=e96] [cursor=pointer]:
+            - /url: https://www.linkedin.com/legal/copyright-policy/
+            - paragraph [ref=e97]: Copyright Policy
+          - link "Send Feedback" [ref=e98] [cursor=pointer]:
+            - /url: https://www.linkedin.com/help/linkedin/
+            - paragraph [ref=e99]: Send Feedback
+          - button "Language" [ref=e100] [cursor=pointer]:
+            - paragraph [ref=e102]: Language

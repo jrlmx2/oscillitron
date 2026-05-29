@@ -422,3 +422,42 @@ func TestEvaluate_PropagatesTransportError(t *testing.T) {
 		t.Fatalf("expected transport error to propagate, got %v", err)
 	}
 }
+
+// TestExecute_RecoversConfidence_FromMinimalOutput is the H1 integration
+// test: process answers in natural text with a trailing "confidence: X.X"
+// line; the adapter must recover the number onto ReturnResult.Confidence
+// (previously dropped to 0) and strip the annotation line from content.
+// Mirrors pkg/adapter/ollama's equivalent. nil Inspector → raw value
+// recovered unadjusted.
+func TestExecute_RecoversConfidence_FromMinimalOutput(t *testing.T) {
+	f := newFakeLMStudio()
+	defer f.close()
+	f.queue(scriptedResponse{
+		status:       http.StatusOK,
+		content:      "The answer is A.\nconfidence: 0.7",
+		finishReason: "stop",
+	})
+	a := newAdapter(t, f.server.URL)
+	env := session.Envelope{
+		ID:       "ap-min",
+		Input:    session.Payload{Kind: "task", Content: "Q?"},
+		Evaluate: &session.Evaluate{Playbook: session.PlaybookProcess},
+	}
+	out, err := a.Execute(context.Background(), env)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	rr := out.Execute.ReturnResult
+	if rr == nil {
+		t.Fatalf("ReturnResult is nil")
+	}
+	if rr.Confidence < 0.69 || rr.Confidence > 0.71 {
+		t.Errorf("Confidence = %v, want 0.7 (recovered via applyEffectiveConfidence)", rr.Confidence)
+	}
+	if strings.Contains(rr.Result.Content, "confidence") {
+		t.Errorf("Content = %q, want the 'confidence: 0.7' line stripped", rr.Result.Content)
+	}
+	if !strings.Contains(rr.Result.Content, "A") {
+		t.Errorf("Content = %q, want to retain the answer 'A'", rr.Result.Content)
+	}
+}

@@ -44,6 +44,7 @@ import (
 	"time"
 
 	"github.com/jrlmx2/oscillitron/pkg/cost"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/semanticpool"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/thinking"
@@ -120,6 +121,14 @@ type Config struct {
 	// to a low-confidence return_result placeholder — useful for
 	// models that don't always honor the format.
 	RequireStructured bool
+
+	// Inspector enables effective-confidence recovery on the
+	// unstructured (process/compose) path: the substrate answers in
+	// natural text with a trailing "confidence: X.X" line, the adapter
+	// recovers that number and (when set) adjusts it by the v3.2
+	// response signals before stamping. Optional; nil recovers the raw
+	// annotated value unadjusted. Mirrors pkg/adapter/ollama.
+	Inspector *notice.Inspector
 
 	// SemanticPool is the optional shared-knowledge store. When set,
 	// the adapter prepends the pool's rendered preamble to every
@@ -340,6 +349,9 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 	if reasoning != "" && execute.ReturnResult != nil {
 		execute.ReturnResult.Reasoning = reasoning
 	}
+	// Recover the model's self-reported confidence from the natural-text
+	// (process/compose) path and strip the annotation line from content.
+	applyEffectiveConfidence(execute, raw, a.cfg.Inspector)
 	env.Execute = execute
 	env.ExitReason = session.ExitDone
 	return env, nil

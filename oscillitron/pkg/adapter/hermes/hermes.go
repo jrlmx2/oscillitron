@@ -50,6 +50,7 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/cost"
+	"github.com/jrlmx2/oscillitron/pkg/notice"
 	"github.com/jrlmx2/oscillitron/pkg/semanticpool"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -123,6 +124,16 @@ type Config struct {
 	// return_result placeholder with the raw text in content — useful
 	// for dev against weak models or quick smoke tests.
 	RequireStructured bool
+
+	// Inspector enables effective-confidence recovery on the
+	// unstructured (process/compose) path: when the substrate answers
+	// in natural text with a trailing "confidence: X.X" line, the
+	// adapter recovers that number and (when an Inspector is set)
+	// adjusts it by the v3.2 response signals (refusal, hedging,
+	// self-correction) before stamping it onto the return_result.
+	// Optional; nil recovers the raw annotated value unadjusted.
+	// Mirrors pkg/adapter/ollama's Inspector wiring.
+	Inspector *notice.Inspector
 
 	// RawEvaluateInstructions overrides the adapter's default evaluate
 	// preamble. Most callers should leave this empty.
@@ -327,6 +338,11 @@ func (a *Adapter) Execute(ctx context.Context, env session.Envelope) (session.En
 		return env, err
 	}
 	execute.TokensUsed = usage.input + usage.output
+	// Recover the model's self-reported confidence from the natural-text
+	// (process/compose) path and strip the annotation line from content.
+	// No-op for the JSON-parsed playbooks (Confidence already set) and
+	// for non-return_result categories.
+	applyEffectiveConfidence(execute, raw, a.cfg.Inspector)
 	env.Execute = execute
 	env.ExitReason = session.ExitDone
 	return env, nil

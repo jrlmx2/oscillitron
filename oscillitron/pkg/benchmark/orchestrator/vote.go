@@ -95,6 +95,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 
 	type result struct {
 		raw        string
+		extracted  string
 		tokens     int
 		confidence float64
 		err        error
@@ -150,9 +151,13 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			results[i].raw = out.Execute.ReturnResult.Result.Content
 			results[i].tokens = out.Execute.TokensUsed
 			results[i].confidence = out.Execute.ReturnResult.Confidence
-			extracted := v.Extractor.Extract(aCtx, c.Goal, results[i].raw)
+			// Extract once here, under aCtx (so the extraction's own trace
+			// events carry attempt_idx), and reuse the value in the tally.
+			// Re-extracting in the tally loop would double the extractor
+			// cost — a real LLM call per attempt with LLMExtractor.
+			results[i].extracted = v.Extractor.Extract(aCtx, c.Goal, results[i].raw)
 			trace.Info(tracer, aCtx, "vote.attempt_done",
-				slog.String("extracted", extracted),
+				slog.String("extracted", results[i].extracted),
 				slog.Int("tokens", results[i].tokens),
 				slog.Float64("confidence", results[i].confidence),
 				slog.Int64("duration_ms", time.Since(start).Milliseconds()),
@@ -179,7 +184,7 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 			}
 			continue
 		}
-		extracted := v.Extractor.Extract(ctx, c.Goal, r.raw)
+		extracted := r.extracted
 		rawParts = append(rawParts, r.raw)
 		totalTokens += r.tokens
 		successes++

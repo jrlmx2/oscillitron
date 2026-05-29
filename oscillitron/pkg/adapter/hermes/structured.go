@@ -179,8 +179,9 @@ func parseSeverity(s string) session.Severity {
 func parseExecuteResponse(pb session.Playbook, raw string, require bool) (*session.Execute, error) {
 	// Process and compose produce natural text with a trailing
 	// "confidence: X.X" annotation — no JSON envelope. Go straight
-	// to unstructuredFallback; applyEffectiveConfidence recovers
-	// the confidence downstream.
+	// to unstructuredFallback (Confidence stays 0); Execute then calls
+	// applyEffectiveConfidence to recover the real number from the raw
+	// text and strip the annotation line from the content.
 	if pb == session.PlaybookProcess || pb == session.PlaybookCompose {
 		return unstructuredFallback(pb, raw), nil
 	}
@@ -330,4 +331,35 @@ func unstructuredFallback(pb session.Playbook, raw string) *session.Execute {
 			},
 		}
 	}
+}
+
+// applyEffectiveConfidence recovers + adjusts confidence when the
+// minimal-output (process/compose) path produced an
+// unstructured-fallback Execute (Confidence == 0 = "not reported").
+// JSON-parsed confidences (Confidence > 0) are left alone — those are
+// already the model's self-report.
+//
+// The pure stamping logic lives in notice.EffectiveConfidenceFromRaw
+// (adapter-agnostic, tested there). This is the adapter-side gate that
+// decides WHEN to stamp, plus stripping the "confidence: X.X"
+// annotation line from the answer content so downstream consumers
+// (extractors, graders) see only the answer. Mirrors the ollama
+// adapter; consolidate when the four OpenAI-compatible adapters merge
+// into a shared package.
+//
+// When the substrate emitted no confidence line AND the JSON envelope
+// was absent, Confidence stays 0 — which cope.Decide reads as
+// ship_with_caveat (NOT escalate). Escalating on missing data is
+// expensive and wrong; flag uncertainty without paying for frontier.
+func applyEffectiveConfidence(exec *session.Execute, raw string, inspector *notice.Inspector) {
+	if exec == nil || exec.ReturnResult == nil {
+		return
+	}
+	if exec.ReturnResult.Confidence > 0 {
+		return
+	}
+	if conf, ok := notice.EffectiveConfidenceFromRaw(raw, inspector); ok {
+		exec.ReturnResult.Confidence = conf
+	}
+	exec.ReturnResult.Result.Content = notice.StripConfidenceLine(exec.ReturnResult.Result.Content)
 }

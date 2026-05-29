@@ -329,9 +329,15 @@ func TestExecuteProcess(t *testing.T) {
 	if !strings.Contains(rr.Result.Content, "42") {
 		t.Errorf("Content = %q, want to contain '42'", rr.Result.Content)
 	}
-	// Confidence stays 0 from unstructuredFallback — the adapter's
-	// applyEffectiveConfidence recovers it downstream (hermes adapter
-	// doesn't currently wire that; the ollama adapter does).
+	// applyEffectiveConfidence recovers the model's self-reported
+	// confidence from the natural-text path (was previously dropped to
+	// 0 — H1 fix) and strips the annotation line from the content.
+	if rr.Confidence < 0.91 || rr.Confidence > 0.93 {
+		t.Errorf("Confidence = %v, want 0.92 (recovered via applyEffectiveConfidence)", rr.Confidence)
+	}
+	if strings.Contains(rr.Result.Content, "confidence") {
+		t.Errorf("Content = %q, want the 'confidence: 0.92' line stripped", rr.Result.Content)
+	}
 }
 
 func TestExecuteCritique(t *testing.T) {

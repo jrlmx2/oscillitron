@@ -454,3 +454,29 @@ func TestVote_StakesZeroValue_DefaultsToMedium(t *testing.T) {
 		t.Errorf("adapter call count = %d, want 5 (zero stakes must read as Medium)", a.calls.Load())
 	}
 }
+
+// TestVote_ExtractsOncePerAttempt is the H2 regression test. The
+// extractor was previously called twice per attempt (once in the
+// goroutine for the trace event, once in the tally) — with
+// LLMExtractor that doubles a real LLM call per attempt. After the
+// fix the goroutine's extracted value is stored and reused, so the
+// extractor fires exactly N times for N attempts.
+func TestVote_ExtractsOncePerAttempt(t *testing.T) {
+	a := &scriptAdapter{answers: []string{"A", "A", "A"}}
+	var extractCalls atomic.Int64
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string {
+		extractCalls.Add(1)
+		return strings.TrimSpace(raw)
+	})
+	v := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}
+	ans, err := v.Answer(context.Background(), benchmark.Case{ID: "x"})
+	if err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if ans.Extracted != "A" {
+		t.Errorf("Extracted = %q, want A", ans.Extracted)
+	}
+	if got := extractCalls.Load(); got != 3 {
+		t.Errorf("extractor calls = %d, want 3 (once per attempt, not 2N)", got)
+	}
+}

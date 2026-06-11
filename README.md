@@ -60,7 +60,7 @@ The demo runs with no API keys and no local model. The bench needs a substrate �
 
 Everything below has benchmark evidence in this repo (run logs and analysis under `scratch/archive/bench-findings-*.md` and `references/`).
 
-**Small open-weight models are far below frontier on hard-science reasoning.** GPQA Diamond, 198 cases, single-call: qwen2.5:7b-instruct-q6_K 29.8%, phi4-mini 26.3% — against a 25% chance floor. Claude Haiku 4.5 scored 37.9% on the same harness. The gap between an edge model and even a small frontier model (+25–35pp, depending on benchmark) dwarfs anything orchestration recovered.
+**Small open-weight models are far below frontier on hard-science reasoning.** GPQA Diamond, 198 cases, single-call: qwen2.5:7b-instruct-q6_K 29.8%, phi4-mini 26.3% — against a 25% chance floor. Claude Haiku 4.5 scored 37.9% on the same harness. The gap between an edge model and even a small frontier model (+25–35pp on GPQA at the same prompt) dwarfs anything orchestration recovered.
 
 **Structured-output enforcement can cost more than it buys.** Forcing JSON schema output cost 15–55pp on reasoning benchmarks for an 8B model — GSM8K went from 0% to 55% when the contract switched to natural text plus a trailing `confidence:` line. The model could do the arithmetic or emit valid JSON, not both. The exception: many-option MCQ (MMLU-Pro) got *worse* under natural text (24% → 10%) because answer extraction got harder. Format constraints and reasoning compete for small-model capacity; choose per task shape.
 

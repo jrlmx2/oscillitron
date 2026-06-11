@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Oscillitron
 
@@ -95,4 +94,4 @@ v4: calibration-correction layer — per-(model, domain, confidence-band) correc
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Apache License 2.0 — see [LICENSE](LICENSE).

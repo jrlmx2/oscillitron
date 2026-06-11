@@ -148,7 +148,7 @@ go run ./cmd/oscillitron --config oscillitron.properties
 
 ## Open placeholders to resolve before publishing
 
-- **License.** MIT LICENSE added at the repo root on the `public-prep` branch (2026-06-11). Note the framework design doc §11.1 had Apache 2.0 as the leading recommendation — the final choice is the owner's call; confirm before the repo goes public.
+- **License.** Apache 2.0 (decided by Jim 2026-06-11, matching framework design doc §11.1) — LICENSE + NOTICE at repo root.
 
 ## When to ask vs. proceed
 

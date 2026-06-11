@@ -1,4 +1,3 @@
-<!-- CLAUDE GENERATED -->
 
 # Oscillitron — Go module
 

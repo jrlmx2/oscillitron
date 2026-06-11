@@ -40,7 +40,7 @@ Production-grade LLM handling at a fraction of the cost. A neural-ensemble runti
 
 - **Language: Go (LOCKED 2026-05-18).** Rationale: goroutines + channels map cleanly onto N oscillators passing action potentials; static binary makes ops simple; the `anthropic-skills:go-agent-company` skill aligns with the multi-agent message-envelope pattern this project needs.
 - **Package manager:** Go modules (stdlib only for v0; external deps introduced one at a time with justification).
-- **Min Go version:** 1.21 (uses `log/slog`).
+- **Min Go version:** 1.26 (per `oscillitron/go.mod`; bumped from 1.21 on 2026-05-18).
 - **Code location:** `oscillitron/` subdirectory (library-plan §8 Option B). If this is later promoted to a sibling repo per library-plan §8 Option A, the cross-link to `oscillitron/CLAUDE.md` becomes a README pointer to the new repo.
 
 ## Architecture

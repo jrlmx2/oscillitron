@@ -105,9 +105,9 @@ Idempotent — safe to re-run. The `pre-commit` hook runs `gofmt -l`
 on staged Go files and `go vet ./...` on the module. No external
 tooling required beyond the Go toolchain already needed to build.
 
-CI (`.github/workflows/check.yml`) runs the same checks on every PR
-as a backstop. **Don't skip the install** — the CI check fires after
-you've already pushed.
+There is no CI workflow in the repo yet (`scratch/ci-workflow-todo.md`
+tracks it), so the local hooks are the only enforcement. **Don't skip
+the install.**
 
 ### Smoke-testing the Hermes adapter against a real local Hermes
 
@@ -148,7 +148,7 @@ go run ./cmd/oscillitron --config oscillitron.properties
 
 ## Open placeholders to resolve before publishing
 
-- **License.** No LICENSE file yet. Apache 2.0 is the leading recommendation per the framework design doc §11.1; confirm and add before the repo goes public.
+- **License.** MIT LICENSE added at the repo root on the `public-prep` branch (2026-06-11). Note the framework design doc §11.1 had Apache 2.0 as the leading recommendation — the final choice is the owner's call; confirm before the repo goes public.
 
 ## When to ask vs. proceed
 

@@ -19,7 +19,11 @@ oscillitron/bin/
 oscillitron/.claude/settings.local.json
 
 # Claude Code per-session worktrees (local-only; never tracked)
+.claude/worktrees/
 oscillitron/.claude/worktrees/
+
+# Playwright MCP session logs (local browser-session captures; never tracked)
+.playwright-mcp/
 
 # Env files (none expected today; defensive)
 .env

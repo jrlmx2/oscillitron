@@ -4,35 +4,35 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 2,
+  "iteration": 3,
   "counts_per_playbook": {
-    "plan": 7,
-    "process": 7,
-    "critique": 7,
-    "verify_grounded": 7,
-    "compose": 7
+    "plan": 12,
+    "process": 12,
+    "critique": 12,
+    "verify_grounded": 12,
+    "compose": 12
   },
-  "total_tasks": 35,
+  "total_tasks": 60,
   "counts_per_domain": {
-    "biology": 2,
-    "business": 2,
-    "chemistry": 2,
-    "cs": 3,
-    "economics": 3,
-    "engineering": 4,
+    "biology": 5,
+    "business": 5,
+    "chemistry": 5,
+    "cs": 4,
+    "economics": 5,
+    "engineering": 5,
     "geography": 1,
-    "health": 3,
-    "history": 2,
-    "law": 4,
-    "math": 2,
+    "health": 5,
+    "history": 4,
+    "law": 5,
+    "math": 5,
     "philosophy": 2,
-    "physics": 3,
-    "psychology": 2
+    "physics": 5,
+    "psychology": 4
   },
   "domains_not_yet_covered": [],
   "verification": {
     "min_verification_passes": 1,
-    "avg_verification_passes": 1.57,
+    "avg_verification_passes": 1.58,
     "all_coherence_checked": true,
     "open_issues": []
   },
@@ -46,5 +46,6 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 2: +15 tasks (3/playbook) covering psychology & philosophy (all 14 domains now present); re-verified the iteration-1 seed (passes 1->2). Exemplar store unchanged this pass."
+  "notes": "Iteration 3: +25 tasks (5/playbook) filling previously-empty (playbook x domain) cells; re-verified the iteration-2 batch (passes 1->2). 12 tasks per playbook, 60 total.",
+  "playbook_domain_cells_filled": "60/70"
 }

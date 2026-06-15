@@ -25,5 +25,14 @@
     "source_case": "critique-business-001",
     "tokens": 42,
     "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "critique",
+    "prompt": "Find the flaw: a=b => a^2=ab => (a+b)(a-b)=b(a-b) => a+b=b => 2=1.",
+    "output": "Issue: dividing by (a-b) is invalid since a=b makes a-b=0 (division by zero).",
+    "score": 0.95,
+    "source_case": "critique-math-001",
+    "tokens": 40,
+    "added_at": "2026-06-15T00:00:00Z"
   }
 ]

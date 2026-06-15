@@ -25,5 +25,14 @@
     "source_case": "plan-history-001",
     "tokens": 55,
     "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "plan",
+    "prompt": "Outline the experimental procedure to measure g using a simple pendulum.",
+    "output": "Ordered steps: build pendulum -> vary length -> time oscillations for T -> plot T^2 vs L -> derive g from slope. Recompose: sequential.",
+    "score": 0.94,
+    "source_case": "plan-physics-001",
+    "tokens": 48,
+    "added_at": "2026-06-15T00:00:00Z"
   }
 ]

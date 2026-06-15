@@ -1,8 +1,8 @@
 [
   {
     "action": "process",
-    "prompt": "Compute the derivative of f(x) = x^3 · ln(x).",
-    "output": "f'(x) = 3x^2·ln(x) + x^2 = x^2(3·ln(x) + 1).",
+    "prompt": "Compute the derivative of f(x) = x^3 \u00b7 ln(x).",
+    "output": "f'(x) = 3x^2\u00b7ln(x) + x^2 = x^2(3\u00b7ln(x) + 1).",
     "score": 0.97,
     "source_case": "process-math-001",
     "tokens": 40,
@@ -24,6 +24,15 @@
     "score": 0.95,
     "source_case": "process-cs-001",
     "tokens": 20,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "process",
+    "prompt": "Standard of proof for a U.S. criminal conviction?",
+    "output": "Beyond a reasonable doubt.",
+    "score": 0.95,
+    "source_case": "process-law-001",
+    "tokens": 18,
     "added_at": "2026-06-15T00:00:00Z"
   }
 ]

@@ -25,5 +25,14 @@
     "source_case": "compose-engineering-001",
     "tokens": 44,
     "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "compose",
+    "prompt": "Merge three commit messages into one release note.",
+    "output": "One release note combining: fix null deref in auth, add API-client retry, bump dependencies.",
+    "score": 0.93,
+    "source_case": "compose-cs-001",
+    "tokens": 34,
+    "added_at": "2026-06-15T00:00:00Z"
   }
 ]

@@ -126,6 +126,7 @@ func run() error {
 		copeEnable       = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
 		copeHigh         = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
 		copeLow          = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
+		copeConfSrc      = flag.String("cope-confidence-source", "self", "Thread B: which confidence column the cope dispatcher reads. 'self' = Answer.Confidence (self-reported mean, current behavior); 'semantic-entropy' = Answer.SEConfidence (Vote's discrete semantic entropy, 1−H/ln(N)). Default 'self' preserves behavior; 'semantic-entropy' is the H0-SE treatment arm (dense-router-design §2.12.3).")
 		treeEnable       = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
 		treeMaxDepth     = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
 		treeTraceDir     = flag.String("tree-trace-dir", "", "v3.5+: write per-case tree trace files (<case-id>.tree.txt) to this directory. Shows the full prompt→response path through the tree for debugging.")
@@ -288,6 +289,9 @@ func run() error {
 				}
 			}
 		}
+		if !flagPassed("cope-confidence-source") {
+			*copeConfSrc = props.String("bench.cope.confidence_source", *copeConfSrc)
+		}
 	}
 
 	var tracer trace.Tracer = trace.Discard{}
@@ -432,7 +436,8 @@ func run() error {
 				LowConfidence:   *copeLow,
 				EscalateAllowed: true, // gated by Frontier != nil at runtime
 			},
-			Tracer: tracer,
+			ConfidenceSource: *copeConfSrc,
+			Tracer:           tracer,
 		}
 	}
 
@@ -920,6 +925,15 @@ func printReport(w *os.File, r benchmark.Report) {
 	// confidence (pre-v3.3 path).
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "--- "+strings.TrimRight(calibration.FormatTable(calibration.Compute(r, nil)), "\n"))
+
+	// Thread B: ECE/Brier/reliability-slope head-to-head, self-reported
+	// vs semantic-entropy confidence, computed from the same report (no
+	// extra run). Empty columns render as a one-line skip.
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "--- "+strings.TrimRight(calibration.FormatScores(
+		calibration.Score(r, calibration.SelfReported, "confidence", nil),
+		calibration.Score(r, calibration.SemanticEntropy, "se_confidence", nil),
+	), "\n"))
 
 	if len(r.Windows) > 0 {
 		fmt.Fprintf(w, "\n--- Sliding window (size=%d) ---\n", r.Windows[0].Size)

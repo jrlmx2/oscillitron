@@ -4,35 +4,35 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 3,
+  "iteration": 4,
   "counts_per_playbook": {
-    "plan": 12,
-    "process": 12,
-    "critique": 12,
-    "verify_grounded": 12,
-    "compose": 12
+    "plan": 14,
+    "process": 14,
+    "critique": 14,
+    "verify_grounded": 14,
+    "compose": 14
   },
-  "total_tasks": 60,
+  "total_tasks": 70,
   "counts_per_domain": {
     "biology": 5,
     "business": 5,
     "chemistry": 5,
-    "cs": 4,
+    "cs": 5,
     "economics": 5,
     "engineering": 5,
-    "geography": 1,
+    "geography": 5,
     "health": 5,
-    "history": 4,
+    "history": 5,
     "law": 5,
     "math": 5,
-    "philosophy": 2,
+    "philosophy": 5,
     "physics": 5,
-    "psychology": 4
+    "psychology": 5
   },
   "domains_not_yet_covered": [],
   "verification": {
     "min_verification_passes": 1,
-    "avg_verification_passes": 1.58,
+    "avg_verification_passes": 1.86,
     "all_coherence_checked": true,
     "open_issues": []
   },
@@ -46,6 +46,6 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 3: +25 tasks (5/playbook) filling previously-empty (playbook x domain) cells; re-verified the iteration-2 batch (passes 1->2). 12 tasks per playbook, 60 total.",
-  "playbook_domain_cells_filled": "60/70"
+  "notes": "Iteration 4: +10 tasks filling the last 10 empty (playbook x domain) cells -> full 70/70 grid; re-verified iteration-3 batch (passes 1->2). 14 per playbook, 70 total.",
+  "playbook_domain_cells_filled": "70/70"
 }

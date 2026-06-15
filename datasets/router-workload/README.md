@@ -1,6 +1,6 @@
-## Status: TARGET REACHED (500 tasks, 100/playbook, 70/70 grid)
+## Status: VERIFIED-COMPLETE ✅ (500 tasks · 100/playbook · 70/70 grid · all ≥3 verification passes)
 
-Growth phase complete (iteration 32). The loop is now in **verification mode**: no new tasks; each iteration re-checks coherence + label-correctness + answer-correctness and raises the minimum verification_passes until every task has >=3 clean independent passes.
+Growth + verification phases complete (iteration 34). Every task has ≥3 independent clean verification passes (coherence + label-correctness + answer-correctness); no duplicate IDs or prompts. The corpus is ready to feed the §2.12.9.3 router experiment. The loop now continues light periodic re-verification only.
 
 # Router-workload corpus — playbook-heterogeneous
 

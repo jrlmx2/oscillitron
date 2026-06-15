@@ -4,29 +4,29 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 13,
+  "iteration": 14,
   "counts_per_playbook": {
-    "process": 41,
-    "verify_grounded": 41,
-    "compose": 41,
-    "critique": 41,
-    "plan": 41
+    "process": 44,
+    "verify_grounded": 44,
+    "compose": 44,
+    "critique": 44,
+    "plan": 44
   },
-  "total_tasks": 205,
+  "total_tasks": 220,
   "counts_per_domain": {
-    "biology": 14,
-    "business": 14,
-    "chemistry": 17,
-    "cs": 16,
-    "economics": 17,
-    "engineering": 17,
-    "geography": 13,
-    "health": 15,
-    "history": 14,
-    "law": 15,
-    "math": 15,
+    "biology": 15,
+    "business": 15,
+    "chemistry": 18,
+    "cs": 19,
+    "economics": 18,
+    "engineering": 18,
+    "geography": 15,
+    "health": 16,
+    "history": 15,
+    "law": 16,
+    "math": 16,
     "philosophy": 8,
-    "physics": 15,
+    "physics": 16,
     "psychology": 15
   },
   "domains_not_yet_covered": [],
@@ -46,7 +46,7 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 13: +15 (3/playbook) via temp-id+renumber; re-verified iteration-12 batch (1->2). 41 per playbook, 205 total.",
+  "notes": "Iteration 14: +15 (3/playbook); re-verified iteration-13 batch (1->2). 44 per playbook, 220 total. Added duplicate-prompt guard.",
   "playbook_domain_cells_filled": "70/70",
   "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free."
 }

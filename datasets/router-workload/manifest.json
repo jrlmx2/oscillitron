@@ -4,35 +4,35 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 7,
+  "iteration": 8,
   "counts_per_playbook": {
-    "plan": 23,
-    "process": 23,
-    "critique": 23,
-    "verify_grounded": 23,
-    "compose": 23
+    "plan": 26,
+    "process": 26,
+    "critique": 26,
+    "verify_grounded": 26,
+    "compose": 26
   },
-  "total_tasks": 115,
+  "total_tasks": 130,
   "counts_per_domain": {
     "biology": 8,
-    "business": 8,
-    "chemistry": 8,
+    "business": 9,
+    "chemistry": 11,
     "cs": 10,
     "economics": 10,
-    "engineering": 9,
-    "geography": 6,
-    "health": 8,
-    "history": 9,
-    "law": 9,
-    "math": 8,
+    "engineering": 11,
+    "geography": 9,
+    "health": 9,
+    "history": 10,
+    "law": 10,
+    "math": 10,
     "philosophy": 6,
     "physics": 9,
-    "psychology": 7
+    "psychology": 8
   },
   "domains_not_yet_covered": [],
   "verification": {
     "min_verification_passes": 1,
-    "avg_verification_passes": 1.87,
+    "avg_verification_passes": 1.88,
     "all_coherence_checked": true,
     "open_issues": []
   },
@@ -46,6 +46,7 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 7: +15 tasks (3/playbook) depth; re-verified iteration-6 batch (1->2). 23 per playbook, 115 total.",
-  "playbook_domain_cells_filled": "70/70"
+  "notes": "Iteration 8: +15 tasks (3/playbook) depth; re-verified iteration-7 batch (1->2). 26/playbook, 130 total. Fixed 3 duplicate IDs via global per-cell renumber and adopted the id_convention above.",
+  "playbook_domain_cells_filled": "70/70",
+  "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free."
 }

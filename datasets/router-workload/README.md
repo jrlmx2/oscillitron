@@ -42,6 +42,8 @@ datasets/router-workload/
   exemplars/<action>.json  ← seed exemplar store (pkg/exemplar.FileStore shape)
 ```
 
+> **ID convention:** `<playbook>-<domain>-<NNN>`, NNN sequential per (playbook,domain) cell in file order (renumber-on-write keeps it collision-free).
+
 ### Task schema (one JSON object per line in `tasks/<playbook>.jsonl`)
 
 ```json

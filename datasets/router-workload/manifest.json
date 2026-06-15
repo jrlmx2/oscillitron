@@ -1,0 +1,48 @@
+{
+  "purpose": "Playbook-heterogeneous corpus to fairly test Oscillitron's Thread A router (routes on operation, not subject). See README.md and scratch/dense-router-design.md §2.12.9.",
+  "target_total": 500,
+  "target_per_playbook": 100,
+  "verification_target_passes": 3,
+  "last_updated": "2026-06-15",
+  "iteration": 1,
+  "counts_per_playbook": {
+    "plan": 4,
+    "process": 4,
+    "critique": 4,
+    "verify_grounded": 4,
+    "compose": 4
+  },
+  "total_tasks": 20,
+  "counts_per_domain": {
+    "law": 3,
+    "engineering": 2,
+    "history": 1,
+    "health": 2,
+    "math": 2,
+    "chemistry": 2,
+    "cs": 3,
+    "geography": 1,
+    "physics": 1,
+    "business": 1,
+    "economics": 1,
+    "biology": 1
+  },
+  "domains_not_yet_covered": ["psychology", "philosophy"],
+  "verification": {
+    "min_verification_passes": 1,
+    "avg_verification_passes": 1.0,
+    "all_coherence_checked": true,
+    "open_issues": []
+  },
+  "exemplar_store": {
+    "format": "pkg/exemplar.FileStore (one <action>.json per playbook)",
+    "counts_per_action": {
+      "plan": 3,
+      "process": 3,
+      "critique": 3,
+      "verify_grounded": 3,
+      "compose": 3
+    }
+  },
+  "notes": "Iteration 1 seed: 4 verified tasks per playbook across 12 domains, plus a 3-per-action seed exemplar store. Each (playbook x domain) cell is intentionally varied so the router must route on the operation axis. Subsequent iterations grow toward target and raise verification_passes."
+}

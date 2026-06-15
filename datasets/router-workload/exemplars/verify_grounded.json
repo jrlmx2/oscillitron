@@ -1,0 +1,29 @@
+[
+  {
+    "action": "verify_grounded",
+    "prompt": "Spec: return the median of a sorted list. Result: returns list[len/2]. Satisfy? Yes/No + why.",
+    "output": "No — fails for even-length lists (median is the average of the two middle elements); returns only the upper-middle.",
+    "score": 0.95,
+    "source_case": "verify_grounded-math-001",
+    "tokens": 40,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "verify_grounded",
+    "prompt": "Spec: balanced complete combustion of methane. Result: CH4 + 2 O2 -> CO2 + 2 H2O. Satisfy?",
+    "output": "Yes — atoms balance: C 1=1, H 4=4, O 4=4.",
+    "score": 0.95,
+    "source_case": "verify_grounded-chemistry-001",
+    "tokens": 36,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "verify_grounded",
+    "prompt": "Spec: cap liability at fees paid in the prior 12 months. Result: 'limited to total fees paid under this Agreement.' Satisfy?",
+    "output": "No — 'total fees' is broader than 'prior 12 months'; the cap fails to limit to the trailing window.",
+    "score": 0.93,
+    "source_case": "verify_grounded-law-001",
+    "tokens": 41,
+    "added_at": "2026-06-15T00:00:00Z"
+  }
+]

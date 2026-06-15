@@ -1,0 +1,29 @@
+[
+  {
+    "action": "compose",
+    "prompt": "Merge three triage notes into one patient summary: [vitals] [history] [meds].",
+    "output": "One consolidated summary weaving demographics, history, current meds, and today's vitals into a single coherent paragraph.",
+    "score": 0.94,
+    "source_case": "compose-health-001",
+    "tokens": 38,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "compose",
+    "prompt": "Combine three analyst paragraphs (demand, supply, policy) into one market outlook.",
+    "output": "A unified outlook: resilient demand + easing supply costs + supportive policy = constructive near-term setup.",
+    "score": 0.93,
+    "source_case": "compose-economics-001",
+    "tokens": 36,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "compose",
+    "prompt": "Merge three incident sub-reports (frontend, backend, infra) into one post-mortem summary.",
+    "output": "One narrative: a bad deploy added a nil-pointer in auth, users saw 500s for ~12 min, infra rolled back at 14:32 UTC with full recovery.",
+    "score": 0.93,
+    "source_case": "compose-engineering-001",
+    "tokens": 44,
+    "added_at": "2026-06-15T00:00:00Z"
+  }
+]

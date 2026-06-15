@@ -4,35 +4,35 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 14,
+  "iteration": 15,
   "counts_per_playbook": {
-    "process": 44,
-    "verify_grounded": 44,
-    "compose": 44,
-    "critique": 44,
-    "plan": 44
+    "process": 47,
+    "verify_grounded": 47,
+    "compose": 47,
+    "critique": 47,
+    "plan": 47
   },
-  "total_tasks": 220,
+  "total_tasks": 235,
   "counts_per_domain": {
-    "biology": 15,
-    "business": 15,
-    "chemistry": 18,
+    "biology": 16,
+    "business": 17,
+    "chemistry": 19,
     "cs": 19,
-    "economics": 18,
-    "engineering": 18,
-    "geography": 15,
-    "health": 16,
-    "history": 15,
-    "law": 16,
-    "math": 16,
+    "economics": 19,
+    "engineering": 20,
+    "geography": 16,
+    "health": 17,
+    "history": 16,
+    "law": 17,
+    "math": 18,
     "philosophy": 8,
-    "physics": 16,
-    "psychology": 15
+    "physics": 17,
+    "psychology": 16
   },
   "domains_not_yet_covered": [],
   "verification": {
     "min_verification_passes": 1,
-    "avg_verification_passes": 1.93,
+    "avg_verification_passes": 1.94,
     "all_coherence_checked": true,
     "open_issues": []
   },
@@ -46,7 +46,7 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 14: +15 (3/playbook); re-verified iteration-13 batch (1->2). 44 per playbook, 220 total. Added duplicate-prompt guard.",
+  "notes": "Iteration 15: +15 (3/playbook); re-verified iteration-14 batch (1->2). 47 per playbook, 235 total.",
   "playbook_domain_cells_filled": "70/70",
   "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free."
 }

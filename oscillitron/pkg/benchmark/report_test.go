@@ -175,6 +175,56 @@ func TestWriteJSON_FieldNamesAreSnakeCase(t *testing.T) {
 	}
 }
 
+func TestAnswerJSON_HasSEConfidence(t *testing.T) {
+	// SEConfidence is additive and parallel to Confidence. When set it
+	// serializes as snake_case "se_confidence"; when zero it is omitted
+	// (omitempty), and the existing confidence/cope_action keys remain.
+	r := Report{
+		BenchmarkName: "gpqa-diamond",
+		StartedAt:     time.Date(2026, 6, 15, 10, 0, 0, 0, time.UTC),
+		EndedAt:       time.Date(2026, 6, 15, 10, 1, 0, 0, time.UTC),
+		Cases: []CaseResult{
+			{
+				CaseID: "c-001",
+				Results: []OrchestratorResult{
+					{
+						OrchestratorName: "vote-3",
+						Answer: Answer{
+							Extracted: "A", Confidence: 0.9, SEConfidence: 0.7, CopeAction: "ship",
+						},
+						Verdict: Verdict{GraderName: "multichoice", Pass: true, Score: 1.0},
+					},
+					{
+						OrchestratorName: "frontier",
+						Answer:           Answer{Extracted: "A", Confidence: 0.8}, // SEConfidence 0 → omitted
+						Verdict:          Verdict{GraderName: "multichoice", Pass: true, Score: 1.0},
+					},
+				},
+			},
+		},
+	}
+	var buf bytes.Buffer
+	if err := WriteJSON(&buf, r); err != nil {
+		t.Fatalf("WriteJSON: %v", err)
+	}
+	body := buf.String()
+	compact := strings.ReplaceAll(body, " ", "") // pretty-printer adds spaces after colons
+	if !strings.Contains(compact, `"se_confidence":0.7`) {
+		t.Errorf("expected se_confidence:0.7 in output, got:\n%s", body)
+	}
+	if !strings.Contains(compact, `"confidence":0.9`) {
+		t.Errorf("expected existing confidence key still present")
+	}
+	if !strings.Contains(compact, `"cope_action":"ship"`) {
+		t.Errorf("expected existing cope_action key still present")
+	}
+	// The zero-SEConfidence answer (frontier) must omit the key. Confirm
+	// there is exactly one se_confidence occurrence (the vote-3 answer).
+	if n := strings.Count(body, "se_confidence"); n != 1 {
+		t.Errorf("expected se_confidence omitted when zero: got %d occurrences", n)
+	}
+}
+
 func TestWriteJSONFile_WritesAndIsValid(t *testing.T) {
 	r := sampleReport(t)
 	dir := t.TempDir()

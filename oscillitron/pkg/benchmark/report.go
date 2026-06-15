@@ -170,12 +170,13 @@ type orchestratorResultJSON struct {
 }
 
 type answerJSON struct {
-	Raw        string  `json:"raw"`
-	Extracted  string  `json:"extracted"`
-	Calls      int     `json:"calls"`
-	TokensUsed int     `json:"tokens_used"`
-	Confidence float64 `json:"confidence,omitempty"`
-	CopeAction string  `json:"cope_action,omitempty"`
+	Raw          string  `json:"raw"`
+	Extracted    string  `json:"extracted"`
+	Calls        int     `json:"calls"`
+	TokensUsed   int     `json:"tokens_used"`
+	Confidence   float64 `json:"confidence,omitempty"`
+	SEConfidence float64 `json:"se_confidence,omitempty"`
+	CopeAction   string  `json:"cope_action,omitempty"`
 }
 
 type verdictJSON struct {

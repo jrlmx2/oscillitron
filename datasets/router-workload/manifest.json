@@ -4,30 +4,30 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 18,
+  "iteration": 19,
   "counts_per_playbook": {
-    "process": 56,
-    "verify_grounded": 56,
-    "compose": 56,
-    "critique": 56,
-    "plan": 56
+    "process": 59,
+    "verify_grounded": 59,
+    "compose": 59,
+    "critique": 59,
+    "plan": 59
   },
-  "total_tasks": 280,
+  "total_tasks": 295,
   "counts_per_domain": {
-    "biology": 19,
-    "business": 20,
-    "chemistry": 23,
-    "cs": 23,
+    "biology": 20,
+    "business": 21,
+    "chemistry": 24,
+    "cs": 24,
     "economics": 22,
-    "engineering": 24,
-    "geography": 20,
-    "health": 20,
-    "history": 19,
-    "law": 20,
-    "math": 21,
+    "engineering": 25,
+    "geography": 22,
+    "health": 21,
+    "history": 20,
+    "law": 22,
+    "math": 22,
     "philosophy": 9,
-    "physics": 21,
-    "psychology": 19
+    "physics": 22,
+    "psychology": 21
   },
   "domains_not_yet_covered": [],
   "verification": {
@@ -46,7 +46,7 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 18: +15 (3/playbook); re-verified iteration-17 batch (1->2). 56 per playbook, 280 total.",
+  "notes": "Iteration 19: +15 (3/playbook); re-verified iteration-18 batch (1->2). 59 per playbook, 295 total.",
   "playbook_domain_cells_filled": "70/70",
   "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free."
 }

@@ -170,6 +170,57 @@ func TestVote_MajorityWins(t *testing.T) {
 	}
 }
 
+// TestVote_SetsSEConfidence verifies Thread B: Vote populates the
+// additive SEConfidence column with discrete semantic entropy over
+// its vote histogram (conf = 1 − H/ln(N)), and that the SE base is
+// the vote total — empty extractions are excluded, not folded in.
+func TestVote_SetsSEConfidence(t *testing.T) {
+	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })
+
+	// Unanimous: 3 identical → one cluster → confidence 1.0.
+	t.Run("unanimous", func(t *testing.T) {
+		a := &scriptAdapter{answers: []string{"A", "A", "A"}}
+		ans, err := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}.
+			Answer(context.Background(), benchmark.Case{ID: "x"})
+		if err != nil {
+			t.Fatalf("Answer: %v", err)
+		}
+		if ans.SEConfidence != 1.0 {
+			t.Errorf("SEConfidence = %v, want 1.0 (unanimous)", ans.SEConfidence)
+		}
+	})
+
+	// Total disagreement: 3 distinct → all singletons → confidence 0.0.
+	t.Run("all_distinct", func(t *testing.T) {
+		a := &scriptAdapter{answers: []string{"A", "B", "C"}}
+		ans, err := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}.
+			Answer(context.Background(), benchmark.Case{ID: "x"})
+		if err != nil {
+			t.Fatalf("Answer: %v", err)
+		}
+		if ans.SEConfidence != 0.0 {
+			t.Errorf("SEConfidence = %v, want 0.0 (total disagreement)", ans.SEConfidence)
+		}
+	})
+
+	// Empty extraction excluded from the SE base: answers A,A,"" →
+	// votes={A:2}, N=2 → unanimous → 1.0. If the empty were wrongly
+	// counted as a third cluster (sizes [2,1], N=3), confidence would
+	// be ~0.42. Asserting 1.0 proves the base is the vote total, not
+	// `successes` (§4b.0 correction #2).
+	t.Run("empty_excluded_from_base", func(t *testing.T) {
+		a := &scriptAdapter{answers: []string{"A", "A", ""}}
+		ans, err := Vote{NameStr: "vote", Adapter: a, N: 3, Extractor: ext}.
+			Answer(context.Background(), benchmark.Case{ID: "x"})
+		if err != nil {
+			t.Fatalf("Answer: %v", err)
+		}
+		if ans.SEConfidence != 1.0 {
+			t.Errorf("SEConfidence = %v, want 1.0 (empty extraction excluded from SE base)", ans.SEConfidence)
+		}
+	})
+}
+
 func TestVote_TieBreakAlphabetical(t *testing.T) {
 	a := &scriptAdapter{answers: []string{"B", "B", "A", "A"}}
 	ext := ExtractorFunc(func(_ context.Context, _, raw string) string { return strings.TrimSpace(raw) })

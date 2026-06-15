@@ -95,6 +95,64 @@ func TestCoping_LowConfidence_HighStakes_EscalatesToFrontier(t *testing.T) {
 	}
 }
 
+// TestCoping_ConfidenceSource_SelectsColumn verifies the Thread B
+// switch: ConfidenceSource picks which Answer column the rule table
+// reads. With a divergent answer (high self-reported Confidence, low
+// SEConfidence) + high stakes, the source determines the action.
+func TestCoping_ConfidenceSource_SelectsColumn(t *testing.T) {
+	// High self-confidence (0.95) but low semantic-entropy conf (0.3).
+	mkInner := func() *stubOrch {
+		return &stubOrch{name: "inner", answer: benchmark.Answer{
+			Extracted: "B", Confidence: 0.95, SEConfidence: 0.3, Calls: 1,
+		}}
+	}
+	front := func() *stubOrch {
+		return &stubOrch{name: "front", answer: benchmark.Answer{Extracted: "A", Confidence: 0.95}}
+	}
+
+	// semantic-entropy: SE=0.3 + high stakes → Escalate (frontier runs).
+	t.Run("semantic_entropy_drives_escalate", func(t *testing.T) {
+		f := front()
+		c := Coping{NameStr: "cope", Inner: mkInner(), Frontier: f, ConfidenceSource: "semantic-entropy"}
+		ans, err := c.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.High})
+		if err != nil {
+			t.Fatalf("Answer: %v", err)
+		}
+		if f.calls != 1 {
+			t.Errorf("frontier calls = %d, want 1 (SE column low → escalate)", f.calls)
+		}
+		if ans.CopeAction != string(cope.Escalate) {
+			t.Errorf("CopeAction = %q, want escalate", ans.CopeAction)
+		}
+	})
+
+	// default (self): Confidence=0.95 → Ship, frontier untouched.
+	t.Run("default_uses_self_confidence", func(t *testing.T) {
+		f := front()
+		c := Coping{NameStr: "cope", Inner: mkInner(), Frontier: f /* ConfidenceSource:"" */}
+		ans, err := c.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.High})
+		if err != nil {
+			t.Fatalf("Answer: %v", err)
+		}
+		if f.calls != 0 {
+			t.Errorf("frontier calls = %d, want 0 (self conf 0.95 → ship)", f.calls)
+		}
+		if ans.CopeAction != string(cope.Ship) {
+			t.Errorf("CopeAction = %q, want ship", ans.CopeAction)
+		}
+	})
+
+	// unknown value falls back to self (safe default).
+	t.Run("unknown_falls_back_to_self", func(t *testing.T) {
+		f := front()
+		c := Coping{NameStr: "cope", Inner: mkInner(), Frontier: f, ConfidenceSource: "bogus"}
+		ans, _ := c.Answer(context.Background(), benchmark.Case{ID: "x", Stakes: stakes.High})
+		if f.calls != 0 || ans.CopeAction != string(cope.Ship) {
+			t.Errorf("unknown source should fall back to self (ship); calls=%d action=%q", f.calls, ans.CopeAction)
+		}
+	})
+}
+
 func TestCoping_LowConfidence_LowStakes_ShipsWithCaveat(t *testing.T) {
 	inner := &stubOrch{name: "inner", answer: benchmark.Answer{
 		Extracted: "C", Confidence: 0.3,

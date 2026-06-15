@@ -98,6 +98,16 @@ type Answer struct {
 	// adapter ran InspectResponse + EffectiveConfidence. Zero =
 	// "no confidence reported" (not "zero confidence").
 	Confidence float64
+	// SEConfidence is the v0 semantic-entropy confidence (0.0–1.0)
+	// computed by the Vote orchestrator from its own answer histogram:
+	// conf = 1 − H/ln(N) over the meaning-cluster distribution
+	// (pkg/semanticentropy). ADDITIVE and PARALLEL to Confidence — it
+	// does NOT replace the self-reported mean. Both columns are carried
+	// in one run so the H0-SE experiment (dense-router-design §2.12.3)
+	// can score them head-to-head. Zero = "not computed" (orchestrators
+	// other than Vote, or N<2). Which column the cope dispatcher reads
+	// is selected by Coping.ConfidenceSource.
+	SEConfidence float64
 	// CopeAction is the v3.4 coping decision that produced this
 	// Answer. Set by the orchestrator.Coping wrapper when wired;
 	// empty when the orchestrator didn't go through cope. Values:

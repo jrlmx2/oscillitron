@@ -51,6 +51,14 @@ type Coping struct {
 	// cope.DefaultRuleTable(); EscalateAllowed is set from
 	// (Frontier != nil) at construction-fixup time.
 	Rules cope.RuleTable
+	// ConfidenceSource selects which Answer column feeds the rule
+	// table: "" / "self" → inner.Confidence (self-reported, current
+	// behavior); "semantic-entropy" → inner.SEConfidence (the SE
+	// column Vote computes, Thread B). A wrong/unknown value falls
+	// back to self (safe default). The rule table itself stays a pure
+	// Decide(conf, stakes) — column selection lives here, one layer
+	// up, never in pkg/cope.
+	ConfidenceSource string
 	// Tracer emits per-case `coping.decision` events. nil-safe.
 	Tracer trace.Tracer
 }
@@ -95,12 +103,20 @@ func (c Coping) Answer(ctx context.Context, kase benchmark.Case) (benchmark.Answ
 		return inner, err
 	}
 
-	decision := rules.Explain(inner.Confidence, kase.Stakes)
+	// Select which confidence column drives the decision. Self is the
+	// default; "semantic-entropy" reads Vote's SEConfidence. Unknown
+	// values fall back to self (safe).
+	conf := inner.Confidence
+	if c.ConfidenceSource == "semantic-entropy" {
+		conf = inner.SEConfidence
+	}
+	decision := rules.Explain(conf, kase.Stakes)
 	trace.Info(tracer, ctx, "coping.decision",
 		slog.String("case", kase.ID),
 		slog.String("orchestrator", c.NameStr),
 		slog.String("action", string(decision.Action)),
 		slog.Float64("confidence", decision.Confidence),
+		slog.String("confidence_source", c.ConfidenceSource),
 		slog.String("stakes", string(decision.Stakes)),
 		slog.String("rationale", decision.Rationale),
 	)

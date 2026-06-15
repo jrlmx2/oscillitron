@@ -13,6 +13,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/adapter"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
+	"github.com/jrlmx2/oscillitron/pkg/semanticentropy"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -256,12 +257,33 @@ func (v Vote) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		slog.String("distribution", formatVoteDistribution(votes)),
 	)
 
+	// Thread B: discrete semantic-entropy confidence over the vote
+	// histogram. N is the vote TOTAL (Σ n_c), not `successes` — empty
+	// extractions were excluded from `votes` above, so using successes
+	// would inflate entropy on substrates with extraction failures
+	// (dense-router-design §4b.0 correction #2). Parallel to the
+	// self-reported meanConfidence; never replaces it.
+	seSizes := make([]int, 0, len(votes))
+	votesTotal := 0
+	for _, n := range votes {
+		seSizes = append(seSizes, n)
+		votesTotal += n
+	}
+	seConf := semanticentropy.Confidence(seSizes, votesTotal)
+	trace.Info(tracer, ctx, "vote.semantic_entropy",
+		slog.Float64("h", semanticentropy.Entropy(seSizes)),
+		slog.Int("clusters", len(seSizes)),
+		slog.Float64("conf", seConf),
+		slog.Int("n", votesTotal),
+	)
+
 	return benchmark.Answer{
-		Raw:        strings.Join(rawParts, "\n---\n"),
-		Extracted:  bestKey,
-		Calls:      successes,
-		TokensUsed: totalTokens,
-		Confidence: meanConfidence(confidenceSum, confidenceCount),
+		Raw:          strings.Join(rawParts, "\n---\n"),
+		Extracted:    bestKey,
+		Calls:        successes,
+		TokensUsed:   totalTokens,
+		Confidence:   meanConfidence(confidenceSum, confidenceCount),
+		SEConfidence: seConf,
 	}, nil
 }
 

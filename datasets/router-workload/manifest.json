@@ -4,30 +4,30 @@
   "target_per_playbook": 100,
   "verification_target_passes": 3,
   "last_updated": "2026-06-15",
-  "iteration": 31,
+  "iteration": 32,
   "counts_per_playbook": {
-    "process": 96,
-    "verify_grounded": 96,
-    "compose": 96,
-    "critique": 96,
-    "plan": 96
+    "process": 100,
+    "verify_grounded": 100,
+    "compose": 100,
+    "critique": 100,
+    "plan": 100
   },
-  "total_tasks": 480,
+  "total_tasks": 500,
   "counts_per_domain": {
-    "biology": 35,
-    "business": 30,
-    "chemistry": 38,
-    "cs": 37,
-    "economics": 36,
-    "engineering": 41,
-    "geography": 38,
-    "health": 29,
-    "history": 36,
-    "law": 39,
-    "math": 40,
+    "biology": 37,
+    "business": 31,
+    "chemistry": 40,
+    "cs": 39,
+    "economics": 37,
+    "engineering": 42,
+    "geography": 40,
+    "health": 30,
+    "history": 38,
+    "law": 40,
+    "math": 42,
     "philosophy": 12,
-    "physics": 36,
-    "psychology": 33
+    "physics": 38,
+    "psychology": 34
   },
   "domains_not_yet_covered": [],
   "verification": {
@@ -46,7 +46,9 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 31: +20 (4/playbook) to close toward target; re-verified iteration-30 batch (1->2). 96 per playbook, 480 total.",
+  "notes": "Iteration 32: +20 (4/playbook) -> TARGET REACHED at 500 tasks (100/playbook, 100 each). Re-verified iteration-31 batch (1->2). Next iterations: verification-only, raising min verification_passes to >=3.",
   "playbook_domain_cells_filled": "70/70",
-  "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free."
+  "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free.",
+  "target_reached": true,
+  "phase": "VERIFICATION (target reached; driving all tasks to >=3 passes)"
 }

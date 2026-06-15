@@ -1,3 +1,7 @@
+## Status: TARGET REACHED (500 tasks, 100/playbook, 70/70 grid)
+
+Growth phase complete (iteration 32). The loop is now in **verification mode**: no new tasks; each iteration re-checks coherence + label-correctness + answer-correctness and raises the minimum verification_passes until every task has >=3 clean independent passes.
+
 # Router-workload corpus — playbook-heterogeneous
 
 A curated test corpus for Oscillitron's **Thread A router** (kNN playbook-hint

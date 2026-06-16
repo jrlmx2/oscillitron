@@ -25,6 +25,9 @@ oscillitron/.claude/worktrees/
 # Playwright MCP session logs (local browser-session captures; never tracked)
 .playwright-mcp/
 
+# graphify knowledge-graph output (generated local artifact; regenerate via /graphify)
+graphify-out/
+
 # Env files (none expected today; defensive)
 .env
 .env.*

@@ -16,6 +16,11 @@
 - Deliverables → `artifacts/`. Drafts and intermediates → `scratch/`.
 - Durable project conventions belong in this file. One-off facts go in memory, not here.
 - Never write into `inputs/`. If a file looks like input material, surface it as a candidate for the user to move themselves.
+- **Always record scores & findings to a durable file — never leave them only in chat/session history.** Whenever a run scores model outputs (a benchmark via `cmd/bench`, the kill-or-proceed gate via `cmd/phase1`, a grader/judge pass, or any eval), the scores and the findings drawn from them must land in a file, not just the conversation. The user should never have to scroll session history to recover a result. Convention:
+  - **Raw machine scores:** use the bench's own persistence — `cmd/bench --report-out <path>.json` (full Report) and/or `--stream-out <path>.jsonl` (per-case, crash-safe). Write these alongside the run.
+  - **Distilled findings:** summarize scores + what they mean into a dated file `scratch/bench-results-<YYYY-MM-DD>.md` (results tables, key findings, what's still broken), matching the existing format. Older deep-dive session analyses are archived under `scratch/archive/bench-findings-<YYYY-MM-DD>.md`.
+  - When a finding is durable enough to reuse, promote it to a focused `references/` file and index it in `INDEX.md`.
+  - Subagents that run scoring must write their scores+findings to such a file and report the path back — returning numbers only in their final message is not sufficient.
 
 ---
 

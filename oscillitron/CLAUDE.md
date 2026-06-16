@@ -91,6 +91,8 @@ go run ./cmd/oscillitron
 
 Requires Go 1.26+ (current toolchain on dev machine; bumped from 1.21 on 2026-05-18).
 
+**Recording scored runs (convention — see `../CLAUDE.md` "Default behaviors"):** any run that scores model outputs must persist its scores + findings to a file, never leave them only in session history. Use `cmd/bench --report-out <path>.json` / `--stream-out <path>.jsonl` for raw scores, and distill the findings into `../scratch/bench-results-<YYYY-MM-DD>.md`. `cmd/phase1` likewise reports quality+cost ratios that should be captured to a findings file rather than read off the terminal once.
+
 ### Pre-commit hooks
 
 Tracked hooks live in `scripts/git-hooks/`. Git fires hooks from

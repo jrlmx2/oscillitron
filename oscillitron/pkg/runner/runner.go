@@ -53,6 +53,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"strconv"
 
 	"sync"
 
@@ -61,6 +62,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/inhibitor"
 	"github.com/jrlmx2/oscillitron/pkg/judge"
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
+	"github.com/jrlmx2/oscillitron/pkg/router"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
 	"github.com/jrlmx2/oscillitron/pkg/verifier"
@@ -111,6 +113,16 @@ type Config struct {
 	// a no-op since there is no runtime to react to it. The policy is
 	// locked in design 2026-05-20; see pkg/verifier.
 	VerifierPolicy *verifier.Policy
+	// Router optionally produces an ADVISORY playbook hint consulted
+	// before Evaluate on every AP. The hint is seeded into Evaluate's
+	// input as steering text — it NEVER skips or replaces Evaluate
+	// (hard-skip is forbidden: it would re-declare a brain-function the
+	// uniform-node + every-AP-evaluates locks forbid; see
+	// scratch/dense-router-design.md §4d.3). Nil = no routing (every AP
+	// evaluates cold, the current behavior). Best-effort: a Router error
+	// is traced and ignored, never fails the AP — routing is a prior,
+	// not a dependency.
+	Router router.Router
 	// Cost is an optional observer of the cost ledger the adapter writes
 	// into. When set, RunState.CostSummary is populated from this
 	// tracker after Run returns. The runner itself does not call Record;
@@ -226,6 +238,13 @@ type RunState struct {
 	// runner does NOT fail the run on judge errors; an error is treated
 	// as "no audit signal for this AP" and is not fed to the policy.
 	JudgeErrors int
+	// RouterHintsProduced counts non-abstain hints Config.Router emitted
+	// (Thread A). RouterHintOverrides counts APs where Evaluate's pick
+	// differed from a non-abstain hint — the disagreement numerator. The
+	// H0-router disagreement rate is RouterHintOverrides /
+	// RouterHintsProduced (dense-router-design §2.12.2).
+	RouterHintsProduced int
+	RouterHintOverrides int
 	// PerPlaybookTokens aggregates Evaluate + Execute TokensUsed by
 	// playbook so the operator can see which playbook's prompt is
 	// fattest. Includes evaluate calls under the empty-playbook key
@@ -269,9 +288,10 @@ func Run(ctx context.Context, cfg Config, root session.Envelope) (Result, error)
 	}
 
 	r := &runner{
-		cfg:     cfg,
-		state:   &RunState{},
-		subtree: map[session.ID][]session.Envelope{},
+		cfg:       cfg,
+		state:     &RunState{},
+		subtree:   map[session.ID][]session.Envelope{},
+		hintForAP: map[session.ID]session.Playbook{},
 	}
 
 	// Library-managed concurrency (LOCKED 2026-05-21): if the caller
@@ -302,6 +322,11 @@ type runner struct {
 	cfg     Config
 	state   *RunState
 	subtree map[session.ID][]session.Envelope
+	// hintForAP remembers the advisory router hint per in-flight AP so
+	// the override-detect (after Evaluate) can compare it to Evaluate's
+	// pick. Guarded by mu (resolve runs concurrently when
+	// MaxConcurrency > 1). Only used when Config.Router is set.
+	hintForAP map[session.ID]session.Playbook
 	// autoSerialFallback is set to true by probeHealthyOnce when the
 	// auto-wired Governor's underlying probe returns an error. Under
 	// the library-managed lock (2026-05-21), probe failure means we
@@ -322,6 +347,23 @@ func (r *runner) lockedStateInc(field *int) {
 	r.mu.Lock()
 	*field++
 	r.mu.Unlock()
+}
+
+// lockedSetHint records the advisory router hint for an in-flight AP.
+func (r *runner) lockedSetHint(id session.ID, pb session.Playbook) {
+	r.mu.Lock()
+	r.hintForAP[id] = pb
+	r.mu.Unlock()
+}
+
+// takeHintForAP reads and removes the stored hint for an AP. ok is false
+// when no non-abstain hint was recorded for this AP.
+func (r *runner) takeHintForAP(id session.ID) (session.Playbook, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	pb, ok := r.hintForAP[id]
+	delete(r.hintForAP, id)
+	return pb, ok
 }
 
 func (r *runner) lockedAddVerifierSignal(rec VerifierSignalRecord) {
@@ -412,6 +454,33 @@ func (r *runner) resolve(
 	// so the defer there becomes a no-op).
 	defer lease.Release()
 
+	// Advisory routing hint (Thread A, Option A: steering text into the
+	// input). Pure-CPU BM25 read; runs before the adapter call. NEVER
+	// skips Evaluate — the hint is a prior, Evaluate still owns the pick.
+	if r.cfg.Router != nil {
+		hint, herr := r.cfg.Router.Hint(ctx, env.Input)
+		if herr != nil {
+			// Best-effort: a routing read must never fail a working AP.
+			trace.Error(r.cfg.Tracer, ctx, "router.hint_error",
+				slog.String("ap_id", string(env.ID)),
+				slog.String("err", herr.Error()),
+			)
+		} else if !hint.IsEmpty() {
+			env.Input.Content += "\n\n[playbook-hint: " + string(hint.Playbook) +
+				" (confidence=" + strconv.FormatFloat(hint.Confidence, 'f', 2, 64) +
+				", k=" + strconv.Itoa(hint.K) + ")]"
+			r.lockedStateInc(&r.state.RouterHintsProduced)
+			r.lockedSetHint(env.ID, hint.Playbook)
+			trace.Info(r.cfg.Tracer, ctx, "router.hint_produced",
+				slog.String("ap_id", string(env.ID)),
+				slog.String("playbook", string(hint.Playbook)),
+				slog.Float64("confidence", hint.Confidence),
+				slog.Float64("margin", hint.Margin),
+				slog.Int("k", hint.K),
+			)
+		}
+	}
+
 	// Evaluate step.
 	evalEnv, err := r.cfg.Adapter.Evaluate(ctx, env)
 	if err != nil {
@@ -428,6 +497,19 @@ func (r *runner) resolve(
 		// Telemetry: evaluate tokens count under the empty-playbook key
 		// (the playbook IS the evaluate output — pre-pick attribution).
 		r.lockedAddPerPlaybookTokens("", int64(env.Evaluate.TokensUsed))
+	}
+
+	// Thread A disagreement detect (H0-router primary metric): did
+	// Evaluate's pick differ from the advisory hint?
+	if r.cfg.Router != nil && env.Evaluate != nil {
+		if hinted, ok := r.takeHintForAP(env.ID); ok && hinted != env.Evaluate.Playbook {
+			r.lockedStateInc(&r.state.RouterHintOverrides)
+			trace.Info(r.cfg.Tracer, ctx, "router.evaluate_overrode_hint",
+				slog.String("ap_id", string(env.ID)),
+				slog.String("hint_playbook", string(hinted)),
+				slog.String("evaluate_playbook", string(env.Evaluate.Playbook)),
+			)
+		}
 	}
 	trace.Info(r.cfg.Tracer, ctx, "runner.evaluated",
 		slog.String("ap_id", string(env.ID)),

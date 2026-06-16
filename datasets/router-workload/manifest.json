@@ -49,12 +49,12 @@
       "compose": 3
     }
   },
-  "notes": "Iteration 53 (light re-verification round 19): fresh-slice spot-check clean; integrity re-asserted. Corpus VERIFIED-COMPLETE.",
+  "notes": "Iteration 54 (light re-verification round 20): fresh-slice spot-check clean; integrity re-asserted. Corpus VERIFIED-COMPLETE. 20 consecutive clean rounds since target.",
   "playbook_domain_cells_filled": "70/70",
   "id_convention": "<playbook>-<domain>-<NNN>, NNN sequential per (playbook,domain) cell in file order. Renumber-on-write keeps it collision-free.",
   "target_reached": true,
   "phase": "VERIFIED-COMPLETE",
-  "light_reverification_rounds": 19,
+  "light_reverification_rounds": 20,
   "last_reverified": "2026-06-15",
   "last_reverified_sample_ok": true
 }

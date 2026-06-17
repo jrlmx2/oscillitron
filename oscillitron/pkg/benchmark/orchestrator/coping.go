@@ -52,12 +52,23 @@ type Coping struct {
 	// (Frontier != nil) at construction-fixup time.
 	Rules cope.RuleTable
 	// ConfidenceSource selects which Answer column feeds the rule
-	// table: "" / "self" → inner.Confidence (self-reported, current
-	// behavior); "semantic-entropy" → inner.SEConfidence (the SE
-	// column Vote computes, Thread B). A wrong/unknown value falls
-	// back to self (safe default). The rule table itself stays a pure
+	// table: "" / "self" → inner.Confidence (self-reported);
+	// "semantic-entropy" → inner.SEConfidence (the SE column Vote
+	// computes, Thread B). A wrong/unknown value falls back to self
+	// (safe default). The rule table itself stays a pure
 	// Decide(conf, stakes) — column selection lives here, one layer
 	// up, never in pkg/cope.
+	//
+	// Recommended source for Vote-backed coping: "semantic-entropy".
+	// H0-SE (2026-06-16, scratch/bench-results-2026-06-16.md) showed
+	// SE is markedly better calibrated than self-report (GPQA Diamond
+	// / qwen3:14b: ECE 0.239→0.147, false-confident ships 9→2), so
+	// cmd/bench now defaults --cope-confidence-source to it. The zero
+	// value here stays "self" on purpose: SEConfidence is only
+	// populated by Vote, and a non-Vote inner (e.g. Single) leaves it
+	// 0.0 — indistinguishable from a genuine max-disagreement SE=0 —
+	// so callers opt into SE explicitly rather than via a zero value
+	// that would misread Single as zero-confidence.
 	ConfidenceSource string
 	// Tracer emits per-case `coping.decision` events. nil-safe.
 	Tracer trace.Tracer

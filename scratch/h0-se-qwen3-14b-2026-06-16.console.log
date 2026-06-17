@@ -1,0 +1,69 @@
+bench: explicit VRAM model (qwen3:14b(layers=40,kv=1024,dtype=2,ctx=24576,prefix=2000), ceiling=1)
+bench: streaming per-case JSONL to /Users/james/Documents/Claude/Projects/Oscillitron/scratch/h0-se-qwen3-14b-2026-06-16.jsonl
+
+=== Benchmark: gpqa-diamond ===
+Cases: 40   Elapsed: 16h8m50s
+
+--- Aggregate ---
+  frontier-qwen3:14b                                  pass=23  fail=16  err=1  pass_rate=0.590  avg_score=0.590  calls=39  tokens=124942  actual=$0.0000  frontier=$0.5622  savings=100.0%
+  orchestrator-vote-5-qwen3:14b                       pass=26  fail=14  err=0  pass_rate=0.650  avg_score=0.650  calls=195  tokens=607927  actual=$0.0000  frontier=$2.7357  savings=100.0%
+
+--- Failure categorization (per orchestrator)
+  category                frontier-qwen3:14b              orchestrator-vote-5-qwen3:14b   
+  pass                    23                              26                              
+  format_no_letter        0                               0                               
+  wrong_letter            16                              14                              
+  refusal                 0                               0                               
+  empty_response          0                               0                               
+  adapter_error           1                               0                               
+  other                   0                               0                               
+  ────────────────────────────────────────────────────────────────────────────────────────
+  total                   40                              40                              
+
+--- Confidence calibration (per orchestrator)
+  frontier-qwen3:14b
+    band                           n   pass    rate  mean_conf
+    low (<0.50)                    0      0    0.0%  0.00
+    medium (0.50-0.85)             3      2   66.7%  0.63
+    high (>=0.85)                 24     18   75.0%  0.93
+  orchestrator-vote-5-qwen3:14b
+    band                           n   pass    rate  mean_conf
+    low (<0.50)                    0      0    0.0%  0.00
+    medium (0.50-0.85)             8      4   50.0%  0.80
+    high (>=0.85)                 31     22   71.0%  0.93
+
+--- Calibration scores (lower ECE/Brier = better; steeper slope = more informative)
+    orchestrator               column              n      ECE    Brier    slope
+    frontier-qwen3:14b         confidence         27   0.1630   0.1928   +0.282
+    orchestrator-vote-5-qwen3:14b confidence         39   0.2387   0.2629   +1.574
+    orchestrator-vote-5-qwen3:14b se_confidence      40   0.1470   0.1727   +1.342
+
+--- Sliding window (size=25) ---
+  end_case  frontier-qwen3:14b                                  orchestrator-vote-5-qwen3:14b                       
+        24  pass_rate=0.667 avg_score=0.667              pass_rate=0.720 avg_score=0.720              
+        25  pass_rate=0.625 avg_score=0.625              pass_rate=0.680 avg_score=0.680              
+        26  pass_rate=0.625 avg_score=0.625              pass_rate=0.720 avg_score=0.720              
+        27  pass_rate=0.583 avg_score=0.583              pass_rate=0.680 avg_score=0.680              
+        28  pass_rate=0.583 avg_score=0.583              pass_rate=0.680 avg_score=0.680              
+        29  pass_rate=0.542 avg_score=0.542              pass_rate=0.640 avg_score=0.640              
+        30  pass_rate=0.500 avg_score=0.500              pass_rate=0.600 avg_score=0.600              
+        31  pass_rate=0.500 avg_score=0.500              pass_rate=0.600 avg_score=0.600              
+        32  pass_rate=0.500 avg_score=0.500              pass_rate=0.600 avg_score=0.600              
+        33  pass_rate=0.458 avg_score=0.458              pass_rate=0.560 avg_score=0.560              
+        34  pass_rate=0.458 avg_score=0.458              pass_rate=0.560 avg_score=0.560              
+        35  pass_rate=0.458 avg_score=0.458              pass_rate=0.560 avg_score=0.560              
+        36  pass_rate=0.417 avg_score=0.417              pass_rate=0.520 avg_score=0.520              
+        37  pass_rate=0.458 avg_score=0.458              pass_rate=0.520 avg_score=0.520              
+        38  pass_rate=0.458 avg_score=0.458              pass_rate=0.520 avg_score=0.520              
+        39  pass_rate=0.458 avg_score=0.458              pass_rate=0.520 avg_score=0.520              
+
+--- First failures: frontier-qwen3:14b ---
+  gpqa-diamond-002: extracted="A" expected="B" notes="extracted=A expected=B"
+  gpqa-diamond-004: extracted="B" expected="C" notes="extracted=B expected=C"
+  gpqa-diamond-013: extracted="C" expected="D" notes="extracted=C expected=D"
+
+--- First failures: orchestrator-vote-5-qwen3:14b ---
+  gpqa-diamond-002: extracted="A" expected="B" notes="extracted=A expected=B"
+  gpqa-diamond-004: extracted="B" expected="C" notes="extracted=B expected=C"
+  gpqa-diamond-018: extracted="A" expected="C" notes="extracted=A expected=C"
+bench: wrote JSON report to /Users/james/Documents/Claude/Projects/Oscillitron/scratch/h0-se-qwen3-14b-2026-06-16.json

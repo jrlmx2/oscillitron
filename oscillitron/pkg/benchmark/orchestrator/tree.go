@@ -30,6 +30,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
 	"github.com/jrlmx2/oscillitron/pkg/classification"
 	"github.com/jrlmx2/oscillitron/pkg/recomposer"
+	"github.com/jrlmx2/oscillitron/pkg/router"
 	"github.com/jrlmx2/oscillitron/pkg/runner"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/trace"
@@ -62,6 +63,11 @@ type Tree struct {
 	// to this directory. Each file is <case-id>.tree.txt and
 	// contains the full prompt→response path through the tree.
 	TraceDir string
+	// Router optionally wires the advisory playbook-hint router into the
+	// runner (Thread A). Nil = no routing (every AP evaluates cold, the
+	// current behavior). Only meaningful on the Tree arm — Vote/Single
+	// bypass Evaluate, where the router is inert by construction.
+	Router router.Router
 }
 
 // Name implements benchmark.Orchestrator.
@@ -99,6 +105,7 @@ func (t Tree) Answer(ctx context.Context, c benchmark.Case) (benchmark.Answer, e
 		Tracer:     t.Tracer,
 		Governor:   t.Governor,
 		MaxDepth:   maxDepth,
+		Router:     t.Router,
 	}
 	res, err := runner.Run(ctx, cfg, root)
 	if err != nil {

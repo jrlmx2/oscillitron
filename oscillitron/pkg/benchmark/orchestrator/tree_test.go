@@ -7,8 +7,34 @@ import (
 
 	"github.com/jrlmx2/oscillitron/pkg/adapter/stub"
 	"github.com/jrlmx2/oscillitron/pkg/benchmark"
+	"github.com/jrlmx2/oscillitron/pkg/router"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 )
+
+// recordingRouter counts Hint calls and always abstains.
+type recordingRouter struct{ calls int }
+
+func (r *recordingRouter) Hint(_ context.Context, _ session.Payload) (router.Hint, error) {
+	r.calls++
+	return router.Hint{}, nil
+}
+
+func TestTree_ForwardsRouterToRunner(t *testing.T) {
+	a := stub.New("tree-router")
+	a.WithEvaluator(func(env session.Envelope) (session.Playbook, float64) {
+		return session.PlaybookProcess, 0.9
+	})
+	a.WithReturnResult(session.PlaybookProcess, session.Payload{Kind: "result", Content: "A"}, 0.8)
+
+	rr := &recordingRouter{}
+	tree := Tree{Adapter: a, Router: rr}
+	if _, err := tree.Answer(context.Background(), benchmark.Case{ID: "z", Prompt: "what?", Goal: "a single letter A-D"}); err != nil {
+		t.Fatalf("Answer: %v", err)
+	}
+	if rr.calls == 0 {
+		t.Error("Tree did not forward Router to the runner (Hint never called)")
+	}
+}
 
 func TestTree_RequiresAdapter(t *testing.T) {
 	_, err := Tree{}.

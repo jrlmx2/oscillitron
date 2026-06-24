@@ -49,6 +49,7 @@ import (
 	"github.com/jrlmx2/oscillitron/pkg/curation"
 	"github.com/jrlmx2/oscillitron/pkg/exemplar"
 	"github.com/jrlmx2/oscillitron/pkg/notice"
+	"github.com/jrlmx2/oscillitron/pkg/router"
 	"github.com/jrlmx2/oscillitron/pkg/session"
 	"github.com/jrlmx2/oscillitron/pkg/stakes"
 	"github.com/jrlmx2/oscillitron/pkg/thinking"
@@ -123,12 +124,18 @@ func run() error {
 		notice_       = flag.Bool("notice", true, "v3.1: enable prompt-side notice inspection on ollama-direct calls. Detects input overflow, persona-heavy prompts, etc.; emits `ollama.notice_assessment` trace events when signals fire. Cheap, observability-only (does not alter calls). Disabled with --notice=false. See scratch/v3-design.md §3.1 + §7.1.")
 		noticeCtxSize = flag.Int("notice-context-size", 0, "v3.1: substrate context window in tokens, used by the notice layer's overflow detectors. 0 = unset (overflow checks skip, persona-heavy still runs). Default matches whatever the operator passed via --model-context-size for the governor; if both are unset, pass this explicitly per substrate (phi4-mini=131072, llama-70b=128000, etc.).")
 
-		copeEnable       = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
-		copeHigh         = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
-		copeLow          = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
-		copeConfSrc      = flag.String("cope-confidence-source", "self", "Thread B: which confidence column the cope dispatcher reads. 'self' = Answer.Confidence (self-reported mean, current behavior); 'semantic-entropy' = Answer.SEConfidence (Vote's discrete semantic entropy, 1−H/ln(N)). Default 'self' preserves behavior; 'semantic-entropy' is the H0-SE treatment arm (dense-router-design §2.12.3).")
-		treeEnable       = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
-		treeMaxDepth     = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
+		copeEnable   = flag.Bool("cope", false, "v3.4: wrap the Vote orchestrator with the cope.RuleTable dispatcher. High-stakes low-confidence cases escalate to the frontier adapter (built per --frontier-* flags). Off by default — operators enable explicitly because escalation has real cost. See scratch/v3-design.md §7.4.")
+		copeHigh     = flag.Float64("cope-high-confidence", 0.85, "v3.4: confidence floor at/above which cope.Ship fires regardless of stakes.")
+		copeLow      = flag.Float64("cope-low-confidence", 0.5, "v3.4: confidence floor below which the action depends on stakes (low/medium → caveat, high → escalate-or-refuse).")
+		copeConfSrc  = flag.String("cope-confidence-source", "self", "Thread B: which confidence column the cope dispatcher reads. 'self' = Answer.Confidence (self-reported mean, current behavior); 'semantic-entropy' = Answer.SEConfidence (Vote's discrete semantic entropy, 1−H/ln(N)). Default 'self' preserves behavior; 'semantic-entropy' is the H0-SE treatment arm (dense-router-design §2.12.3).")
+		treeEnable   = flag.Bool("tree", false, "v3.5+: enable the Tree orchestrator arm — full call tree (plan → emit_subtree → children → recompose) on the orchestrator substrate. Off by default. When set, the bench runs frontier + cope-vote + tree as a third arm. AdapterSynth wraps the orchestrator adapter for synthesis steps.")
+		treeMaxDepth = flag.Int("tree-max-depth", 10, "v3.5+: MaxDepth for the Tree orchestrator's call tree.")
+
+		routerEnable     = flag.Bool("router", false, "Thread A (§4d): wrap the Tree orchestrator's runner with the kNN playbook-hint router (advisory — seeds Evaluate, never skips it). Off by default. Requires --tree. Measurable only on the --tree arm (Vote/Single bypass Evaluate).")
+		routerStore      = flag.String("router-store", "", "Thread A: exemplar.FileStore directory the router reads (cross-action BM25 kNN). Empty + --router → router abstains on every AP (valid 'no substrate' null).")
+		routerK          = flag.Int("router-k", 8, "Thread A: neighbors the router polls per AP (kNN k).")
+		routerMinConf    = flag.Float64("router-min-confidence", 0.5, "Thread A: winning vote-share floor; below → abstain.")
+		routerMinMargin  = flag.Float64("router-min-margin", 0.15, "Thread A: (top1−top2) vote-share floor; below → abstain (tie guard).")
 		treeTraceDir     = flag.String("tree-trace-dir", "", "v3.5+: write per-case tree trace files (<case-id>.tree.txt) to this directory. Shows the full prompt→response path through the tree for debugging.")
 		structuredOutput = flag.Bool("structured-output", true, "v3.5+: constrain the OpenAI-compat substrate (ollama/vllm/lmstudio) to the {response, confidence} JSON shape via response_format schema enforcement. On by default — required for any substrate at or above the capability floor (see references/model-capability-floor.md). Disable only to A/B-test the prompt-only path; expect substrate-dependent results.")
 		thinkingMode     = flag.String("thinking", "off", "v3.6+: reasoning-mode policy for substrates that expose a thinking trace (qwen3.x, deepseek-r1, magistral, etc.). One of: off (AlwaysOff — fast bench mode; default), on (AlwaysOn — substrate-native behavior), by-stakes (ByStakes — only high-stakes calls think), by-playbook (ByPlaybook — Plan and Compose think, Process and Critique don't), substrate-default (omit the flag; let the substrate decide). Honored by ollama / vllm / lmstudio adapters; ignored by hermes (which speaks /v1/runs).")
@@ -454,7 +461,22 @@ func run() error {
 			MaxDepth: *treeMaxDepth,
 			TraceDir: *treeTraceDir,
 		}
+		// Thread A: wire the advisory playbook-hint router onto the Tree
+		// arm (the only arm that walks Evaluate). Empty --router-store →
+		// FileStore with an empty Dir → the router abstains on every AP
+		// (the valid "no substrate" null).
+		if *routerEnable {
+			treeOrch.Router = router.ExemplarRouter{
+				Store:         &exemplar.FileStore{Dir: *routerStore},
+				K:             *routerK,
+				MinConfidence: *routerMinConf,
+				MinMargin:     *routerMinMargin,
+			}
+		}
 		orchestrators = append(orchestrators, treeOrch)
+	}
+	if *routerEnable && !*treeEnable {
+		return fmt.Errorf("--router requires --tree (Vote/Single bypass Evaluate; the router is inert there)")
 	}
 
 	// Grader: per-benchmark Primary from the benchmark config; dual

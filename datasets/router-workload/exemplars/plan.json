@@ -1,0 +1,38 @@
+[
+  {
+    "action": "plan",
+    "prompt": "Lay out the phases of a U.S. civil breach-of-contract lawsuit from complaint through trial.",
+    "output": "Decompose into ordered phases: pleadings -> discovery -> pretrial motions -> pretrial conference -> trial -> post-trial/appeal. Recompose: sequential.",
+    "score": 0.95,
+    "source_case": "plan-law-001",
+    "tokens": 60,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "plan",
+    "prompt": "Design the build order for a CI/CD pipeline that lints, tests, builds, and deploys a service with an approval gate.",
+    "output": "Subtasks in dependency order: lint -> unit-test -> build -> integration-test -> manual approval -> deploy-staging -> deploy-prod. Recompose: sequential.",
+    "score": 0.95,
+    "source_case": "plan-engineering-001",
+    "tokens": 58,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "plan",
+    "prompt": "Outline a research plan for a thesis on the economic causes of the fall of the Western Roman Empire.",
+    "output": "Subtasks: define scope/period -> gather sources -> identify economic indicators -> analyze each -> synthesize argument. Recompose: sequential.",
+    "score": 0.9,
+    "source_case": "plan-history-001",
+    "tokens": 55,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "plan",
+    "prompt": "Outline the experimental procedure to measure g using a simple pendulum.",
+    "output": "Ordered steps: build pendulum -> vary length -> time oscillations for T -> plot T^2 vs L -> derive g from slope. Recompose: sequential.",
+    "score": 0.94,
+    "source_case": "plan-physics-001",
+    "tokens": 48,
+    "added_at": "2026-06-15T00:00:00Z"
+  }
+]

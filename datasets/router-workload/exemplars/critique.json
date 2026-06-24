@@ -1,0 +1,38 @@
+[
+  {
+    "action": "critique",
+    "prompt": "Review this Go function for bugs: func avg(xs []int) int { s := 0; for _, x := range xs { s += x }; return s / len(xs) }",
+    "output": "Issues: division by zero on empty slice; integer division truncates the mean; possible int overflow on large sums.",
+    "score": 0.95,
+    "source_case": "critique-cs-001",
+    "tokens": 45,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "critique",
+    "prompt": "Critique: 'A 1 kg ball dropped near Earth reaches terminal velocity of 9.8 m/s because that is gravity.'",
+    "output": "Issues: confuses acceleration (9.8 m/s^2) with velocity; terminal velocity depends on drag, not equal to g; wrong units.",
+    "score": 0.93,
+    "source_case": "critique-physics-001",
+    "tokens": 44,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "critique",
+    "prompt": "Critique this KPI: 'Success = number of features shipped per quarter.'",
+    "output": "Issues: vanity output metric ignoring outcome/quality/value; incentivizes scope inflation; gameable; no link to revenue or retention.",
+    "score": 0.92,
+    "source_case": "critique-business-001",
+    "tokens": 42,
+    "added_at": "2026-06-15T00:00:00Z"
+  },
+  {
+    "action": "critique",
+    "prompt": "Find the flaw: a=b => a^2=ab => (a+b)(a-b)=b(a-b) => a+b=b => 2=1.",
+    "output": "Issue: dividing by (a-b) is invalid since a=b makes a-b=0 (division by zero).",
+    "score": 0.95,
+    "source_case": "critique-math-001",
+    "tokens": 40,
+    "added_at": "2026-06-15T00:00:00Z"
+  }
+]
